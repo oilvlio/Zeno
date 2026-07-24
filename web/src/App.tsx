@@ -381,6 +381,28 @@ export function orderHomeNodes(nodes: HomeCardNode[]): HomeCardNode[] {
     .map((entry) => entry.node)
 }
 
+function normalizeHomeRegion(countryCode: string | undefined): string {
+  const code = (countryCode ?? '').trim().toUpperCase()
+  return /^[A-Z]{2}$/.test(code) ? code : ''
+}
+
+export function homeRegionOptions(nodes: HomeCardNode[]): string[] {
+  const seen = new Set<string>()
+  const regions: string[] = []
+  nodes.forEach((node) => {
+    const region = normalizeHomeRegion(node.countryCode)
+    if (region === '' || seen.has(region)) return
+    seen.add(region)
+    regions.push(region)
+  })
+  return regions
+}
+
+export function filterHomeNodesByRegion(nodes: HomeCardNode[], region: string): HomeCardNode[] {
+  if (region === 'ALL') return nodes
+  return nodes.filter((node) => normalizeHomeRegion(node.countryCode) === region)
+}
+
 export function applyDocumentBranding(settings: AdminSettings) {
   if (typeof document === 'undefined') return
   const branding = documentBrandingForSettings(settings)
@@ -400,6 +422,7 @@ export function App() {
     return initialSummary ? { kind: 'ready', data: initialSummary.data } : { kind: 'loading' }
   })
   const [route, setRoute] = useState<DashboardRoute>(() => parseDashboardRoute(window.location.pathname))
+  const [homeRegion, setHomeRegion] = useState('ALL')
   const [nodeLatencyRange, setNodeLatencyRange] = useState('1d')
   const [serviceLatencyRange, setServiceLatencyRange] = useState('1h')
   const [stateRange, setStateRange] = useState('1h')
@@ -1090,6 +1113,9 @@ export function App() {
   const nodes = state.kind === 'ready' ? state.data.nodes : []
   const homeRealtimeNodes = homeRealtimeSnapshot?.nodes ?? nodes
   const homeNodes = orderHomeNodes(homeRealtimeNodes)
+  const homeRegions = homeRegionOptions(homeNodes)
+  const activeHomeRegion = homeRegion === 'ALL' || homeRegions.includes(homeRegion) ? homeRegion : 'ALL'
+  const visibleHomeNodes = filterHomeNodesByRegion(homeNodes, activeHomeRegion)
   const services = state.kind === 'ready' ? state.data.services : []
   const selectedNode = route.kind === 'node' ? nodes.find((node) => node.id === route.nodeId) : undefined
   const selectedNodeLatencyPoints = latencyState.kind === 'ready' ? latencyState.data.points : summaryLatencyPoints(selectedNode)
@@ -1199,8 +1225,10 @@ export function App() {
             backgroundEnabled={hasBackgroundImage}
           />
 
+          <HomeRegionFilter regions={homeRegions} activeRegion={activeHomeRegion} onChange={setHomeRegion} />
+
           <section className="server-card-list" aria-label="server cards">
-            {homeNodes.map((node) => <ServerCard key={node.id} node={node} onOpen={navigateNode} />)}
+            {visibleHomeNodes.map((node) => <ServerCard key={node.id} node={node} onOpen={navigateNode} />)}
           </section>
         </div>
       )}
@@ -1244,6 +1272,21 @@ export function HomeTopPanel({ settings = defaultSettings, onHome, onAdmin, onTh
       <DashboardHeader settings={settings} onHome={onHome} onAdmin={onAdmin} onThemeChange={onThemeChange} onBackgroundToggle={onBackgroundToggle} backgroundEnabled={backgroundEnabled} />
       <HomeOverviewPanel settings={settings} {...overview} />
     </section>
+  )
+}
+
+export function HomeRegionFilter({ regions, activeRegion, onChange }: { regions: string[]; activeRegion: string; onChange: (region: string) => void }) {
+  return (
+    <nav className="region-filter-bar" aria-label="服务器地区筛选">
+      <div className="region-filter-buttons">
+        <button className="region-filter-all" type="button" data-region="ALL" data-active={activeRegion === 'ALL'} aria-pressed={activeRegion === 'ALL'} onClick={() => onChange('ALL')}><span className="region-all-text">全部</span></button>
+        {regions.map((region) => (
+          <button key={region} type="button" data-region={region} data-active={activeRegion === region} aria-pressed={activeRegion === region} aria-label={`筛选 ${region} 地区`} title={region} onClick={() => onChange(region)}>
+            <ServerFlag countryCode={region} />
+          </button>
+        ))}
+      </div>
+    </nav>
   )
 }
 

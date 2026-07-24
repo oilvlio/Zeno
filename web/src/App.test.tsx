@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AdminCredentialField, AdminDashboard, AdminDeleteConfirmModal, HomeTopPanel, adminTokenMaxAgeMs, applyCustomCode, documentBrandingForSettings, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, remoteInsecureAgentControllerURL, shellStyleForSettings, shouldRefreshHomeRealtimeSnapshot, validateAdminSettingsInput } from './App'
+import { AdminCredentialField, AdminDashboard, AdminDeleteConfirmModal, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, applyCustomCode, documentBrandingForSettings, filterHomeNodesByRegion, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, remoteInsecureAgentControllerURL, shellStyleForSettings, shouldRefreshHomeRealtimeSnapshot, validateAdminSettingsInput } from './App'
 import type { AdminAlertRule, AdminNode, AdminNotificationChannel, AdminProbeTarget, AdminSettings, HomeCardNode } from './types'
 
 const overviewProps = {
@@ -304,6 +304,28 @@ describe('HomeTopPanel', () => {
 
     expect(orderHomeNodes(nodes).map((node) => node.id)).toEqual(['online-middle', 'offline-first', 'warning-last'])
     expect(nodes.map((node) => node.id)).toEqual(['offline-first', 'online-middle', 'warning-last'])
+  })
+
+  it('builds country filters in server order and keeps 全部 as the unfiltered view', () => {
+    const nodes = [
+      { id: 'hk-a', countryCode: 'hk' },
+      { id: 'unknown' },
+      { id: 'jp', countryCode: 'JP' },
+      { id: 'hk-b', countryCode: 'HK' },
+      { id: 'invalid', countryCode: 'Hong Kong' },
+    ] as HomeCardNode[]
+
+    expect(homeRegionOptions(nodes)).toEqual(['HK', 'JP'])
+    expect(filterHomeNodesByRegion(nodes, 'ALL').map((node) => node.id)).toEqual(['hk-a', 'unknown', 'jp', 'hk-b', 'invalid'])
+    expect(filterHomeNodesByRegion(nodes, 'HK').map((node) => node.id)).toEqual(['hk-a', 'hk-b'])
+
+    const html = renderToStaticMarkup(<HomeRegionFilter regions={['HK', 'JP']} activeRegion="ALL" onChange={() => {}} />)
+    expect(html).toContain('aria-label="服务器地区筛选"')
+    expect(html).toContain('aria-pressed="true"><span class="region-all-text">全部</span></button>')
+    expect(html).toContain('title="HK"')
+    expect(html).toContain('title="JP"')
+    expect(html).not.toContain('香港')
+    expect(html).not.toContain('日本')
   })
 
   it('uses the configured logo as the browser favicon source', () => {
