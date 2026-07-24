@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { LatencyChart, yDomainForRows } from './LatencyChart'
+import { integerYAxisDomain, LatencyChart, yDomainForRows } from './LatencyChart'
 
 const points = [
   { ts: '2026-07-02T00:00:00Z', targetId: 'alpha', targetName: 'Alpha', medianMs: 12, avgMs: 12, lossPercent: 0 },
@@ -65,6 +65,29 @@ describe('LatencyChart', () => {
 
     expect(yAxisLabels).not.toContain('0ms')
     expect(yAxisLabels.some((label) => label.startsWith('186') || label.startsWith('187') || label.startsWith('188'))).toBe(true)
+  })
+
+  it('uses a minimum four millisecond axis span to keep narrow-range labels distinct integers', () => {
+    const narrowLatencyPoints = [144, 144.2, 144.5, 144.8, 145].map((medianMs, index) => ({
+      ts: new Date(Date.UTC(2026, 6, 5, 0, index * 30)).toISOString(),
+      targetId: 'fiber-state',
+      targetName: 'FiberState',
+      medianMs,
+      avgMs: medianMs,
+      lossPercent: 0,
+    }))
+
+    const html = renderToStaticMarkup(<LatencyChart points={narrowLatencyPoints} activeTargetIds={['fiber-state']} />)
+    const yAxisLabels = [...html.matchAll(/class="axis-label"[^>]*>([^<]+)<\/text>/g)]
+      .map((match) => match[1])
+      .filter((label) => label.endsWith('ms'))
+
+    expect(yAxisLabels).toHaveLength(5)
+    expect(new Set(yAxisLabels).size).toBe(5)
+    expect(yAxisLabels.every((label) => /^\d+ms$/.test(label))).toBe(true)
+    const yAxisValues = yAxisLabels.map((label) => Number(label.replace('ms', '')))
+    expect(Math.max(...yAxisValues) - Math.min(...yAxisValues)).toBeGreaterThanOrEqual(4)
+    expect(yAxisValues.every((value, index) => index === 0 || Number.isInteger(yAxisValues[index - 1] - value))).toBe(true)
   })
 
   it('caps drawn latency axis at 5000ms while still allowing values above the 1000ms timeout line', () => {
@@ -144,5 +167,10 @@ describe('LatencyChart', () => {
     const domain = yDomainForRows(rows, ['target'])
     expect(domain.min).toBeCloseTo(6.6)
     expect(domain.max).toBeCloseTo(53.4)
+  })
+
+  it('keeps integer tick endpoints within the 5000ms cap', () => {
+    expect(integerYAxisDomain({ min: 143.8, max: 145.3 })).toEqual({ min: 142, max: 146 })
+    expect(integerYAxisDomain({ min: 4998.8, max: 5000 })).toEqual({ min: 4996, max: 5000 })
   })
 })

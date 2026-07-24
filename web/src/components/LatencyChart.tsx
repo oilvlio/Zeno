@@ -50,7 +50,7 @@ export function LatencyChart({
   const maxAxisTicks = width <= 480 ? 4 : 14
   const axisTicks = useMemo(() => axisTicksForTimestamps(timestamps, maxAxisTicks), [timestamps, maxAxisTicks])
   const plotHeight = height - pad.top - pad.bottom
-  const domain = useMemo(() => yDomainForRows(rows, baseView.lineKeys), [rows, baseView.lineKeys])
+  const domain = useMemo(() => integerYAxisDomain(yDomainForRows(rows, baseView.lineKeys)), [rows, baseView.lineKeys])
   const packetLossSeries = baseView.showPacketLossArea
     ? series.find((item) => item.targetId === activeTargetIds[0])
     : undefined
@@ -134,7 +134,7 @@ export function LatencyChart({
           return (
             <g key={ratio}>
               <line x1={pad.left} x2={width - pad.right} y1={yy} y2={yy} className="grid-line" />
-              <text x={12} y={yy + 4} className="axis-label">{Math.round(value)}ms</text>
+              <text x={12} y={yy + 4} className="axis-label">{formatYAxisValue(value)}ms</text>
             </g>
           )
         })}
@@ -339,6 +339,24 @@ function cappedLatencyDomain(min: number, max: number): { min: number; max: numb
   const cappedMax = Math.min(maxDrawableLatencyMs, Math.max(1, max))
   const cappedMin = Math.max(0, Math.min(min, cappedMax - 0.5))
   return { min: cappedMin, max: cappedMax }
+}
+
+export function integerYAxisDomain(domain: { min: number; max: number }): { min: number; max: number } {
+  const min = Math.max(0, Math.min(maxDrawableLatencyMs, domain.min))
+  const max = Math.max(min, Math.min(maxDrawableLatencyMs, domain.max))
+  const tickStep = Math.max(1, Math.ceil((max - min) / 4))
+  const axisSpan = tickStep * 4
+  const highestStart = maxDrawableLatencyMs - axisSpan
+  let axisMin = Math.floor((min + max - axisSpan) / 2)
+  axisMin = Math.max(0, Math.min(highestStart, axisMin))
+  if (axisMin > min) axisMin = Math.floor(min)
+  if (axisMin + axisSpan < max) axisMin = Math.ceil(max - axisSpan)
+  axisMin = Math.max(0, Math.min(highestStart, axisMin))
+  return { min: axisMin, max: axisMin + axisSpan }
+}
+
+function formatYAxisValue(value: number): string {
+  return Math.round(value).toFixed(0)
 }
 
 function rowNumber(row: KulinChartRow, key: string): number | null {
