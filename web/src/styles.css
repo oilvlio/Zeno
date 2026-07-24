@@ -492,9 +492,8 @@ svg { display: block; }
 .region-filter-buttons .server-flag {
   width: 21px;
   height: 15px;
-  overflow: hidden;
-  border-radius: 3px;
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, .06);
+  flex: none;
+  font-size: 16px;
 }
 .region-filter-bar + .server-card-list { margin-top: 16px; }
 

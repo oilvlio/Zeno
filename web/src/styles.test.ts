@@ -286,6 +286,8 @@ describe('Kulin-inspired color polish', () => {
     expect(styles).toContain('.resource-card.tone-green')
     expect(styles).toContain('.resource-chart-tooltip')
     expect(styles).toContain('.server-flag .fi')
+    expect(styles).toMatch(/\.region-filter-buttons \.server-flag \{[^}]*font-size: 16px;[^}]*\}/)
+    expect(styles).not.toMatch(/\.region-filter-buttons \.server-flag \{[^}]*(?:border|box-shadow|overflow)[^}]*\}/)
     expect(styles).toContain('.latency-chart-tooltip foreignObject')
     expect(styles).toContain('.latency-tooltip-card')
     expect(styles).not.toContain('<title>')
