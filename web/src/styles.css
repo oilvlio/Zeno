@@ -286,6 +286,7 @@ svg { display: block; }
 .home-top-card {
   width: 100%;
   position: relative;
+  z-index: 20;
   overflow: visible;
   padding: 16px;
   border: 1px solid var(--border);

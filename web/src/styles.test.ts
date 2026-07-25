@@ -45,6 +45,11 @@ describe('homepage and admin shell layout', () => {
     expect(styles).toContain('.home-top-card .home-summary')
   })
 
+  it('keeps the theme menu above later homepage sections', () => {
+    expect(styles).toMatch(/\.home-top-card \{[^}]*position: relative;[^}]*z-index: 20;[^}]*overflow: visible;/)
+    expect(styles).toMatch(/\.theme-menu-popover \{[^}]*z-index: 80;/)
+  })
+
   it('does not leave touch-tapped header icon buttons in the desktop hover accent state', () => {
     expect(styles).toContain('@media (hover: hover) and (pointer: fine)')
     expect(styles).toContain('.nav-icon-button:hover:not(:disabled) { background: #eff6ff; color: var(--blue); transform: translateY(-1px); box-shadow: 0 6px 18px -14px var(--blue); }')
