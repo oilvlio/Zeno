@@ -41,6 +41,13 @@ func TestStatusTransitionsQueueOutboxInSameStoreTransaction(t *testing.T) {
 	if offlineDeliveries != 1 {
 		t.Fatalf("atomic offline deliveries=%d, want 1", offlineDeliveries)
 	}
+	claimed, err := store.PendingNotificationDeliveries(ctx, time.Now().UTC(), 1)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim atomic offline delivery: %+v err=%v", claimed, err)
+	}
+	if err := store.RecordNotificationDeliveryAttempt(ctx, claimed[0], nil, time.Now().UTC()); err != nil {
+		t.Fatalf("deliver atomic offline delivery: %v", err)
+	}
 
 	recovery, err := store.RecordAgentHeartbeatTransition(ctx, "example-node-a", time.Now().UTC(), "online", "v-test")
 	if err != nil || recovery.Previous.Status != "offline" || recovery.Current.Status != "online" {
@@ -106,7 +113,7 @@ func TestNotificationDeliveryAckFailureKeepsPendingAndMaySendAgain(t *testing.T)
 	}
 }
 
-func TestNotificationOutboxClaimsLeaseAndRecoversExpiredLease(t *testing.T) {
+func TestNotificationOutboxExpiredLeaseRequiresManualRetry(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {
 		t.Fatalf("open sqlite store: %v", err)
@@ -144,10 +151,19 @@ func TestNotificationOutboxClaimsLeaseAndRecoversExpiredLease(t *testing.T) {
 	}
 	third, err := store.PendingNotificationDeliveries(ctx, now.Add(notificationDeliveryLease+time.Second), 10)
 	if err != nil {
-		t.Fatalf("claim after lease expiry: %v", err)
+		t.Fatalf("scan after lease expiry: %v", err)
 	}
-	if len(third) != 1 || third[0].ID != first[0].ID || third[0].ClaimToken == first[0].ClaimToken {
-		t.Fatalf("expired lease claim = %+v, want same delivery with new token", third)
+	if len(third) != 0 {
+		t.Fatalf("expired lease claim = %+v, want no automatic retry", third)
+	}
+	var state, lastError string
+	var attempts int
+	var nextAttemptAt int64
+	if err := store.db.QueryRowContext(ctx, `SELECT state, attempts, next_attempt_at, last_error FROM notification_deliveries WHERE id = ?`, first[0].ID).Scan(&state, &attempts, &nextAttemptAt, &lastError); err != nil {
+		t.Fatalf("read expired lease: %v", err)
+	}
+	if state != "failed" || attempts != 1 || nextAttemptAt != notificationDeliveryManualRetryAtUnix || lastError != notificationDeliveryOutcomeUnknownMessage {
+		t.Fatalf("expired lease state=%q attempts=%d next=%d error=%q", state, attempts, nextAttemptAt, lastError)
 	}
 }
 

@@ -8,10 +8,16 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 )
+
+const notificationDeliveryOutcomeUnknownMessage = "delivery outcome unknown; automatic retry suppressed"
+
+var errNotificationDeliveryOutcomeUnknown = errors.New("notification delivery outcome unknown")
 
 type heartbeatTransitionStore interface {
 	RecordAgentHeartbeatTransition(ctx context.Context, nodeID string, ts time.Time, status, agentVersion string) (notificationStatusTransition, error)
@@ -113,8 +119,23 @@ func (sender httpNotificationSender) sendTelegram(ctx context.Context, channel n
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("User-Agent", "Zeno-Controller")
+	var requestWritten atomic.Bool
+	trace := &httptrace.ClientTrace{
+		WroteRequest: func(info httptrace.WroteRequestInfo) {
+			if info.Err == nil {
+				requestWritten.Store(true)
+			}
+		},
+	}
+	request = request.WithContext(httptrace.WithClientTrace(request.Context(), trace))
 	response, err := sender.client.Do(request)
 	if err != nil {
+		// Once the full request has left this process, Telegram may already have
+		// accepted and delivered the message even if its response times out. The
+		// Bot API has no idempotency key, so an automatic retry can duplicate it.
+		if requestWritten.Load() {
+			return fmt.Errorf("%w: %v", errNotificationDeliveryOutcomeUnknown, err)
+		}
 		return err
 	}
 	defer response.Body.Close()
@@ -335,6 +356,9 @@ func shouldClaimStatusNotification(event notificationEvent) bool {
 func sanitizeNotificationDeliveryError(err error) string {
 	if err == nil {
 		return ""
+	}
+	if errors.Is(err, errNotificationDeliveryOutcomeUnknown) {
+		return notificationDeliveryOutcomeUnknownMessage
 	}
 	message := strings.TrimSpace(err.Error())
 	if message == "" {

@@ -23,6 +23,9 @@ const (
 	notificationDeliveryScanLimit   = 32
 	notificationDeliveryMaxAttempts = 5
 	notificationDeliveryLease       = 30 * time.Second
+	// An ambiguous Telegram attempt may already have delivered. Keep it visible
+	// as failed for manual review but never retry it automatically.
+	notificationDeliveryManualRetryAtUnix int64 = 253402300799
 	// Deliveries that exhaust the fast retry budget remain retryable at a low
 	// frequency. They intentionally stay in the failed state between attempts so
 	// operators can identify and manually retry them without creating a tight
@@ -128,6 +131,10 @@ func (s *SQLiteStore) QueueNotificationEvent(ctx context.Context, event notifica
 
 func insertNotificationDeliveriesTx(ctx context.Context, tx *sql.Tx, event notificationEvent, channels []notificationDispatchChannel, nowUnix int64) error {
 	event = notificationEventWithIdentity(event, time.Unix(nowUnix, 0).UTC())
+	recoveryDelay, err := notificationRecoveryDelayTx(ctx, tx, event)
+	if err != nil {
+		return err
+	}
 	for _, channel := range channels {
 		channel = notificationChannelWithRoutingIdentity(channel)
 		predecessorEventID := ""
@@ -146,23 +153,40 @@ func insertNotificationDeliveriesTx(ctx context.Context, tx *sql.Tx, event notif
 				return err
 			}
 		}
-		if notificationEventIsRecovery(event) {
-			// A recovery may replace an offline/warning delivery only while that
-			// predecessor has never been leased/sent. Once an attempt started, the
-			// predecessor must complete first to preserve causal order.
+		if shouldClaimStatusNotification(event) {
+			visibleStatus, visible, err := notificationVisibleStatusTx(ctx, tx, channel, event)
+			if err != nil {
+				return err
+			}
+			// Only the newest unsent state is useful. Keeping every failed flap in
+			// causal order creates a burst when Telegram becomes reachable again.
 			if _, err := tx.ExecContext(ctx, `
 				UPDATE notification_deliveries
-				SET state = 'canceled', last_error = 'superseded by recovery',
+				SET state = 'canceled',
+				    last_error = CASE
+				      WHEN last_error = ? THEN 'delivery outcome unknown; superseded by newer status'
+				      ELSE 'superseded by newer status'
+				    END,
 				    superseded_by_event_id = ?, lease_until = 0, claim_token = '', updated_at = ?
 				WHERE channel_id = ? AND channel_version = ?
 				  AND destination_fingerprint = ?
-				  AND event_type = ? AND node_id = ? AND status = ?
-				  AND state IN ('pending', 'paused') AND attempts = 0
-			`, event.EventID, nowUnix, channel.ID, channel.DeliveryVersion,
-				channel.DestinationFingerprint, event.EventType, event.NodeID,
-				event.PreviousStatus); err != nil {
+				  AND event_type = ? AND node_id = ?
+				  AND state IN ('pending', 'paused', 'failed')
+			`, notificationDeliveryOutcomeUnknownMessage, event.EventID, nowUnix, channel.ID, channel.DeliveryVersion,
+				channel.DestinationFingerprint, event.EventType, event.NodeID); err != nil {
 				return err
 			}
+			// User-visible state, not raw Agent transitions, decides whether a new
+			// message is useful. This suppresses recovery-only messages when the
+			// corresponding alert was never delivered and suppresses repeated alerts
+			// while a delayed recovery is canceled by another flap.
+			if !notificationStatusEventChangesVisibleState(event, visibleStatus, visible) {
+				continue
+			}
+		}
+		nextAttemptAt := nowUnix
+		if notificationEventIsRecovery(event) {
+			nextAttemptAt = time.Unix(nowUnix, 0).UTC().Add(recoveryDelay).Unix()
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO notification_deliveries (
@@ -174,11 +198,68 @@ func insertNotificationDeliveriesTx(ctx context.Context, tx *sql.Tx, event notif
 		`, event.EventID, event.EventType, event.Label, event.NodeID, event.NodeName, event.NodeIP,
 			event.PreviousStatus, event.Status, event.TS, event.Detail, channel.ID, channel.Name,
 			channel.DeliveryVersion, channel.DestinationFingerprint, predecessorEventID,
-			nowUnix, nowUnix, nowUnix); err != nil {
+			nextAttemptAt, nowUnix, nowUnix); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func notificationRecoveryDelayTx(ctx context.Context, tx *sql.Tx, event notificationEvent) (time.Duration, error) {
+	if !notificationEventIsRecovery(event) {
+		return 0, nil
+	}
+	var durationSeconds sql.NullInt64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT MAX(ar.duration_sec)
+		FROM alert_rules ar
+		WHERE ar.enabled = 1
+		  AND ar.notification_event_type = ?
+		  AND (
+		    NOT EXISTS (SELECT 1 FROM alert_rule_node_scopes scope_all WHERE scope_all.rule_id = ar.id)
+		    OR EXISTS (SELECT 1 FROM alert_rule_node_scopes scope_node WHERE scope_node.rule_id = ar.id AND scope_node.node_id = ?)
+		  )
+	`, event.EventType, event.NodeID).Scan(&durationSeconds); err != nil {
+		return 0, err
+	}
+	if !durationSeconds.Valid || durationSeconds.Int64 <= 0 {
+		return 0, nil
+	}
+	return time.Duration(durationSeconds.Int64) * time.Second, nil
+}
+
+func notificationVisibleStatusTx(ctx context.Context, tx *sql.Tx, channel notificationDispatchChannel,
+	event notificationEvent) (string, bool, error) {
+	var status string
+	err := tx.QueryRowContext(ctx, `
+		SELECT status
+		FROM notification_deliveries
+		WHERE channel_id = ? AND channel_version = ?
+		  AND destination_fingerprint = ?
+		  AND event_type = ? AND node_id = ?
+		  AND (
+		    state = 'delivered' OR state = 'leased' OR
+		    last_error = ? OR last_error LIKE 'delivery outcome unknown; superseded%'
+		  )
+		ORDER BY id DESC
+		LIMIT 1
+	`, channel.ID, channel.DeliveryVersion, channel.DestinationFingerprint,
+		event.EventType, event.NodeID, notificationDeliveryOutcomeUnknownMessage).Scan(&status)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return strings.TrimSpace(status), true, nil
+}
+
+func notificationStatusEventChangesVisibleState(event notificationEvent, visibleStatus string, visible bool) bool {
+	status := strings.TrimSpace(event.Status)
+	if notificationEventIsRecovery(event) {
+		return visible && visibleStatus == strings.TrimSpace(event.PreviousStatus)
+	}
+	return !visible || visibleStatus != status
 }
 
 func enabledNotificationChannelsTx(ctx context.Context, tx *sql.Tx) ([]notificationDispatchChannel, error) {
@@ -281,9 +362,11 @@ func (s *SQLiteStore) claimNextNotificationDelivery(ctx context.Context, now tim
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries
-		SET state = 'pending', lease_until = 0, claim_token = '', updated_at = ?
+		SET state = 'failed', attempts = attempts + 1,
+		    next_attempt_at = ?, last_error = ?,
+		    lease_until = 0, claim_token = '', updated_at = ?
 		WHERE state = 'leased' AND lease_until <= ?
-	`, nowUnix, nowUnix); err != nil {
+	`, notificationDeliveryManualRetryAtUnix, notificationDeliveryOutcomeUnknownMessage, nowUnix, nowUnix); err != nil {
 		return queuedNotificationDelivery{}, false, false, err
 	}
 	// Legacy paused rows may resume only when their immutable routing binding is
@@ -336,6 +419,101 @@ func (s *SQLiteStore) claimNextNotificationDelivery(ctx context.Context, now tim
 		      )
 		  )
 	`, nowUnix); err != nil {
+		return queuedNotificationDelivery{}, false, false, err
+	}
+	// A newer status can arrive while an older delivery is leased. Once that
+	// lease is released after a failure, cancel the obsolete row before it can be
+	// retried and unblock the current state.
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE notification_deliveries AS stale
+		SET state = 'canceled', lease_until = 0, claim_token = '',
+		    last_error = CASE
+		      WHEN last_error = ? THEN 'delivery outcome unknown; superseded by newer status'
+		      ELSE 'superseded by newer status'
+		    END,
+		    superseded_by_event_id = COALESCE((
+		      SELECT newer.event_id
+		      FROM notification_deliveries newer
+		      WHERE newer.channel_id = stale.channel_id
+		        AND newer.channel_version = stale.channel_version
+		        AND newer.destination_fingerprint = stale.destination_fingerprint
+		        AND newer.event_type = stale.event_type
+		        AND newer.node_id = stale.node_id
+		        AND newer.id > stale.id
+		      ORDER BY newer.id DESC
+		      LIMIT 1
+		    ), ''),
+		    updated_at = ?
+		WHERE stale.state IN ('pending', 'paused', 'failed')
+		  AND TRIM(stale.node_id) <> ''
+		  AND TRIM(stale.previous_status) <> ''
+		  AND TRIM(stale.status) <> ''
+		  AND EXISTS (
+		    SELECT 1
+		    FROM notification_deliveries newer
+		    WHERE newer.channel_id = stale.channel_id
+		      AND newer.channel_version = stale.channel_version
+		      AND newer.destination_fingerprint = stale.destination_fingerprint
+		      AND newer.event_type = stale.event_type
+		      AND newer.node_id = stale.node_id
+		      AND newer.id > stale.id
+		  )
+	`, notificationDeliveryOutcomeUnknownMessage, nowUnix); err != nil {
+		return queuedNotificationDelivery{}, false, false, err
+	}
+	// Re-evaluate the user-visible state after any older lease has resolved. This
+	// closes the race where a newer opposite event was queued while the previous
+	// request was in flight but that request then failed before being written.
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE notification_deliveries AS current
+		SET state = 'canceled', lease_until = 0, claim_token = '',
+		    last_error = 'status suppressed because user-visible state did not change', updated_at = ?
+		WHERE current.state IN ('pending', 'paused', 'failed')
+		  AND TRIM(current.node_id) <> ''
+		  AND TRIM(current.previous_status) <> ''
+		  AND TRIM(current.status) <> ''
+		  AND (
+		    (
+		      current.status = 'online' AND
+		      COALESCE((
+		        SELECT prior.status
+		        FROM notification_deliveries prior
+		        WHERE prior.channel_id = current.channel_id
+		          AND prior.channel_version = current.channel_version
+		          AND prior.destination_fingerprint = current.destination_fingerprint
+		          AND prior.event_type = current.event_type
+		          AND prior.node_id = current.node_id
+		          AND prior.id < current.id
+		          AND (
+		            prior.state = 'delivered' OR
+		            prior.last_error = ? OR
+		            prior.last_error LIKE 'delivery outcome unknown; superseded%'
+		          )
+		        ORDER BY prior.id DESC
+		        LIMIT 1
+		      ), '') <> current.previous_status
+		    ) OR (
+		      current.status <> 'online' AND
+		      COALESCE((
+		        SELECT prior.status
+		        FROM notification_deliveries prior
+		        WHERE prior.channel_id = current.channel_id
+		          AND prior.channel_version = current.channel_version
+		          AND prior.destination_fingerprint = current.destination_fingerprint
+		          AND prior.event_type = current.event_type
+		          AND prior.node_id = current.node_id
+		          AND prior.id < current.id
+		          AND (
+		            prior.state = 'delivered' OR
+		            prior.last_error = ? OR
+		            prior.last_error LIKE 'delivery outcome unknown; superseded%'
+		          )
+		        ORDER BY prior.id DESC
+		        LIMIT 1
+		      ), '') = current.status
+		    )
+		  )
+	`, nowUnix, notificationDeliveryOutcomeUnknownMessage, notificationDeliveryOutcomeUnknownMessage); err != nil {
 		return queuedNotificationDelivery{}, false, false, err
 	}
 	var deliveryID int64
@@ -472,10 +650,13 @@ func (s *SQLiteStore) recordNotificationDeliveryAttemptOnce(ctx context.Context,
 
 	attempts := delivery.Attempts + 1
 	state := "pending"
-	if attempts >= notificationDeliveryMaxAttempts {
+	nextAttemptAt := now.Add(notificationRetryDelay(attempts)).UTC().Unix()
+	if errors.Is(sendErr, errNotificationDeliveryOutcomeUnknown) {
+		state = "failed"
+		nextAttemptAt = notificationDeliveryManualRetryAtUnix
+	} else if attempts >= notificationDeliveryMaxAttempts {
 		state = "failed"
 	}
-	delay := notificationRetryDelay(attempts)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -485,7 +666,7 @@ func (s *SQLiteStore) recordNotificationDeliveryAttemptOnce(ctx context.Context,
 		UPDATE notification_deliveries
 		SET state = ?, attempts = ?, next_attempt_at = ?, last_error = ?, lease_until = 0, claim_token = '', updated_at = ?
 		WHERE id = ? AND state = 'leased' AND claim_token = ?
-	`, state, attempts, now.Add(delay).UTC().Unix(), sanitizeNotificationDeliveryError(sendErr), nowUnix, delivery.ID, delivery.ClaimToken)
+	`, state, attempts, nextAttemptAt, sanitizeNotificationDeliveryError(sendErr), nowUnix, delivery.ID, delivery.ClaimToken)
 	if err != nil {
 		return err
 	}

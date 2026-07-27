@@ -1396,6 +1396,14 @@ func TestAgentStateDispatchesRecoveryAfterPersistedOffline(t *testing.T) {
 	}
 
 	postAgentState(t, h.handleAgentState, time.Now().UTC().Unix(), 22.5)
+	paths, forms, errors = telegram.waitForCalls(t, 1)
+	if len(errors) != 0 || len(paths) != 1 || len(forms) != 1 {
+		t.Fatalf("recovery was not held for stability: paths=%+v forms=%+v errors=%+v", paths, forms, errors)
+	}
+	if _, err := store.db.ExecContext(ctx, `UPDATE notification_deliveries SET next_attempt_at = 0 WHERE status = 'online' AND state = 'pending'`); err != nil {
+		t.Fatalf("make stable recovery due: %v", err)
+	}
+	h.dispatchPendingNotificationDeliveries(ctx)
 	paths, forms, errors = telegram.waitForCalls(t, 2)
 	if len(errors) != 0 {
 		t.Fatalf("telegram handler errors after recovery = %+v", errors)

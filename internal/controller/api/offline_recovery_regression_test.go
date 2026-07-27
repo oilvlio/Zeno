@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -76,7 +75,7 @@ func assertOfflineIncidentRecovered(t *testing.T, store *SQLiteStore) {
 	}
 }
 
-func TestAgentStateReconcilesOfflineIncidentAfterStoredStatusWasSilentlyOnline(t *testing.T) {
+func TestAgentStateReconcilesOfflineIncidentWithoutStandaloneRecoveryWhenAlertWasNotDelivered(t *testing.T) {
 	store := openOfflineRecoveryTestStore(t)
 	ctx := context.Background()
 	enabled := true
@@ -91,9 +90,12 @@ func TestAgentStateReconcilesOfflineIncidentAfterStoredStatusWasSilentlyOnline(t
 	telegram := newTelegramTestCapture(t)
 	h := &handler{store: store, notificationSender: newHTTPNotificationSender(telegram.server.Client(), telegram.server.URL), liveHub: newLiveUpdateHub(), presence: newAgentPresenceManager()}
 	postAgentState(t, h.handleAgentState, time.Now().UTC().Unix(), 22.5)
-	_, forms, errors := telegram.waitForCalls(t, 1)
-	if len(errors) != 0 || len(forms) != 1 || !strings.Contains(decodedTelegramText(forms[0]), "🟢[恢复]") {
-		t.Fatalf("recovery calls=%d forms=%+v errors=%+v, want one recovery", len(forms), forms, errors)
+	_, forms, errors := telegram.waitForCalls(t, 0)
+	if len(errors) != 0 || len(forms) != 0 {
+		t.Fatalf("recovery was not held for stability: forms=%+v errors=%+v", forms, errors)
+	}
+	if len(errors) != 0 || len(forms) != 0 {
+		t.Fatalf("standalone recovery calls=%d forms=%+v errors=%+v, want none", len(forms), forms, errors)
 	}
 	assertOfflineIncidentRecovered(t, store)
 }
