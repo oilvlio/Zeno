@@ -90,14 +90,22 @@ describe('ServerCard', () => {
     expect(html).toContain('class="node-specs"')
     expect(html).not.toContain('node-specs has-billing')
     expect(html).not.toContain('spec-billing')
-    expect(html).toContain('¥160 / 年')
-    expect(html).not.toContain('$20 / 年')
-    expect(html).not.toContain('node-renewal-row')
+    expect(html).toContain('¥ 160 / 年')
+    expect(html).not.toContain('$ 20 / 年')
     expect(html).toContain('node-renewal-cost')
-    expect(html).not.toContain('node-title-copy')
     expect(html).toMatch(/<div class="node-title-line">[\s\S]*<p>Example Node A<\/p><\/div>/)
-    expect(html).toMatch(/<div class="node-renewal-meta"><span class="node-expiry is-safe">永久<\/span><span class="node-renewal-cost is-safe" title="¥160 \/ 年">¥160 \/ 年<\/span><\/div>/)
+    expect(html).toMatch(/<div class="node-expiry-meta"><span class="node-expiry is-safe">永久<\/span><\/div>/)
+    expect(html).toMatch(/<div class="node-renewal-slot"><span class="node-renewal-cost" title="¥ 160 \/ 年">¥ 160 \/ 年<\/span><\/div>/)
     expect(html).toMatch(/<section class="node-specs"[^>]*>[\s\S]*spec-cpu[\s\S]*spec-memory[\s\S]*spec-disk[\s\S]*<\/section>/)
+    expect(html).not.toContain('node-renewal-row')
+    expect(html).not.toContain('node-renewal-label')
+  })
+
+  it('reserves a centered renewal slot without sharing the server name row', () => {
+    const html = renderToStaticMarkup(<ServerCard node={{ ...baseNode, renewalAmount: null }} onOpen={vi.fn()} />)
+
+    expect(html).toMatch(/<div class="node-title-line">[\s\S]*<p>Example Node A<\/p><\/div>[\s\S]*<div class="node-renewal-slot"><\/div>/)
+    expect(html).not.toContain('node-renewal-cost')
   })
 
   it('updates the renewal amount when a non-default display currency is selected', () => {
@@ -105,7 +113,7 @@ describe('ServerCard', () => {
       <ServerCard node={{ ...baseNode, renewalAmount: 20, renewalCurrency: 'USD', billingCycle: '年' }} displayCurrency="EUR" exchangeRates={{ CNY: 1, USD: 8, EUR: 10 }} onOpen={vi.fn()} />,
     )
 
-    expect(html).toContain('€16 / 年')
-    expect(html).toContain('title="€16 / 年"')
+    expect(html).toContain('€ 16 / 年')
+    expect(html).toContain('title="€ 16 / 年"')
   })
 })

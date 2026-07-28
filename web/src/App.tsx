@@ -1285,6 +1285,7 @@ interface DashboardHeaderProps {
   onHome: () => void
   onAdmin: () => void
   adminLabel?: string
+  leadingAction?: ReactNode
   trailingAction?: ReactNode
   onThemeChange?: (theme: AdminTheme) => void
   onBackgroundToggle?: () => void
@@ -1300,9 +1301,20 @@ interface HomeTopPanelProps extends HomeOverviewPanelProps {
 }
 
 export function HomeTopPanel({ settings = defaultSettings, onHome, onAdmin, onThemeChange, onBackgroundToggle, backgroundEnabled = false, ...overview }: HomeTopPanelProps) {
+  const headerCurrency = normalizeCurrencyCode(overview.displayCurrency ?? 'CNY')
+  const headerExchangeRates = normalizeCurrencyRates(overview.exchangeRates ?? { CNY: 1 })
+  const headerCurrencyOptions = overview.currencyOptions ?? availableCurrencyOptions(headerExchangeRates)
   return (
     <section className="home-top-card" aria-label="homepage control panel">
-      <DashboardHeader settings={settings} onHome={onHome} onAdmin={onAdmin} onThemeChange={onThemeChange} onBackgroundToggle={onBackgroundToggle} backgroundEnabled={backgroundEnabled} />
+      <DashboardHeader
+        settings={settings}
+        onHome={onHome}
+        onAdmin={onAdmin}
+        leadingAction={<HomeCurrencyMenu value={headerCurrency} options={headerCurrencyOptions} onChange={overview.onCurrencyChange} />}
+        onThemeChange={onThemeChange}
+        onBackgroundToggle={onBackgroundToggle}
+        backgroundEnabled={backgroundEnabled}
+      />
       <HomeOverviewPanel settings={settings} {...overview} />
     </section>
   )
@@ -1353,7 +1365,7 @@ function BrandLogo({ logoUrl, siteTitle }: { logoUrl?: string; siteTitle?: strin
   )
 }
 
-function DashboardHeader({ settings = defaultSettings, onHome, onAdmin, adminLabel = '后台', trailingAction, onThemeChange, onBackgroundToggle, backgroundEnabled = false }: DashboardHeaderProps) {
+function DashboardHeader({ settings = defaultSettings, onHome, onAdmin, adminLabel = '后台', leadingAction, trailingAction, onThemeChange, onBackgroundToggle, backgroundEnabled = false }: DashboardHeaderProps) {
   const [themeMenuOpen, setThemeMenuOpen] = useState(false)
   const themeMenuRef = useRef<HTMLDivElement>(null)
   const themeMode = settings.theme
@@ -1392,6 +1404,7 @@ function DashboardHeader({ settings = defaultSettings, onHome, onAdmin, adminLab
         <span>{settings.siteTitle || 'Zeno'}</span>
       </button>
       <nav className="nav-actions" aria-label="dashboard actions">
+        {leadingAction}
         <button className="login-link" type="button" onClick={onAdmin}>{adminLabel}</button>
         <div className="theme-menu" ref={themeMenuRef}>
           <button className="nav-icon-button" type="button" aria-label={`主题：${currentThemeLabel}`} aria-haspopup="menu" aria-expanded={themeMenuOpen} onClick={() => setThemeMenuOpen((open) => !open)}>{themeMode === 'system' ? <MonitorIcon /> : currentTheme === 'dark' ? <MoonIcon /> : <SunIcon />}<span className="sr-only">切换深浅色</span></button>
@@ -3828,6 +3841,16 @@ function HomeTrafficDirectionIcon({ direction }: { direction: 'upload' | 'downlo
   )
 }
 
+function HomeMonthlyCostIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M7 9h.01M17 15h.01" />
+    </svg>
+  )
+}
+
 interface HomeTrafficSummaryProps {
   direction: 'upload' | 'download'
   rate: ReturnType<typeof compactRateParts>
@@ -3938,7 +3961,6 @@ function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
         }}
       >
         <span className="home-currency-select__value">{selectedOption?.shortLabel ?? value}</span>
-        <ChevronDownIcon expanded={open} />
       </button>
       {open && (
         <div id={menuId} className="home-currency-popover" role="listbox" aria-label="金额单位">
@@ -3964,13 +3986,12 @@ function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
   )
 }
 
-export function HomeOverviewPanel({ totalCount, onlineCount, monthlyCost, displayCurrency = 'CNY', exchangeRates: inputExchangeRates = { CNY: 1 }, currencyOptions: inputCurrencyOptions, onCurrencyChange, totalUp, totalDown, upSpeed, downSpeed }: HomeOverviewPanelProps) {
+export function HomeOverviewPanel({ totalCount, onlineCount, monthlyCost, displayCurrency = 'CNY', exchangeRates: inputExchangeRates = { CNY: 1 }, totalUp, totalDown, upSpeed, downSpeed }: HomeOverviewPanelProps) {
   const uploadRate = compactRateParts(upSpeed)
   const downloadRate = compactRateParts(downSpeed)
   const onlineRatio = totalCount > 0 ? Math.min(100, Math.max(0, Math.round((onlineCount / totalCount) * 100))) : 0
   const exchangeRates = normalizeCurrencyRates(inputExchangeRates)
   const activeCurrency = normalizeCurrencyCode(displayCurrency)
-  const currencyChoices = inputCurrencyOptions ?? availableCurrencyOptions(exchangeRates)
   return (
     <section className="home-summary" aria-label="server overview">
       <div className="home-summary__tile home-summary__status" aria-label="服务器在线摘要">
@@ -3979,20 +4000,22 @@ export function HomeOverviewPanel({ totalCount, onlineCount, monthlyCost, displa
             <span className="home-summary__status-dot" aria-hidden="true" />
             <span>在线节点</span>
           </span>
-          <HomeCurrencyMenu value={activeCurrency} options={currencyChoices} onChange={onCurrencyChange} />
         </div>
-        <div className="home-summary__status-body">
-          <div className="home-summary__status-value">
-            <strong>{onlineCount}</strong>
-            <span>/ {totalCount}</span>
-          </div>
-          <div className="home-summary__status-cost">
-            <span className="home-summary__status-cost-label">月均消费</span>
-            <strong>{formatCurrencyAmount(monthlyCost, activeCurrency, { fixed: true, spaced: true })}</strong>
-          </div>
+        <div className="home-summary__status-value">
+          <strong>{onlineCount}</strong>
+          <span>/ {totalCount}</span>
         </div>
         <div className="home-summary__status-track" aria-hidden="true">
           <span style={{ width: `${onlineRatio}%` }} />
+        </div>
+      </div>
+      <div className="home-summary__tile home-summary__cost" aria-label="月均消费">
+        <div className="home-summary__cost-heading">
+          <span className="home-summary__cost-icon"><HomeMonthlyCostIcon /></span>
+          <span>月均消费</span>
+        </div>
+        <div className="home-summary__cost-value">
+          <strong>{formatCurrencyAmount(monthlyCost, activeCurrency, { fixed: true, spaced: true })}</strong>
         </div>
       </div>
       <HomeTrafficSummary direction="upload" rate={uploadRate} total={compactBytes(totalUp)} />

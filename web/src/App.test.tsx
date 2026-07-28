@@ -390,7 +390,7 @@ describe('HomeTopPanel', () => {
     })
   })
 
-  it('keeps the homepage top controls inside one card with a structured status and traffic overview', () => {
+  it('keeps the homepage top controls inside one card with four separate overview tiles', () => {
     const html = renderToStaticMarkup(
       <HomeTopPanel
         {...overviewProps}
@@ -411,11 +411,18 @@ describe('HomeTopPanel', () => {
     expect(html).not.toContain('VPS 状态总览')
     expect(html).toContain('home-summary')
     expect(html).toContain('home-summary__status')
+    expect(html).toContain('home-summary__cost')
     expect(html).toContain('home-summary__status-track')
+    expect(html.match(/home-summary__tile/g)).toHaveLength(4)
+    expect(html).toContain('home-summary__status-dot')
+    expect(html).toMatch(/home-summary__status[\s\S]*?home-summary__cost[\s\S]*?home-summary__network--upload[\s\S]*?home-summary__network--download/)
     expect(html).toContain('在线节点')
     expect(html).toContain('月均消费')
     expect(html).toContain('¥ 88.50')
+    expect(html).not.toContain('home-summary__status-body')
+    expect(html).not.toContain('home-summary__status-cost')
     expect(html).toContain('class="home-currency-menu"')
+    expect(html).toMatch(/<nav class="nav-actions"[^>]*><div class="home-currency-menu"[\s\S]*?<\/div><button class="login-link"/)
     expect(html).toContain('aria-label="金额单位：人民币 CNY"')
     expect(html).toContain('aria-haspopup="listbox"')
     expect(html).toContain('aria-expanded="false"')
@@ -423,6 +430,7 @@ describe('HomeTopPanel', () => {
     expect(html).not.toContain('class="fi fi-cn"')
     expect(html).toContain('home-currency-select__value')
     expect(html).toContain('>CNY</span>')
+    expect(html).toMatch(/<button class="home-currency-select"[\s\S]*?<span class="home-currency-select__value">CNY<\/span><\/button>/)
     expect(html).not.toContain('<select')
     expect(html).not.toContain('<option')
     expect(html).not.toContain('home-summary__status-meta')
@@ -439,6 +447,9 @@ describe('HomeTopPanel', () => {
     expect(html).toContain('上传速率')
     expect(html).toContain('下载速率')
     expect(html).toContain('home-summary__network-icon')
+    expect(html).toMatch(/home-summary__status-dot[^>]*><\/span><span>在线节点<\/span>/)
+    expect(html).toMatch(/home-summary__cost-icon[\s\S]*?月均消费/)
+    expect(html).toMatch(/home-summary__network-icon[\s\S]*?上传速率<\/dt>/)
     expect(html).not.toContain('实时')
     expect(html).not.toContain('累计上传')
     expect(html).not.toContain('累计下载')

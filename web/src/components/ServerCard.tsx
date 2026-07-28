@@ -121,7 +121,7 @@ function formatRenewalCost(amount: number | null | undefined, currency: string |
   const shownCurrency = converted === null ? sourceCurrency : displayCurrency
   const shownAmount = converted ?? amount
   const cycleText = (cycle ?? '').trim()
-  return `${formatCurrencyAmount(shownAmount, shownCurrency)}${cycleText ? ` / ${cycleText}` : ''}`
+  return `${formatCurrencyAmount(shownAmount, shownCurrency, { spaced: true })}${cycleText ? ` / ${cycleText}` : ''}`
 }
 
 export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: inputExchangeRates = { CNY: 1 }, onOpen }: ServerCardProps) {
@@ -156,12 +156,14 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
           <ServerFlag countryCode={node.countryCode} className="node-flag" />
           <p>{node.displayName}</p>
         </div>
-        {(renewalCost || expiry) && (
-          <div className="node-renewal-meta">
-            {expiry && <span className={`node-expiry is-${expiry.tone}`}>{expiry.text}</span>}
-            {renewalCost && <span className={`node-renewal-cost${expiry ? ` is-${expiry.tone}` : ''}`} title={renewalCost}>{renewalCost}</span>}
+        {expiry && (
+          <div className="node-expiry-meta">
+            <span className={`node-expiry is-${expiry.tone}`}>{expiry.text}</span>
           </div>
         )}
+        <div className="node-renewal-slot">
+          {renewalCost && <span className="node-renewal-cost" title={renewalCost}>{renewalCost}</span>}
+        </div>
       </section>
 
       <section className="node-specs" aria-label={`${node.displayName} specs`}>
