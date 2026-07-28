@@ -43,7 +43,7 @@ func (s *SQLiteStore) RefreshExchangeRates(ctx context.Context, client *http.Cli
 		endpoint = defaultExchangeRateURL
 	}
 	if !strings.Contains(endpoint, "{currency}") {
-		return fmt.Errorf("Google Finance exchange rate endpoint must contain {currency}")
+		return fmt.Errorf("google finance exchange rate endpoint must contain {currency}")
 	}
 
 	type quoteResult struct {
@@ -117,14 +117,14 @@ func fetchGoogleFinanceRate(ctx context.Context, client *http.Client, endpoint, 
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-		return 0, fmt.Errorf("Google Finance returned %d", response.StatusCode)
+		return 0, fmt.Errorf("google finance returned %d", response.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, googleFinanceMaxResponseBytes+1))
 	if err != nil {
 		return 0, fmt.Errorf("read Google Finance response: %w", err)
 	}
 	if len(body) > googleFinanceMaxResponseBytes {
-		return 0, fmt.Errorf("Google Finance response is too large")
+		return 0, fmt.Errorf("google finance response is too large")
 	}
 	return parseGoogleFinanceRate(body)
 }
@@ -141,7 +141,7 @@ func parseGoogleFinanceRate(body []byte) (float64, error) {
 			return rate, nil
 		}
 	}
-	return 0, fmt.Errorf("Google Finance response does not contain a valid exchange rate")
+	return 0, fmt.Errorf("google finance response does not contain a valid exchange rate")
 }
 
 func validExchangeRate(value float64) bool {
