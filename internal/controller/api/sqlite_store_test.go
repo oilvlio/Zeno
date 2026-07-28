@@ -37,7 +37,7 @@ func TestEmptyPublicSummaryUsesJSONArrays(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal empty summary: %v", err)
 	}
-	if got := string(payload); got != `{"nodes":[],"services":[],"latency_points":[]}` {
+	if got := string(payload); got != `{"nodes":[],"services":[],"latency_points":[],"exchange_rates":{"CNY":1}}` {
 		t.Fatalf("empty summary JSON = %s", got)
 	}
 }

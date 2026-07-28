@@ -414,6 +414,8 @@ type AdminNodeCreateRequest struct {
 	ExpiryDate        string             `json:"expiry_date,omitempty"`
 	ExpiryPermanent   bool               `json:"expiry_permanent,omitempty"`
 	BillingCycle      string             `json:"billing_cycle,omitempty"`
+	RenewalAmount     adminOptionalFloat `json:"renewal_amount,omitempty"`
+	RenewalCurrency   string             `json:"renewal_currency,omitempty"`
 	BillingMode       string             `json:"billing_mode,omitempty"`
 	MonthlyResetDay   *int               `json:"monthly_reset_day,omitempty"`
 	DisplayOrder      int                `json:"display_order,omitempty"`
@@ -445,6 +447,18 @@ func (request *AdminNodeCreateRequest) normalize() error {
 		return errInvalidAdminNodeCreate
 	}
 	request.BillingCycle = billingCycle
+	if request.RenewalAmount.Set && request.RenewalAmount.Valid {
+		amount, ok := normalizeAdminNodeRenewalAmount(request.RenewalAmount.Value)
+		if !ok {
+			return errInvalidAdminNodeCreate
+		}
+		request.RenewalAmount.Value = amount
+	}
+	currency, ok := normalizeAdminNodeRenewalCurrency(request.RenewalCurrency)
+	if !ok {
+		return errInvalidAdminNodeCreate
+	}
+	request.RenewalCurrency = currency
 	billingMode, ok := normalizeAdminNodeBillingMode(request.BillingMode)
 	if !ok {
 		return errInvalidAdminNodeCreate
@@ -938,6 +952,8 @@ type AdminNodeUpdateRequest struct {
 	ExpiryDate        *string            `json:"expiry_date,omitempty"`
 	ExpiryPermanent   *bool              `json:"expiry_permanent,omitempty"`
 	BillingCycle      *string            `json:"billing_cycle,omitempty"`
+	RenewalAmount     adminOptionalFloat `json:"renewal_amount,omitempty"`
+	RenewalCurrency   *string            `json:"renewal_currency,omitempty"`
 	BillingMode       *string            `json:"billing_mode,omitempty"`
 	MonthlyResetDay   *int               `json:"monthly_reset_day,omitempty"`
 	DisplayOrder      *int               `json:"display_order,omitempty"`
@@ -994,6 +1010,24 @@ func (request *AdminNodeUpdateRequest) normalize() error {
 			return errInvalidAdminNodeUpdate
 		}
 		request.BillingCycle = &trimmed
+	}
+	if request.RenewalAmount.Set {
+		changed = true
+		if request.RenewalAmount.Valid {
+			amount, ok := normalizeAdminNodeRenewalAmount(request.RenewalAmount.Value)
+			if !ok {
+				return errInvalidAdminNodeUpdate
+			}
+			request.RenewalAmount.Value = amount
+		}
+	}
+	if request.RenewalCurrency != nil {
+		changed = true
+		currency, ok := normalizeAdminNodeRenewalCurrency(*request.RenewalCurrency)
+		if !ok {
+			return errInvalidAdminNodeUpdate
+		}
+		request.RenewalCurrency = &currency
 	}
 	if request.BillingMode != nil {
 		changed = true
@@ -1074,6 +1108,28 @@ type adminOptionalInt64 struct {
 	Value int64
 }
 
+type adminOptionalFloat struct {
+	Set   bool
+	Valid bool
+	Value float64
+}
+
+func (value *adminOptionalFloat) UnmarshalJSON(data []byte) error {
+	value.Set = true
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		value.Valid = false
+		value.Value = 0
+		return nil
+	}
+	var parsed float64
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	value.Valid = true
+	value.Value = parsed
+	return nil
+}
+
 func (value *adminOptionalInt64) UnmarshalJSON(data []byte) error {
 	value.Set = true
 	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
@@ -1091,35 +1147,66 @@ func (value *adminOptionalInt64) UnmarshalJSON(data []byte) error {
 }
 
 type AdminNode struct {
-	ID                string  `json:"id"`
-	DisplayName       string  `json:"display_name"`
-	Status            string  `json:"status"`
-	CountryCode       string  `json:"country_code,omitempty"`
-	Region            string  `json:"region,omitempty"`
-	HomeProbeTargetID string  `json:"home_probe_target_id,omitempty"`
-	Disabled          bool    `json:"disabled"`
-	BillingMode       string  `json:"billing_mode"`
-	MonthlyResetDay   int     `json:"monthly_reset_day"`
-	ExpiryDate        string  `json:"expiry_date,omitempty"`
-	ExpiryPermanent   bool    `json:"expiry_permanent"`
-	BillingCycle      string  `json:"billing_cycle,omitempty"`
-	DisplayOrder      int     `json:"display_order"`
-	PublicIPv4        string  `json:"public_ipv4,omitempty"`
-	PublicIPv6        string  `json:"public_ipv6,omitempty"`
-	MonthlyQuotaBytes *int64  `json:"monthly_quota_bytes,omitempty"`
-	LastSeenAt        *string `json:"last_seen_at,omitempty"`
-	CreatedAt         string  `json:"created_at"`
-	UpdatedAt         string  `json:"updated_at"`
-	Hostname          string  `json:"hostname,omitempty"`
-	OSName            string  `json:"os_name,omitempty"`
-	OSVersion         string  `json:"os_version,omitempty"`
-	Kernel            string  `json:"kernel,omitempty"`
-	Arch              string  `json:"arch,omitempty"`
-	Virtualization    string  `json:"virtualization,omitempty"`
-	CPUModel          string  `json:"cpu_model,omitempty"`
-	CPUCores          *int    `json:"cpu_cores,omitempty"`
-	MemoryTotalBytes  *int64  `json:"memory_total_bytes,omitempty"`
-	DiskTotalBytes    *int64  `json:"disk_total_bytes,omitempty"`
-	BootTime          *string `json:"boot_time,omitempty"`
-	AgentVersion      string  `json:"agent_version,omitempty"`
+	ID                string   `json:"id"`
+	DisplayName       string   `json:"display_name"`
+	Status            string   `json:"status"`
+	CountryCode       string   `json:"country_code,omitempty"`
+	Region            string   `json:"region,omitempty"`
+	HomeProbeTargetID string   `json:"home_probe_target_id,omitempty"`
+	Disabled          bool     `json:"disabled"`
+	BillingMode       string   `json:"billing_mode"`
+	MonthlyResetDay   int      `json:"monthly_reset_day"`
+	ExpiryDate        string   `json:"expiry_date,omitempty"`
+	ExpiryPermanent   bool     `json:"expiry_permanent"`
+	BillingCycle      string   `json:"billing_cycle,omitempty"`
+	RenewalAmount     *float64 `json:"renewal_amount,omitempty"`
+	RenewalCurrency   string   `json:"renewal_currency"`
+	DisplayOrder      int      `json:"display_order"`
+	PublicIPv4        string   `json:"public_ipv4,omitempty"`
+	PublicIPv6        string   `json:"public_ipv6,omitempty"`
+	MonthlyQuotaBytes *int64   `json:"monthly_quota_bytes,omitempty"`
+	LastSeenAt        *string  `json:"last_seen_at,omitempty"`
+	CreatedAt         string   `json:"created_at"`
+	UpdatedAt         string   `json:"updated_at"`
+	Hostname          string   `json:"hostname,omitempty"`
+	OSName            string   `json:"os_name,omitempty"`
+	OSVersion         string   `json:"os_version,omitempty"`
+	Kernel            string   `json:"kernel,omitempty"`
+	Arch              string   `json:"arch,omitempty"`
+	Virtualization    string   `json:"virtualization,omitempty"`
+	CPUModel          string   `json:"cpu_model,omitempty"`
+	CPUCores          *int     `json:"cpu_cores,omitempty"`
+	MemoryTotalBytes  *int64   `json:"memory_total_bytes,omitempty"`
+	DiskTotalBytes    *int64   `json:"disk_total_bytes,omitempty"`
+	BootTime          *string  `json:"boot_time,omitempty"`
+	AgentVersion      string   `json:"agent_version,omitempty"`
+}
+
+var adminNodeRenewalCurrencies = map[string]struct{}{
+	"CNY": {},
+	"USD": {},
+	"HKD": {},
+	"EUR": {},
+	"GBP": {},
+	"JPY": {},
+	"SGD": {},
+	"AUD": {},
+	"CAD": {},
+	"KRW": {},
+}
+
+func normalizeAdminNodeRenewalCurrency(value string) (string, bool) {
+	currency := strings.ToUpper(strings.TrimSpace(value))
+	if currency == "" {
+		currency = "CNY"
+	}
+	_, ok := adminNodeRenewalCurrencies[currency]
+	return currency, ok
+}
+
+func normalizeAdminNodeRenewalAmount(value float64) (float64, bool) {
+	if math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 || value > 1_000_000_000 {
+		return 0, false
+	}
+	return math.Round(value*100) / 100, true
 }

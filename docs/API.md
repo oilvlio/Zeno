@@ -286,7 +286,7 @@ Controller 对下发给单个节点的探针配置做资源上限：最多 32 �
 
 ### GET /api/public/v1/summary
 
-首页使用，返回节点卡片所需数据。节点按后台 `display_order ASC, id ASC` 排序；`expiry_label` 来自后台节点的 `expiry_date`，没有配置时为空，前端按永久展示。前端会把 summary 写入 localStorage，携带 `storedAt`，短 TTL 内作为新鲜数据；超过短 TTL 仍可作为兜底展示，但必须标出“数据已过期 / 最后更新”，同时展示 WS/HTTP 当前状态。
+首页使用，返回节点卡片所需数据。节点按后台 `display_order ASC, id ASC` 排序；`expiry_label` 来自后台节点的 `expiry_date`。配置续费金额后，节点同时返回原币种金额、账单周期和按最近一次成功汇率折算的人民币月均消费；永久节点不计入月均消费。`exchange_rates` 表示 1 单位币种可兑换的人民币金额，供首页顶部和服务器卡片跟随用户选择的展示单位换算；默认选择 CNY。Controller 每天从 Google Finance 获取各币种兑人民币的当天汇率并持久缓存，刷新失败时继续使用上次成功值。
 
 节点响应示例：
 
@@ -299,6 +299,10 @@ Controller 对下发给单个节点的探针配置做资源上限：最多 32 �
       "status": "online",
       "country_code": "HK",
       "expiry_label": "2026-08-01",
+      "renewal_amount": 20,
+      "renewal_currency": "USD",
+      "billing_cycle": "年",
+      "monthly_cost_cny": 11.75,
       "cpu_percent": 12.5,
       "memory_used_bytes": 1073741824,
       "memory_total_bytes": 2147483648,
@@ -330,7 +334,12 @@ Controller 对下发给单个节点的探针配置做资源上限：最多 32 �
       "updated_at": "2026-07-04T12:00:00Z"
     }
   ],
-  "latency_points": []
+  "latency_points": [],
+  "exchange_rates": {
+    "CNY": 1,
+    "USD": 7.18,
+    "EUR": 8.42
+  }
 }
 ```
 
@@ -532,7 +541,7 @@ X-Admin-Token: <admin-token>
 
 ### GET /api/admin/v1/nodes
 
-节点管理列表，返回 enabled + disabled 节点、状态、地区、到期日、账单周期、显示顺序、公网 IPv4/IPv6、流量计费口径、月流量重置日、配额、last seen、host info 和 agent version。列表按 `display_order ASC, id ASC` 排序；后台 UI 的服务器列表只展示名称、状态、公网 IP、Agent 和编辑操作；IPv4/IPv6 分行显示且不加 v4/v6 前缀；显示顺序可通过整理顺序或编辑表单写回 `display_order`。
+节点管理列表，返回 enabled + disabled 节点、状态、地区、到期日、续费金额、币种、账单周期、显示顺序、公网 IPv4/IPv6、流量计费口径、月流量重置日、配额、last seen、host info 和 agent version。列表按 `display_order ASC, id ASC` 排序。
 
 响应字段重点：
 
@@ -550,6 +559,8 @@ X-Admin-Token: <admin-token>
       "monthly_reset_day": 1,
       "expiry_date": "2026-08-01",
       "billing_cycle": "月付",
+      "renewal_amount": 20,
+      "renewal_currency": "USD",
       "display_order": 10,
       "public_ipv4": "198.51.100.8",
       "public_ipv6": "2001:db8::8",
@@ -576,6 +587,8 @@ X-Admin-Token: <admin-token>
   "region": "Hong Kong",
   "expiry_date": "2026-08-01",
   "billing_cycle": "月付",
+  "renewal_amount": 20,
+  "renewal_currency": "USD",
   "billing_mode": "both",
   "monthly_reset_day": 1,
   "display_order": 10,
@@ -585,7 +598,7 @@ X-Admin-Token: <admin-token>
 }
 ```
 
-响应返回新节点 DTO，但不会返回 Agent token 原文或 token hash。新节点默认 `status=no_data`，并自动分配当前启用的探针目标。`billing_mode` 可选 `both`、`in`、`out`、`max`，默认 `both`；`monthly_reset_day` 范围 1–31，默认 1。`expiry_date` 为空时清空到期日；非空时必须是 `YYYY-MM-DD`。`display_order` 必须是非负整数；`public_ipv4` / `public_ipv6` 为空可省略，非空时会校验 IP 版本。
+响应返回新节点 DTO，但不会返回 Agent token 原文或 token hash。新节点默认 `status=no_data`，并自动分配当前启用的探针目标。`renewal_amount` 可为空或为大于 0 的金额；`renewal_currency` 支持 `CNY`、`USD`、`HKD`、`EUR`、`GBP`、`JPY`、`SGD`、`AUD`、`CAD`、`KRW`，默认 `CNY`。`billing_mode` 可选 `both`、`in`、`out`、`max`，默认 `both`；`monthly_reset_day` 范围 1–31，默认 1。`expiry_date` 为空时清空到期日；非空时必须是 `YYYY-MM-DD`。
 
 每次复制安装命令都会生成一个有效期 10 分钟、只能兑换一次的 enrollment token，并立即撤销该节点先前尚未使用的 enrollment；命令不会包含或复用 runtime token。生成命令本身不会中断已在线 Agent：当前 runtime token 继续有效。安装器兑换 enrollment 后会生成随机 runtime token；新 Agent 首次用该 token 成功鉴权时，Controller 才原子切换 runtime token，旧 runtime token 随即失效。后台 UI 提供 Linux / macOS / Windows 三种命令和复制按钮。命令中的 Controller 地址优先使用站点设置里的 `agent_controller_url`；未设置时才使用当前后台请求地址。未显式配置 Agent 版本时，安装脚本解析 Zeno-Agent 最新稳定 release。
 
@@ -602,6 +615,8 @@ X-Admin-Token: <admin-token>
   "region": "Hong Kong",
   "expiry_date": "2026-08-01",
   "billing_cycle": "月付",
+  "renewal_amount": 20,
+  "renewal_currency": "USD",
   "billing_mode": "max",
   "monthly_reset_day": 15,
   "display_order": 10,
@@ -614,7 +629,7 @@ X-Admin-Token: <admin-token>
 }
 ```
 
-字段均可部分提交；`monthly_quota_bytes: null` 表示清空月配额；`expiry_date` / `billing_cycle` / `public_ipv4` / `public_ipv6` 提交空字符串表示清空。`billing_mode` 可选 `both`（入站+出站）、`in`（只算入站）、`out`（只算出站）、`max`（入/出取较大）；`monthly_reset_day` 范围 1–31。`display_name` 不能为空，`expiry_date` 非空时必须是 `YYYY-MM-DD`，`display_order` 必须是非负整数，公网 IP 会分别校验 IPv4 / IPv6。
+字段均可部分提交；`monthly_quota_bytes: null` 表示清空月配额，`renewal_amount: null` 表示清空续费金额；`expiry_date` / `billing_cycle` / `public_ipv4` / `public_ipv6` 提交空字符串表示清空。币种范围与创建接口一致。`billing_mode` 可选 `both`（入站+出站）、`in`（只算入站）、`out`（只算出站）、`max`（入/出取较大）；`monthly_reset_day` 范围 1–31。
 
 编辑服务器时可同时提交 `probe_target_ids`，后端会在同一事务内替换该服务器的延迟监控关联并更新 `home_probe_target_id`，避免前端为每个目标分别发送 PATCH。首页目标非空时必须包含在 `probe_target_ids` 中；空数组表示取消全部关联。
 

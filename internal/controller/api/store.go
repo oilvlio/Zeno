@@ -18,7 +18,7 @@ type Store interface {
 type mockStore struct{}
 
 func (mockStore) Summary(ctx context.Context) (SummaryResponse, error) {
-	return SummaryResponse{Nodes: mockNodes(), Services: mockServiceTargets(), LatencyPoints: []LatencyPoint{}}, nil
+	return SummaryResponse{Nodes: mockNodes(), Services: mockServiceTargets(), LatencyPoints: []LatencyPoint{}, ExchangeRates: map[string]float64{"CNY": 1}}, nil
 }
 
 func (mockStore) PublicSettings(ctx context.Context) (SiteSettings, error) {

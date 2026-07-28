@@ -1,4 +1,4 @@
-import { type CSSProperties, type DragEvent, type FormEvent, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { type CSSProperties, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import copy from 'copy-to-clipboard'
 import { createAdminNode, createAdminNotificationChannel, createAdminProbeTarget, deleteAdminNode, deleteAdminNotificationChannel, deleteAdminProbeTarget, fetchAdminAlertRules, fetchAdminNodes, fetchAdminNotificationChannels, fetchAdminProbeTargets, fetchAdminSettings, fetchNodeLatency, fetchNodeState, fetchPublicSettings, fetchServiceLatency, fetchSummary, subscribeNodeLatency, subscribeNodeState, subscribeServiceLatency, subscribeSummary, requestAdminNodeInstallCommand, testAdminNotificationChannel, updateAdminAlertRule, updateAdminNode, updateAdminNotificationChannel, updateAdminProbeTarget, updateAdminSettings, type AdminAlertRuleUpdateInput, type AdminNodeCreateInput, type AdminNodeUpdateInput, type AdminNotificationChannelCreateInput, type AdminNotificationChannelUpdateInput, type AdminProbeTargetInput, type AdminProbeTargetUpdateInput, type AdminSettingsUpdateInput, type NodeLatencyData, type NodeStateData, type ServiceLatencyData, type SummaryData } from './api/client'
@@ -16,6 +16,7 @@ import { applyCustomCode } from './lib/customCode'
 import { coerceHistoryRange, isHTTPUnauthorizedError, rangeRequiresAdmin } from './lib/historyRange'
 import { DetailMemoryCache, loadCachedDetailData, nodeLatencyCachePrefix, nodeStateCachePrefix, rememberDetailData, serviceLatencyCachePrefix } from './lib/detailCache'
 import { loadStoredSummary, rememberSummary } from './lib/summaryCache'
+import { availableCurrencyOptions, billingCycleMonths, convertCurrencyAmount, currencyOptions as displayCurrencyOptions, formatCurrencyAmount, normalizeCurrencyCode, normalizeCurrencyRates, rememberHomeCurrency, storedHomeCurrency, type CurrencyCode, type CurrencyRates } from './lib/currency'
 import type { AdminAlertRule, AdminNode, AdminNodeInstallCommand, AdminNotificationChannel, AdminProbeTarget, AdminSettings, AdminTheme, AppearancePreset, HomeCardNode, LatencyPoint, ProbeType, StatePoint } from './types'
 
 export { applyCustomCode, extractSafeCustomCSS } from './lib/customCode'
@@ -159,6 +160,19 @@ export function homeTrafficTotalsForNodes(nodes: HomeCardNode[]): { totalUp: num
     totalUp: sum(nodes.map((node) => node.netOutLifetimeBytes ?? node.netOutTotalBytes)),
     totalDown: sum(nodes.map((node) => node.netInLifetimeBytes ?? node.netInTotalBytes)),
   }
+}
+
+export function homeMonthlyCostForNodes(nodes: HomeCardNode[], displayCurrency: CurrencyCode, inputExchangeRates: CurrencyRates): number {
+  const exchangeRates = normalizeCurrencyRates(inputExchangeRates)
+  return sum(nodes.map((node) => {
+    if (node.monthlyCostCny === null || node.monthlyCostCny === undefined) return 0
+    const cycleMonths = billingCycleMonths(node.billingCycle)
+    const convertedRenewal = cycleMonths > 0
+      ? convertCurrencyAmount(node.renewalAmount, node.renewalCurrency, displayCurrency, exchangeRates)
+      : null
+    if (convertedRenewal !== null) return convertedRenewal / cycleMonths
+    return convertCurrencyAmount(node.monthlyCostCny, 'CNY', displayCurrency, exchangeRates) ?? 0
+  }))
 }
 
 function homeRealtimeSnapshotForNodes(nodes: HomeCardNode[]): HomeRealtimeSnapshot {
@@ -423,6 +437,7 @@ export function App() {
   })
   const [route, setRoute] = useState<DashboardRoute>(() => parseDashboardRoute(window.location.pathname))
   const [homeRegion, setHomeRegion] = useState('ALL')
+  const [homeCurrency, setHomeCurrency] = useState<CurrencyCode>(storedHomeCurrency)
   const [nodeLatencyRange, setNodeLatencyRange] = useState('1d')
   const [serviceLatencyRange, setServiceLatencyRange] = useState('1h')
   const [stateRange, setStateRange] = useState('1h')
@@ -1117,6 +1132,9 @@ export function App() {
   const activeHomeRegion = homeRegion === 'ALL' || homeRegions.includes(homeRegion) ? homeRegion : 'ALL'
   const visibleHomeNodes = filterHomeNodesByRegion(homeNodes, activeHomeRegion)
   const services = state.kind === 'ready' ? state.data.services : []
+  const exchangeRates = normalizeCurrencyRates(state.kind === 'ready' ? state.data.exchangeRates : null)
+  const homeCurrencyOptions = availableCurrencyOptions(exchangeRates)
+  const activeHomeCurrency = homeCurrencyOptions.some((option) => option.value === homeCurrency) ? homeCurrency : 'CNY'
   const selectedNode = route.kind === 'node' ? nodes.find((node) => node.id === route.nodeId) : undefined
   const selectedNodeLatencyPoints = latencyState.kind === 'ready' ? latencyState.data.points : summaryLatencyPoints(selectedNode)
   const selectedService = route.kind === 'service' ? services.find((service) => service.id === route.targetId) : undefined
@@ -1124,11 +1142,16 @@ export function App() {
   const onlineCount = homeRealtimeNodes.filter((node) => node.status === 'online').length
   const offlineCount = homeRealtimeNodes.filter((node) => node.status === 'offline').length
   const { totalUp, totalDown } = homeTrafficTotalsForNodes(homeRealtimeNodes)
+  const monthlyCost = homeMonthlyCostForNodes(homeRealtimeNodes, activeHomeCurrency, exchangeRates)
   const currentRealtimeSnapshot = homeRealtimeSnapshot ?? homeRealtimeSnapshotForNodes(homeRealtimeNodes)
   const upSpeed = currentRealtimeSnapshot.upSpeed
   const downSpeed = currentRealtimeSnapshot.downSpeed
   const hasBackgroundImage = (effectiveSettings.desktopBackgroundUrl || effectiveSettings.backgroundUrl || effectiveSettings.mobileBackgroundUrl).trim() !== ''
   const hasAdminToken = adminToken !== ''
+  const changeHomeCurrency = (currency: CurrencyCode) => {
+    rememberHomeCurrency(currency)
+    setHomeCurrency(currency)
+  }
 
   return (
     <main className="kulin-shell" data-theme={effectiveSettings.theme} data-background={hasBackgroundImage ? 'on' : 'off'} style={shellStyleForSettings(effectiveSettings)}>
@@ -1214,6 +1237,11 @@ export function App() {
             totalCount={totalCount}
             onlineCount={onlineCount}
             offlineCount={offlineCount}
+            monthlyCost={monthlyCost}
+            displayCurrency={activeHomeCurrency}
+            exchangeRates={exchangeRates}
+            currencyOptions={homeCurrencyOptions}
+            onCurrencyChange={changeHomeCurrency}
             totalUp={totalUp}
             totalDown={totalDown}
             upSpeed={upSpeed}
@@ -1228,7 +1256,7 @@ export function App() {
           <HomeRegionFilter regions={homeRegions} activeRegion={activeHomeRegion} onChange={setHomeRegion} />
 
           <section className="server-card-list" aria-label="server cards">
-            {visibleHomeNodes.map((node) => <ServerCard key={node.id} node={node} onOpen={navigateNode} />)}
+            {visibleHomeNodes.map((node) => <ServerCard key={node.id} node={node} displayCurrency={activeHomeCurrency} exchangeRates={exchangeRates} onOpen={navigateNode} />)}
           </section>
         </div>
       )}
@@ -1241,6 +1269,11 @@ interface HomeOverviewPanelProps {
   totalCount: number
   onlineCount: number
   offlineCount: number
+  monthlyCost: number
+  displayCurrency?: CurrencyCode
+  exchangeRates?: CurrencyRates
+  currencyOptions?: ReadonlyArray<{ value: CurrencyCode; label: string; shortLabel: string; flagCode: string }>
+  onCurrencyChange?: (currency: CurrencyCode) => void
   totalUp: number
   totalDown: number
   upSpeed: number
@@ -2159,6 +2192,8 @@ function AdminNodeCreateModal({ onCreate, onInstallCommand, onClose }: { onCreat
       expiryDate: String(formData.get('new-expiry-date') ?? '').trim(),
       expiryPermanent: formData.get('new-expiry-permanent') === '1',
       billingCycle: String(formData.get('new-billing-cycle') ?? '').trim(),
+      renewalAmount: parseRenewalAmount(String(formData.get('new-renewal-amount') ?? '')),
+      renewalCurrency: String(formData.get('new-renewal-currency') ?? 'CNY'),
       billingMode: String(formData.get('new-billing-mode') ?? 'both'),
       monthlyResetDay: parseMonthlyResetDay(String(formData.get('new-monthly-reset-day') ?? '')) ?? 1,
       monthlyQuotaBytes: parseQuota(String(formData.get('new-monthly-quota') ?? ''), String(formData.get('new-monthly-quota-unit') ?? 'GB')),
@@ -2246,13 +2281,18 @@ function AdminNodeCreateModal({ onCreate, onInstallCommand, onClose }: { onCreat
           <div className="admin-billing-grid">
             <div className="admin-billing-row admin-billing-row--cycle">
               <AdminDateField className="admin-billing-control admin-billing-control--expiry" name="new-expiry-date" label="到期日" permanentLabel="设为永久" disabled={Boolean(createdNode)} />
+              <label className="admin-billing-control admin-billing-control--amount">
+                <span>续费金额</span>
+                <input name="new-renewal-amount" type="number" min="0" max="1000000000" step="0.01" inputMode="decimal" disabled={Boolean(createdNode)} />
+              </label>
+              <AdminSegmentedField className="admin-billing-control admin-billing-control--currency" name="new-renewal-currency" label="币种" defaultValue="CNY" options={renewalCurrencyOptions} disabled={Boolean(createdNode)} />
+              <AdminSegmentedField className="admin-billing-control admin-billing-control--cycle" name="new-billing-cycle" label="账单周期" defaultValue="月" options={billingCycleOptions} disabled={Boolean(createdNode)} />
+            </div>
+            <div className="admin-billing-row admin-billing-row--traffic">
               <label className="admin-billing-control admin-billing-control--reset">
                 <span>月流量重置日</span>
                 <input name="new-monthly-reset-day" type="number" min="1" max="31" step="1" defaultValue="1" disabled={Boolean(createdNode)} />
               </label>
-              <AdminSegmentedField className="admin-billing-control admin-billing-control--cycle" name="new-billing-cycle" label="账单周期" defaultValue="月" options={billingCycleOptions} disabled={Boolean(createdNode)} />
-            </div>
-            <div className="admin-billing-row admin-billing-row--traffic">
               <AdminSegmentedField className="admin-billing-control admin-billing-control--mode" name="new-billing-mode" label="流量计费口径" defaultValue="both" options={billingModeOptions} disabled={Boolean(createdNode)} />
               <label className="admin-billing-control admin-billing-control--quota">
                 <span>月配额</span>
@@ -2317,6 +2357,8 @@ function AdminNodeEditModal({ node, targets, onUpdate, onInstallCommand, onClose
       expiryDate: String(formData.get('expiry-date') ?? '').trim(),
       expiryPermanent: formData.get('expiry-permanent') === '1',
       billingCycle: String(formData.get('billing-cycle') ?? '').trim(),
+      renewalAmount: parseRenewalAmount(String(formData.get('renewal-amount') ?? '')),
+      renewalCurrency: String(formData.get('renewal-currency') ?? node.renewalCurrency ?? 'CNY'),
       billingMode: String(formData.get('billing-mode') ?? node.billingMode),
       monthlyResetDay: parseMonthlyResetDay(String(formData.get('monthly-reset-day') ?? '')) ?? node.monthlyResetDay,
       monthlyQuotaBytes: parseQuota(String(formData.get('monthly-quota') ?? ''), String(formData.get('monthly-quota-unit') ?? quotaUnitForBytes(node.monthlyQuotaBytes))),
@@ -2406,13 +2448,18 @@ function AdminNodeEditModal({ node, targets, onUpdate, onInstallCommand, onClose
           <div className="admin-billing-grid">
             <div className="admin-billing-row admin-billing-row--cycle">
               <AdminDateField className="admin-billing-control admin-billing-control--expiry" name="expiry-date" label="到期日" defaultValue={node.expiryDate ?? ''} defaultPermanent={node.expiryPermanent} permanentLabel="设为永久" />
+              <label className="admin-billing-control admin-billing-control--amount">
+                <span>续费金额</span>
+                <input name="renewal-amount" type="number" min="0" max="1000000000" step="0.01" inputMode="decimal" defaultValue={formatRenewalAmountInput(node.renewalAmount)} />
+              </label>
+              <AdminSegmentedField className="admin-billing-control admin-billing-control--currency" name="renewal-currency" label="币种" defaultValue={node.renewalCurrency || 'CNY'} options={renewalCurrencyOptions} />
+              <AdminSegmentedField className="admin-billing-control admin-billing-control--cycle" name="billing-cycle" label="账单周期" defaultValue={normalizeBillingCycle(node.billingCycle)} options={billingCycleOptions} />
+            </div>
+            <div className="admin-billing-row admin-billing-row--traffic">
               <label className="admin-billing-control admin-billing-control--reset">
                 <span>月流量重置日</span>
                 <input name="monthly-reset-day" type="number" min="1" max="31" step="1" defaultValue={node.monthlyResetDay || 1} />
               </label>
-              <AdminSegmentedField className="admin-billing-control admin-billing-control--cycle" name="billing-cycle" label="账单周期" defaultValue={normalizeBillingCycle(node.billingCycle)} options={billingCycleOptions} />
-            </div>
-            <div className="admin-billing-row admin-billing-row--traffic">
               <AdminSegmentedField className="admin-billing-control admin-billing-control--mode" name="billing-mode" label="流量计费口径" defaultValue={node.billingMode || 'both'} options={billingModeOptions} />
               <label className="admin-billing-control admin-billing-control--quota">
                 <span>月配额</span>
@@ -3419,6 +3466,10 @@ const billingCycleOptions = [
   { value: '五年', label: '五年' },
 ]
 
+export const renewalCurrencyOptions = displayCurrencyOptions
+  .filter(({ value }) => value !== 'SGD' && value !== 'KRW')
+  .map(({ value, label }) => ({ value, label }))
+
 const quotaUnitOptions = [
   { value: 'GB', label: 'GB' },
   { value: 'TB', label: 'TB' },
@@ -3754,34 +3805,198 @@ function parseQuota(value: string, unit: string): number | null {
   return Math.round(parsed * multiplier)
 }
 
-export function HomeOverviewPanel({ totalCount, onlineCount, offlineCount: _offlineCount, totalUp, totalDown, upSpeed, downSpeed }: HomeOverviewPanelProps) {
+function parseRenewalAmount(value: string): number | null {
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+  const parsed = Number(trimmed)
+  if (!Number.isFinite(parsed) || parsed <= 0) return null
+  return Math.round(parsed * 100) / 100
+}
+
+function formatRenewalAmountInput(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value) || value <= 0) return ''
+  return String(value)
+}
+
+function HomeTrafficDirectionIcon({ direction }: { direction: 'upload' | 'download' }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d={direction === 'upload' ? 'M12 16V4' : 'M12 4v12'} />
+      <path d={direction === 'upload' ? 'm7 9 5-5 5 5' : 'm7 11 5 5 5-5'} />
+      <path d="M5 20h14" />
+    </svg>
+  )
+}
+
+interface HomeTrafficSummaryProps {
+  direction: 'upload' | 'download'
+  rate: ReturnType<typeof compactRateParts>
+  total: string
+}
+
+function HomeTrafficSummary({ direction, rate, total }: HomeTrafficSummaryProps) {
+  const isUpload = direction === 'upload'
+  return (
+    <dl className={`home-summary__tile home-summary__network home-summary__network--${direction}`} aria-label={isUpload ? 'upload traffic' : 'download traffic'}>
+      <div className="home-summary__network-heading">
+        <span className="home-summary__network-icon"><HomeTrafficDirectionIcon direction={direction} /></span>
+        <dt>{isUpload ? '上传速率' : '下载速率'}</dt>
+      </div>
+      <dd className="home-summary__network-rate">
+        <strong>{rate.value}</strong>
+        <span>{rate.unit}</span>
+      </dd>
+      <div className="home-summary__network-total">
+        <dt>{isUpload ? '累计发送' : '累计接收'}</dt>
+        <dd>{total}</dd>
+      </div>
+    </dl>
+  )
+}
+
+interface HomeCurrencyMenuProps {
+  value: CurrencyCode
+  options: ReadonlyArray<{ value: CurrencyCode; label: string; shortLabel: string; flagCode: string }>
+  onChange?: (currency: CurrencyCode) => void
+}
+
+function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
+  const [open, setOpen] = useState(false)
+  const menuId = useId()
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value))
+  const selectedOption = options[selectedIndex]
+
+  useEffect(() => {
+    if (!open) return undefined
+    const frame = window.requestAnimationFrame(() => optionRefs.current[selectedIndex]?.focus())
+    const handlePointerDown = (event: PointerEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setOpen(false)
+      triggerRef.current?.focus()
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open, selectedIndex])
+
+  const selectCurrency = (currency: CurrencyCode) => {
+    onChange?.(currency)
+    setOpen(false)
+    window.requestAnimationFrame(() => triggerRef.current?.focus())
+  }
+
+  const focusOption = (index: number) => {
+    const normalizedIndex = (index + options.length) % options.length
+    optionRefs.current[normalizedIndex]?.focus()
+  }
+
+  const handleOptionKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+      event.preventDefault()
+      focusOption(index + 1)
+    } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+      event.preventDefault()
+      focusOption(index - 1)
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      focusOption(0)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      focusOption(options.length - 1)
+    } else if (event.key === 'Tab') {
+      setOpen(false)
+    }
+  }
+
+  return (
+    <div className="home-currency-menu" ref={rootRef}>
+      <button
+        ref={triggerRef}
+        className="home-currency-select"
+        type="button"
+        title="切换首页金额单位"
+        aria-label={`金额单位：${selectedOption?.label ?? value}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={() => setOpen((current) => !current)}
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+          event.preventDefault()
+          setOpen(true)
+        }}
+      >
+        <span className="home-currency-select__value">{selectedOption?.shortLabel ?? value}</span>
+        <ChevronDownIcon expanded={open} />
+      </button>
+      {open && (
+        <div id={menuId} className="home-currency-popover" role="listbox" aria-label="金额单位">
+          {options.map((option, index) => (
+            <button
+              key={option.value}
+              ref={(element) => { optionRefs.current[index] = element }}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              data-active={option.value === value}
+              onClick={() => selectCurrency(option.value)}
+              onKeyDown={(event) => handleOptionKeyDown(event, index)}
+            >
+              <ServerFlag countryCode={option.flagCode} className="home-currency-option__flag" />
+              <span className="home-currency-option__name">{option.label.replace(` ${option.value}`, '')}</span>
+              <span className="home-currency-option__code">{option.shortLabel}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function HomeOverviewPanel({ totalCount, onlineCount, monthlyCost, displayCurrency = 'CNY', exchangeRates: inputExchangeRates = { CNY: 1 }, currencyOptions: inputCurrencyOptions, onCurrencyChange, totalUp, totalDown, upSpeed, downSpeed }: HomeOverviewPanelProps) {
   const uploadRate = compactRateParts(upSpeed)
   const downloadRate = compactRateParts(downSpeed)
+  const onlineRatio = totalCount > 0 ? Math.min(100, Math.max(0, Math.round((onlineCount / totalCount) * 100))) : 0
+  const exchangeRates = normalizeCurrencyRates(inputExchangeRates)
+  const activeCurrency = normalizeCurrencyCode(displayCurrency)
+  const currencyChoices = inputCurrencyOptions ?? availableCurrencyOptions(exchangeRates)
   return (
     <section className="home-summary" aria-label="server overview">
-      <div className="home-summary__tile home-summary__status-line" aria-label="服务器在线摘要">
-        <strong>{onlineCount} / {totalCount} 在线</strong>
+      <div className="home-summary__tile home-summary__status" aria-label="服务器在线摘要">
+        <div className="home-summary__status-heading">
+          <span className="home-summary__status-label">
+            <span className="home-summary__status-dot" aria-hidden="true" />
+            <span>在线节点</span>
+          </span>
+          <HomeCurrencyMenu value={activeCurrency} options={currencyChoices} onChange={onCurrencyChange} />
+        </div>
+        <div className="home-summary__status-body">
+          <div className="home-summary__status-value">
+            <strong>{onlineCount}</strong>
+            <span>/ {totalCount}</span>
+          </div>
+          <div className="home-summary__status-cost">
+            <span className="home-summary__status-cost-label">月均消费</span>
+            <strong>{formatCurrencyAmount(monthlyCost, activeCurrency, { fixed: true, spaced: true })}</strong>
+          </div>
+        </div>
+        <div className="home-summary__status-track" aria-hidden="true">
+          <span style={{ width: `${onlineRatio}%` }} />
+        </div>
       </div>
-
-      <dl className="home-summary__tile home-summary__metric home-summary__metric--send" aria-label="traffic sent">
-          <dt>发送</dt>
-          <dd>{compactBytes(totalUp)}</dd>
-      </dl>
-
-      <dl className="home-summary__tile home-summary__metric home-summary__metric--receive" aria-label="traffic received">
-          <dt>接收</dt>
-          <dd>{compactBytes(totalDown)}</dd>
-      </dl>
-
-      <dl className="home-summary__tile home-summary__metric home-summary__metric--upload-rate home-summary__metric--rate" aria-label="upload speed">
-          <dt>上传</dt>
-          <dd><span className="home-summary__rate-value"><span>{uploadRate.value}</span><span className="home-summary__rate-gap" aria-hidden="true">&nbsp;</span><span className="home-summary__rate-unit">{uploadRate.unit}</span></span></dd>
-      </dl>
-
-      <dl className="home-summary__tile home-summary__metric home-summary__metric--download-rate home-summary__metric--rate" aria-label="download speed">
-          <dt>下载</dt>
-          <dd><span className="home-summary__rate-value"><span>{downloadRate.value}</span><span className="home-summary__rate-gap" aria-hidden="true">&nbsp;</span><span className="home-summary__rate-unit">{downloadRate.unit}</span></span></dd>
-      </dl>
+      <HomeTrafficSummary direction="upload" rate={uploadRate} total={compactBytes(totalUp)} />
+      <HomeTrafficSummary direction="download" rate={downloadRate} total={compactBytes(totalDown)} />
     </section>
   )
 }

@@ -26,6 +26,8 @@
 - 国家 / 地区旗帜。
 - 服务器显示名。
 - 可选副标题：地区、运营商或标签。
+- 可选续费金额：保留编辑服务器时设置的账单周期，并按首页选择的金额单位换算展示。
+- 首页顶部提供金额单位选择，默认人民币；顶部月均消费和所有服务器卡片续费金额必须按当天 Google Finance 汇率同步切换，选择结果保存在当前浏览器。
 
 位置关系：
 
@@ -113,6 +115,10 @@ interface HomeCardNode {
   monthlyPeriodEnd?: string
   monthlyBillableBytes: number | null
   monthlyQuotaBytes: number | null
+  renewalAmount?: number | null
+  renewalCurrency?: string
+  billingCycle?: string
+  monthlyCostCny?: number | null
   latencySummary?: LatencySummary
 }
 

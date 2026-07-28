@@ -1,6 +1,7 @@
 import type { AdminAlertRule, AdminNode, AdminNodeInstallCommand, AdminNotificationChannel, AdminNotificationDelivery, AdminProbeTarget, AdminSettings, AdminTheme, AppearancePreset, HomeCardNode, LatencyPoint, ProbeType, ServiceTarget, StatePoint } from '../types'
 import { adminCookieSessionMarker } from '../lib/adminToken'
 import { adminHeaders } from './adminSession'
+import { normalizeCurrencyRates, type CurrencyRates } from '../lib/currency'
 
 export { fetchAdminAccount, loginAdmin, logoutAdmin, updateAdminAccount } from './adminSession'
 export type { AdminAccountData, AdminLoginData } from './adminSession'
@@ -49,6 +50,10 @@ interface ApiNode {
   subtitle?: string
   cpu_cores?: number | null
   expiry_label?: string
+  renewal_amount?: number | null
+  renewal_currency?: string
+  billing_cycle?: string
+  monthly_cost_cny?: number | null
   cpu_percent: number | null
   memory_used_bytes: number | null
   memory_total_bytes: number | null
@@ -179,6 +184,8 @@ interface ApiAdminNode {
   expiry_date?: string
   expiry_permanent?: boolean
   billing_cycle?: string
+  renewal_amount?: number | null
+  renewal_currency?: string
   display_order?: number
   public_ipv4?: string
   public_ipv6?: string
@@ -273,6 +280,7 @@ export interface ApiSummaryResponse {
   nodes: ApiNode[] | null
   services?: ApiServiceTarget[] | null
   latency_points: ApiLatencyPoint[] | null
+  exchange_rates?: Record<string, number> | null
 }
 
 export interface ApiLatencyResponse {
@@ -348,6 +356,7 @@ export interface SummaryData {
   nodes: HomeCardNode[]
   services: ServiceTarget[]
   latencyPoints: LatencyPoint[]
+  exchangeRates: CurrencyRates
 }
 
 export interface NodeLatencyData {
@@ -414,6 +423,8 @@ export interface AdminNodeUpdateInput {
   expiryDate?: string
   expiryPermanent?: boolean
   billingCycle?: string
+  renewalAmount?: number | null
+  renewalCurrency?: string
   billingMode?: string
   monthlyResetDay?: number
   displayOrder?: number
@@ -432,6 +443,8 @@ export interface AdminNodeCreateInput {
   expiryDate?: string
   expiryPermanent?: boolean
   billingCycle?: string
+  renewalAmount?: number | null
+  renewalCurrency?: string
   billingMode?: string
   monthlyResetDay?: number
   displayOrder?: number
@@ -859,6 +872,7 @@ export function normalizeSummary(input: ApiSummaryResponse): SummaryData {
     nodes: (input.nodes ?? []).map(normalizeNode),
     services: (input.services ?? []).map(normalizeServiceTarget),
     latencyPoints: (input.latency_points ?? []).map(normalizeLatencyPoint),
+    exchangeRates: normalizeCurrencyRates(input.exchange_rates),
   }
 }
 
@@ -941,6 +955,8 @@ function serializeAdminNodeUpdate(input: AdminNodeUpdateInput) {
     ...(input.expiryDate !== undefined ? { expiry_date: input.expiryDate } : {}),
     ...(input.expiryPermanent !== undefined ? { expiry_permanent: input.expiryPermanent } : {}),
     ...(input.billingCycle !== undefined ? { billing_cycle: input.billingCycle } : {}),
+    ...(input.renewalAmount !== undefined ? { renewal_amount: input.renewalAmount } : {}),
+    ...(input.renewalCurrency !== undefined ? { renewal_currency: input.renewalCurrency } : {}),
     ...(input.billingMode !== undefined ? { billing_mode: input.billingMode } : {}),
     ...(input.monthlyResetDay !== undefined ? { monthly_reset_day: input.monthlyResetDay } : {}),
     ...(input.displayOrder !== undefined ? { display_order: input.displayOrder } : {}),
@@ -961,6 +977,8 @@ function serializeAdminNodeCreate(input: AdminNodeCreateInput) {
     ...(input.expiryDate !== undefined ? { expiry_date: input.expiryDate } : {}),
     ...(input.expiryPermanent !== undefined ? { expiry_permanent: input.expiryPermanent } : {}),
     ...(input.billingCycle !== undefined ? { billing_cycle: input.billingCycle } : {}),
+    ...(input.renewalAmount !== undefined ? { renewal_amount: input.renewalAmount } : {}),
+    ...(input.renewalCurrency !== undefined ? { renewal_currency: input.renewalCurrency } : {}),
     ...(input.billingMode !== undefined ? { billing_mode: input.billingMode } : {}),
     ...(input.monthlyResetDay !== undefined ? { monthly_reset_day: input.monthlyResetDay } : {}),
     ...(input.displayOrder !== undefined ? { display_order: input.displayOrder } : {}),
@@ -1056,6 +1074,10 @@ function normalizeNode(node: ApiNode): HomeCardNode {
     subtitle: node.subtitle,
     cpuCores: node.cpu_cores ?? null,
     expiryLabel: node.expiry_label,
+    renewalAmount: node.renewal_amount ?? null,
+    renewalCurrency: node.renewal_currency,
+    billingCycle: node.billing_cycle,
+    monthlyCostCny: node.monthly_cost_cny ?? null,
     cpuPercent: node.cpu_percent,
     memoryUsedBytes: node.memory_used_bytes,
     memoryTotalBytes: node.memory_total_bytes,
@@ -1249,6 +1271,8 @@ function normalizeAdminNode(node: ApiAdminNode): AdminNode {
     expiryDate: node.expiry_date,
     expiryPermanent: Boolean(node.expiry_permanent),
     billingCycle: node.billing_cycle,
+    renewalAmount: node.renewal_amount ?? null,
+    renewalCurrency: node.renewal_currency ?? 'CNY',
     displayOrder: node.display_order ?? 0,
     publicIPv4: node.public_ipv4,
     publicIPv6: node.public_ipv6,

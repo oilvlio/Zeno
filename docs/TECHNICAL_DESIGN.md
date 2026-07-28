@@ -114,6 +114,14 @@ delta_out = current_out_total - last_out_total
 - `monthly_reset_day`：每台服务器可设置月流量重置日。重置日为 1 时按自然月；重置日大于 1 时，重置日前的样本计入上一个账单周期；月末不存在该日期时按当月最后一天计算。
 - Public summary 会返回当前流量计费周期的 `monthly_period_start` / `monthly_period_end`，首页流量条直接展示这段周期范围，避免“本月”口径不清。
 
+## 续费金额与汇率
+
+- `nodes` 保存原始 `renewal_amount`、`renewal_currency` 和 `billing_cycle`；Public summary 同时返回完整的 CNY-per-unit 汇率快照。
+- Controller 并发读取 Google Finance 的各币种/CNY 页面，提取当天的直接报价；启动时刷新一次，之后每 24 小时刷新。
+- 汇率通过 HTTPS 获取并完整校验后，在同一 SQLite 事务中写入 `exchange_rates`；任何币种缺失时整批拒绝，保留上次成功缓存。
+- Public summary 按账单周期折算 `monthly_cost_cny`；永久节点、未配置金额、未知周期或无可用汇率时不产生月均消费。
+- 首页金额单位默认 CNY，并将选择保存在浏览器；顶部月均消费从 CNY 换算，服务器卡片从节点原始币种换算，避免多次换算产生累计误差。
+
 ## 延迟 / 服务探测数据
 
 每轮保留 summary + samples：

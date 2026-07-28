@@ -42,7 +42,7 @@ describe('ServerCard', () => {
     expect(html).toContain('node-specs')
     expect(html).toContain('node-usage')
     expect(html).toContain('<p>Example Node A</p>')
-    expect(html).toContain('node-dot status-offline')
+    expect(html).not.toContain('node-dot')
     expect(html).not.toContain('node-offline-watermark')
     expect(html).not.toContain('离线')
     expect(html).not.toContain('node-offline-state')
@@ -56,6 +56,8 @@ describe('ServerCard', () => {
     expect(html).toContain('node-usage')
     expect(html).toContain('Example Node A')
     expect(html).toContain('永久')
+    expect(html).toContain('class="node-specs"')
+    expect(html).not.toContain('node-specs has-billing')
     expect(html).toContain('>流量</span>')
     expect(html).not.toContain('>负载</span>')
     expect(html).not.toContain('0.42 / 0.35 / 0.28')
@@ -78,5 +80,32 @@ describe('ServerCard', () => {
 
     expect(html).toContain('node-expiry is-urgent')
     expect(html).toContain('余 3 天')
+  })
+
+  it('converts the renewal amount to the homepage currency and keeps the cycle', () => {
+    const html = renderToStaticMarkup(
+      <ServerCard node={{ ...baseNode, renewalAmount: 20, renewalCurrency: 'USD', billingCycle: '年' }} displayCurrency="CNY" exchangeRates={{ CNY: 1, USD: 8 }} onOpen={vi.fn()} />,
+    )
+
+    expect(html).toContain('class="node-specs"')
+    expect(html).not.toContain('node-specs has-billing')
+    expect(html).not.toContain('spec-billing')
+    expect(html).toContain('¥160 / 年')
+    expect(html).not.toContain('$20 / 年')
+    expect(html).not.toContain('node-renewal-row')
+    expect(html).toContain('node-renewal-cost')
+    expect(html).not.toContain('node-title-copy')
+    expect(html).toMatch(/<div class="node-title-line">[\s\S]*<p>Example Node A<\/p><\/div>/)
+    expect(html).toMatch(/<div class="node-renewal-meta"><span class="node-expiry is-safe">永久<\/span><span class="node-renewal-cost is-safe" title="¥160 \/ 年">¥160 \/ 年<\/span><\/div>/)
+    expect(html).toMatch(/<section class="node-specs"[^>]*>[\s\S]*spec-cpu[\s\S]*spec-memory[\s\S]*spec-disk[\s\S]*<\/section>/)
+  })
+
+  it('updates the renewal amount when a non-default display currency is selected', () => {
+    const html = renderToStaticMarkup(
+      <ServerCard node={{ ...baseNode, renewalAmount: 20, renewalCurrency: 'USD', billingCycle: '年' }} displayCurrency="EUR" exchangeRates={{ CNY: 1, USD: 8, EUR: 10 }} onOpen={vi.fn()} />,
+    )
+
+    expect(html).toContain('€16 / 年')
+    expect(html).toContain('title="€16 / 年"')
   })
 })

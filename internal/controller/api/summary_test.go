@@ -97,16 +97,16 @@ func TestSummaryQueryCountDoesNotGrowWithNodesOrServices(t *testing.T) {
 	if smallQueries != largeQueries {
 		t.Fatalf("summary query count grew with fixture size: small=%d large=%d", smallQueries, largeQueries)
 	}
-	if smallQueries != 5 {
-		t.Fatalf("summary query count = %d, want fixed 5 statements (nodes, home summaries, per-node summaries, service list, service summaries)", smallQueries)
+	if smallQueries != 6 {
+		t.Fatalf("summary query count = %d, want fixed 6 statements (nodes, home summaries, per-node summaries, service list, service summaries, exchange rates)", smallQueries)
 	}
 
 	largeCounter.reset()
 	if _, err := largeStore.Summary(ctx); err != nil {
 		t.Fatalf("cached large summary: %v", err)
 	}
-	if cachedQueries := largeCounter.count(); cachedQueries != 1 {
-		t.Fatalf("cached summary query count = %d, want only fresh node state", cachedQueries)
+	if cachedQueries := largeCounter.count(); cachedQueries != 2 {
+		t.Fatalf("cached summary query count = %d, want fresh node state and exchange rates", cachedQueries)
 	}
 
 	largeStore.summaryAggregateMu.Lock()
@@ -116,8 +116,8 @@ func TestSummaryQueryCountDoesNotGrowWithNodesOrServices(t *testing.T) {
 	if _, err := largeStore.Summary(ctx); err != nil {
 		t.Fatalf("expired large summary: %v", err)
 	}
-	if expiredQueries := largeCounter.count(); expiredQueries != 5 {
-		t.Fatalf("expired summary query count = %d, want full 5 statements", expiredQueries)
+	if expiredQueries := largeCounter.count(); expiredQueries != 6 {
+		t.Fatalf("expired summary query count = %d, want full 6 statements", expiredQueries)
 	}
 }
 
@@ -371,7 +371,11 @@ func legacySummaryForTest(ctx context.Context, store *SQLiteStore) (SummaryRespo
 	if err != nil {
 		return SummaryResponse{}, err
 	}
-	return SummaryResponse{Nodes: nodes, Services: services, LatencyPoints: []LatencyPoint{}}, nil
+	exchangeRates, err := store.exchangeRateSnapshot(ctx)
+	if err != nil {
+		return SummaryResponse{}, err
+	}
+	return SummaryResponse{Nodes: nodes, Services: services, LatencyPoints: []LatencyPoint{}, ExchangeRates: exchangeRates}, nil
 }
 
 func legacyServiceTargetsForTest(ctx context.Context, store *SQLiteStore) ([]ServiceTarget, error) {

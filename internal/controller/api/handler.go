@@ -27,6 +27,9 @@ type HandlerOptions struct {
 	RenewalNotificationInterval  time.Duration
 	HistoryRetentionInterval     time.Duration
 	NotificationDispatchInterval time.Duration
+	ExchangeRateRefreshInterval  time.Duration
+	ExchangeRateClient           *http.Client
+	ExchangeRateURL              string
 	DisableNotifications         bool
 	BackgroundContext            context.Context
 }
@@ -294,6 +297,11 @@ func NewHandler(options ...HandlerOptions) http.Handler {
 	}
 	if opts.NotificationDispatchInterval > 0 {
 		h.ensureNotificationOutboxWorker(opts.NotificationDispatchInterval)
+	}
+	if opts.ExchangeRateRefreshInterval > 0 {
+		h.startBackground(func(ctx context.Context) {
+			h.runExchangeRateRefresher(ctx, opts.ExchangeRateRefreshInterval, opts.ExchangeRateClient, opts.ExchangeRateURL)
+		})
 	}
 
 	mux := http.NewServeMux()

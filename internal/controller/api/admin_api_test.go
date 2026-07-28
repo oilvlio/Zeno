@@ -461,6 +461,8 @@ func TestAdminNodeBillingIPAndDisplayOrderFieldsFlowThroughAdminAndPublicSummary
 		"country_code": " jp ",
 		"expiry_date": "2026-12-31",
 		"billing_cycle": "年付",
+		"renewal_amount": 120,
+		"renewal_currency": "CNY",
 		"billing_mode": "in",
 		"monthly_reset_day": 10,
 		"display_order": 30,
@@ -477,6 +479,8 @@ func TestAdminNodeBillingIPAndDisplayOrderFieldsFlowThroughAdminAndPublicSummary
 	patchRequest := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/nodes/example-node-a", bytes.NewBufferString(`{
 		"expiry_date": "2026-08-01",
 		"billing_cycle": "月付",
+		"renewal_amount": 60,
+		"renewal_currency": "CNY",
 		"billing_mode": "max",
 		"monthly_reset_day": 15,
 		"display_order": 10,
@@ -503,14 +507,16 @@ func TestAdminNodeBillingIPAndDisplayOrderFieldsFlowThroughAdminAndPublicSummary
 	}
 	var response struct {
 		Nodes []struct {
-			ID           string `json:"id"`
-			ExpiryDate   string `json:"expiry_date"`
-			BillingCycle string `json:"billing_cycle"`
-			BillingMode  string `json:"billing_mode"`
-			ResetDay     int    `json:"monthly_reset_day"`
-			DisplayOrder int    `json:"display_order"`
-			PublicIPv4   string `json:"public_ipv4"`
-			PublicIPv6   string `json:"public_ipv6"`
+			ID              string   `json:"id"`
+			ExpiryDate      string   `json:"expiry_date"`
+			BillingCycle    string   `json:"billing_cycle"`
+			RenewalAmount   *float64 `json:"renewal_amount"`
+			RenewalCurrency string   `json:"renewal_currency"`
+			BillingMode     string   `json:"billing_mode"`
+			ResetDay        int      `json:"monthly_reset_day"`
+			DisplayOrder    int      `json:"display_order"`
+			PublicIPv4      string   `json:"public_ipv4"`
+			PublicIPv6      string   `json:"public_ipv6"`
 		} `json:"nodes"`
 	}
 	if err := json.NewDecoder(bytes.NewBufferString(raw)).Decode(&response); err != nil {
@@ -519,10 +525,10 @@ func TestAdminNodeBillingIPAndDisplayOrderFieldsFlowThroughAdminAndPublicSummary
 	if len(response.Nodes) != 2 {
 		t.Fatalf("nodes len = %d, want 2", len(response.Nodes))
 	}
-	if response.Nodes[0].ID != "example-node-a" || response.Nodes[0].DisplayOrder != 10 || response.Nodes[0].ExpiryDate != "2026-08-01" || response.Nodes[0].BillingCycle != "月付" || response.Nodes[0].BillingMode != "max" || response.Nodes[0].ResetDay != 15 || response.Nodes[0].PublicIPv4 != "198.51.100.8" || response.Nodes[0].PublicIPv6 != "2001:db8::8" {
+	if response.Nodes[0].ID != "example-node-a" || response.Nodes[0].DisplayOrder != 10 || response.Nodes[0].ExpiryDate != "2026-08-01" || response.Nodes[0].BillingCycle != "月付" || response.Nodes[0].RenewalAmount == nil || *response.Nodes[0].RenewalAmount != 60 || response.Nodes[0].RenewalCurrency != "CNY" || response.Nodes[0].BillingMode != "max" || response.Nodes[0].ResetDay != 15 || response.Nodes[0].PublicIPv4 != "198.51.100.8" || response.Nodes[0].PublicIPv6 != "2001:db8::8" {
 		t.Fatalf("example-node-a metadata = %+v, want edited billing/IP/order fields", response.Nodes[0])
 	}
-	if response.Nodes[1].ID != "backup" || response.Nodes[1].DisplayOrder != 30 || response.Nodes[1].BillingMode != "in" || response.Nodes[1].ResetDay != 10 {
+	if response.Nodes[1].ID != "backup" || response.Nodes[1].DisplayOrder != 30 || response.Nodes[1].RenewalAmount == nil || *response.Nodes[1].RenewalAmount != 120 || response.Nodes[1].RenewalCurrency != "CNY" || response.Nodes[1].BillingMode != "in" || response.Nodes[1].ResetDay != 10 {
 		t.Fatalf("second node = %+v, want display-order sorted backup", response.Nodes[1])
 	}
 
@@ -537,6 +543,9 @@ func TestAdminNodeBillingIPAndDisplayOrderFieldsFlowThroughAdminAndPublicSummary
 	expectedBackupExpiry := expiryLabelValue(sql.NullString{String: "2026-12-31", Valid: true}, sql.NullString{String: "年付", Valid: true}, false, time.Now())
 	if summary.Nodes[0].ExpiryLabel != expectedExampleNodeAExpiry || summary.Nodes[1].ExpiryLabel != expectedBackupExpiry {
 		t.Fatalf("summary expiry labels = %q/%q, want %q/%q", summary.Nodes[0].ExpiryLabel, summary.Nodes[1].ExpiryLabel, expectedExampleNodeAExpiry, expectedBackupExpiry)
+	}
+	if summary.Nodes[0].MonthlyCostCNY == nil || *summary.Nodes[0].MonthlyCostCNY != 60 || summary.Nodes[1].MonthlyCostCNY == nil || *summary.Nodes[1].MonthlyCostCNY != 10 {
+		t.Fatalf("summary monthly costs = %v/%v, want 60/10", summary.Nodes[0].MonthlyCostCNY, summary.Nodes[1].MonthlyCostCNY)
 	}
 	expectedPeriod := billingPeriodFor(time.Now(), 15)
 	if summary.Nodes[0].BillingMode != "max" || summary.Nodes[0].MonthlyResetDay != 15 || summary.Nodes[0].MonthlyPeriodStart != expectedPeriod.StartDate || summary.Nodes[0].MonthlyPeriodEnd != expectedPeriod.EndDate {
@@ -613,6 +622,8 @@ func TestAdminNodePatchRejectsUnauthorizedUnknownAndInvalidRequests(t *testing.T
 		{name: "blank display name", nodeID: "example-node-a", body: `{"display_name":"   "}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "negative monthly quota", nodeID: "example-node-a", body: `{"monthly_quota_bytes":-1}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "invalid billing mode", nodeID: "example-node-a", body: `{"billing_mode":"95th"}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
+		{name: "negative renewal amount", nodeID: "example-node-a", body: `{"renewal_amount":-1}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
+		{name: "invalid renewal currency", nodeID: "example-node-a", body: `{"renewal_currency":"BTC"}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "zero monthly reset day", nodeID: "example-node-a", body: `{"monthly_reset_day":0}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "invalid monthly reset day", nodeID: "example-node-a", body: `{"monthly_reset_day":32}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 	}

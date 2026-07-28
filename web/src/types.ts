@@ -47,6 +47,10 @@ export interface HomeCardNode {
   subtitle?: string
   cpuCores?: number | null
   expiryLabel?: string
+  renewalAmount?: number | null
+  renewalCurrency?: string
+  billingCycle?: string
+  monthlyCostCny?: number | null
   cpuPercent: number | null
   memoryUsedBytes: number | null
   memoryTotalBytes: number | null
@@ -129,6 +133,8 @@ export interface AdminNode {
   expiryDate?: string
   expiryPermanent?: boolean
   billingCycle?: string
+  renewalAmount?: number | null
+  renewalCurrency?: string
   displayOrder: number
   publicIPv4?: string
   publicIPv6?: string

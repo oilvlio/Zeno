@@ -8,6 +8,7 @@ const summary: SummaryData = {
   nodes: [],
   services: [],
   latencyPoints: [],
+  exchangeRates: { CNY: 1 },
 }
 
 function installWindowStorage() {

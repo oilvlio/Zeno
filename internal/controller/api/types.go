@@ -1,9 +1,10 @@
 package api
 
 type SummaryResponse struct {
-	Nodes         []Node          `json:"nodes"`
-	Services      []ServiceTarget `json:"services"`
-	LatencyPoints []LatencyPoint  `json:"latency_points"`
+	Nodes         []Node             `json:"nodes"`
+	Services      []ServiceTarget    `json:"services"`
+	LatencyPoints []LatencyPoint     `json:"latency_points"`
+	ExchangeRates map[string]float64 `json:"exchange_rates"`
 }
 
 type LatencyResponse struct {
@@ -38,6 +39,10 @@ type Node struct {
 	Subtitle             string           `json:"subtitle,omitempty"`
 	CPUCores             *float64         `json:"cpu_cores,omitempty"`
 	ExpiryLabel          string           `json:"expiry_label,omitempty"`
+	RenewalAmount        *float64         `json:"renewal_amount,omitempty"`
+	RenewalCurrency      string           `json:"renewal_currency,omitempty"`
+	BillingCycle         string           `json:"billing_cycle,omitempty"`
+	MonthlyCostCNY       *float64         `json:"monthly_cost_cny,omitempty"`
 	CPUPercent           *float64         `json:"cpu_percent"`
 	MemoryUsedBytes      *float64         `json:"memory_used_bytes"`
 	MemoryTotalBytes     *float64         `json:"memory_total_bytes"`

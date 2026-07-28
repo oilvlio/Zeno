@@ -1,12 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AdminCredentialField, AdminDashboard, AdminDeleteConfirmModal, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, applyCustomCode, documentBrandingForSettings, filterHomeNodesByRegion, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, remoteInsecureAgentControllerURL, shellStyleForSettings, shouldRefreshHomeRealtimeSnapshot, validateAdminSettingsInput } from './App'
+import { AdminCredentialField, AdminDashboard, AdminDeleteConfirmModal, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, applyCustomCode, documentBrandingForSettings, filterHomeNodesByRegion, homeMonthlyCostForNodes, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, remoteInsecureAgentControllerURL, renewalCurrencyOptions, shellStyleForSettings, shouldRefreshHomeRealtimeSnapshot, validateAdminSettingsInput } from './App'
 import type { AdminAlertRule, AdminNode, AdminNotificationChannel, AdminProbeTarget, AdminSettings, HomeCardNode } from './types'
 
 const overviewProps = {
   totalCount: 11,
   onlineCount: 9,
   offlineCount: 2,
+  monthlyCost: 88.5,
   totalUp: 1024,
   totalDown: 2048,
   upSpeed: 128,
@@ -21,6 +22,12 @@ describe('remoteInsecureAgentControllerURL', () => {
     expect(remoteInsecureAgentControllerURL('http://127.0.0.2:18980')).toBe(false)
     expect(remoteInsecureAgentControllerURL('http://[::1]:18980')).toBe(false)
     expect(remoteInsecureAgentControllerURL('https://zeno.example.com')).toBe(false)
+  })
+})
+
+describe('renewalCurrencyOptions', () => {
+  it('keeps the server editor currency menu short enough to fit without SGD and KRW', () => {
+    expect(renewalCurrencyOptions.map((option) => option.value)).toEqual(['CNY', 'USD', 'HKD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD'])
   })
 })
 
@@ -80,6 +87,18 @@ describe('homeTrafficTotalsForNodes', () => {
   it('falls back to raw counters for a cached summary created before lifetime totals existed', () => {
     const legacyNode = { ...trafficNode, netInLifetimeBytes: undefined, netOutLifetimeBytes: undefined }
     expect(homeTrafficTotalsForNodes([legacyNode])).toEqual({ totalUp: 200, totalDown: 100 })
+  })
+
+  it('derives the selected-currency monthly total from original renewal amounts without double rounding', () => {
+    const nodes = [
+      { ...trafficNode, renewalAmount: 10, renewalCurrency: 'USD', billingCycle: '月', monthlyCostCny: 67.66 },
+      { ...trafficNode, id: 'yearly', renewalAmount: 120, renewalCurrency: 'USD', billingCycle: '年', monthlyCostCny: 67.66 },
+      { ...trafficNode, id: 'permanent', renewalAmount: 10, renewalCurrency: 'USD', billingCycle: '月', monthlyCostCny: null },
+    ]
+    const rates = { CNY: 1, USD: 6.766, KRW: 0.004602 }
+
+    expect(homeMonthlyCostForNodes(nodes, 'USD', rates)).toBe(20)
+    expect(homeMonthlyCostForNodes(nodes, 'KRW', rates)).toBeCloseTo(29_404.61, 2)
   })
 })
 
@@ -371,7 +390,7 @@ describe('HomeTopPanel', () => {
     })
   })
 
-  it('keeps the homepage top controls inside one card with a simple custom overview', () => {
+  it('keeps the homepage top controls inside one card with a structured status and traffic overview', () => {
     const html = renderToStaticMarkup(
       <HomeTopPanel
         {...overviewProps}
@@ -391,23 +410,35 @@ describe('HomeTopPanel', () => {
     expect(html).not.toContain('/assets/avatar/custom.webp')
     expect(html).not.toContain('VPS 状态总览')
     expect(html).toContain('home-summary')
-    expect(html).toContain('home-summary__status-line')
-    expect(html).toContain('9 / 11 在线')
-    expect(html).toContain('home-summary__metric--send')
-    expect(html).toContain('home-summary__metric--receive')
-    expect(html).toContain('home-summary__metric--upload-rate')
-    expect(html).toContain('home-summary__metric--download-rate')
+    expect(html).toContain('home-summary__status')
+    expect(html).toContain('home-summary__status-track')
+    expect(html).toContain('在线节点')
+    expect(html).toContain('月均消费')
+    expect(html).toContain('¥ 88.50')
+    expect(html).toContain('class="home-currency-menu"')
+    expect(html).toContain('aria-label="金额单位：人民币 CNY"')
+    expect(html).toContain('aria-haspopup="listbox"')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).not.toContain('home-currency-select__flag')
+    expect(html).not.toContain('class="fi fi-cn"')
+    expect(html).toContain('home-currency-select__value')
+    expect(html).toContain('>CNY</span>')
+    expect(html).not.toContain('<select')
+    expect(html).not.toContain('<option')
+    expect(html).not.toContain('home-summary__status-meta')
+    expect(html).not.toContain('运行中')
+    expect(html).not.toContain('全部在线')
+    expect(html).toContain('home-summary__network--upload')
+    expect(html).toContain('home-summary__network--download')
     expect(html).not.toContain('Zeno Overview')
     expect(html).not.toContain('服务器运行概览')
     expect(html).not.toContain('在线率')
-    expect(html).not.toContain('2 台未在线')
     expect(html).not.toContain('11 台服务器')
-    expect(html).toContain('发送')
-    expect(html).toContain('接收')
-    expect(html).toContain('上传')
-    expect(html).toContain('下载')
-    expect(html).toContain('home-summary__rate-gap')
-    expect(html).not.toContain('CircleArrowIcon')
+    expect(html).toContain('累计发送')
+    expect(html).toContain('累计接收')
+    expect(html).toContain('上传速率')
+    expect(html).toContain('下载速率')
+    expect(html).toContain('home-summary__network-icon')
     expect(html).not.toContain('实时')
     expect(html).not.toContain('累计上传')
     expect(html).not.toContain('累计下载')
@@ -417,6 +448,28 @@ describe('HomeTopPanel', () => {
     expect(html).not.toContain('overview-card--combined')
     expect(html).not.toContain('overview-metric')
     expect(html).not.toContain(['service', 'status', 'panel'].join('-'))
+  })
+
+  it('converts the top monthly cost and selector to the chosen currency', () => {
+    const html = renderToStaticMarkup(
+      <HomeTopPanel
+        {...overviewProps}
+        settings={settings}
+        monthlyCost={11.0625}
+        displayCurrency="USD"
+        exchangeRates={{ CNY: 1, USD: 8, EUR: 9 }}
+        onCurrencyChange={() => {}}
+        onHome={() => {}}
+        onAdmin={() => {}}
+      />,
+    )
+
+    expect(html).toContain('aria-label="金额单位：美元 USD"')
+    expect(html).not.toContain('class="fi fi-us"')
+    expect(html).toContain('>USD</span>')
+    expect(html).not.toContain('<select')
+    expect(html).toContain('$ 11.06')
+    expect(html).not.toContain('¥ 88.50')
   })
 
   it('renders a circular Z brand avatar when the logo URL is blank', () => {
@@ -459,7 +512,7 @@ describe('HomeTopPanel', () => {
     expect(ready).not.toContain('nav-icon-button-placeholder')
   })
 
-  it('treats no-data nodes as not online in the summary copy', () => {
+  it('keeps the no-data count without duplicate status copy', () => {
     const html = renderToStaticMarkup(
       <HomeTopPanel
         {...overviewProps}
@@ -471,7 +524,11 @@ describe('HomeTopPanel', () => {
       />,
     )
 
-    expect(html).toContain('0 / 11 在线')
+    expect(html).toContain('home-summary__status-value')
+    expect(html).toContain('<strong>0</strong><span>/ 11</span>')
+    expect(html).not.toContain('home-summary__status-meta')
+    expect(html).not.toContain('运行中')
+    expect(html).not.toContain('等待连接')
     expect(html).not.toContain('11 台未在线')
     expect(html).not.toContain('11 台服务器')
     expect(html).not.toContain('全部在线')

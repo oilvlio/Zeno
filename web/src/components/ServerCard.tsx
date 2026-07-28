@@ -1,10 +1,13 @@
 import type { ReactNode } from 'react'
 import type { HomeCardNode } from '../types'
 import { formatLatency } from '../lib/format'
+import { convertCurrencyAmount, formatCurrencyAmount, normalizeCurrencyCode, normalizeCurrencyRates, type CurrencyCode, type CurrencyRates } from '../lib/currency'
 import { ServerFlag } from './ServerFlag'
 
 interface ServerCardProps {
   node: HomeCardNode
+  displayCurrency?: CurrencyCode
+  exchangeRates?: CurrencyRates
   onOpen?: (nodeId: string) => void
 }
 
@@ -111,12 +114,24 @@ function expiryBadge(expiryLabel: string | null | undefined): { text: string; to
   return { text: `余 ${days} 天`, tone: 'safe' }
 }
 
-export function ServerCard({ node, onOpen }: ServerCardProps) {
+function formatRenewalCost(amount: number | null | undefined, currency: string | null | undefined, cycle: string | null | undefined, displayCurrency: CurrencyCode, exchangeRates: CurrencyRates): string | null {
+  if (amount === null || amount === undefined || !Number.isFinite(amount) || amount <= 0) return null
+  const sourceCurrency = normalizeCurrencyCode(currency)
+  const converted = convertCurrencyAmount(amount, sourceCurrency, displayCurrency, exchangeRates)
+  const shownCurrency = converted === null ? sourceCurrency : displayCurrency
+  const shownAmount = converted ?? amount
+  const cycleText = (cycle ?? '').trim()
+  return `${formatCurrencyAmount(shownAmount, shownCurrency)}${cycleText ? ` / ${cycleText}` : ''}`
+}
+
+export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: inputExchangeRates = { CNY: 1 }, onOpen }: ServerCardProps) {
   const memoryPercent = ratio(node.memoryUsedBytes, node.memoryTotalBytes)
   const diskPercent = ratio(node.diskUsedBytes, node.diskTotalBytes)
   const trafficPercent = ratio(node.monthlyBillableBytes, node.monthlyQuotaBytes)
   const latency = node.latencySummary
   const expiry = expiryBadge(node.expiryLabel)
+  const exchangeRates = normalizeCurrencyRates(inputExchangeRates)
+  const renewalCost = formatRenewalCost(node.renewalAmount, node.renewalCurrency, node.billingCycle, displayCurrency, exchangeRates)
   const open = () => onOpen?.(node.id)
   const visualStatus = node.status === 'online' ? 'online' : 'offline'
   const isOfflineCard = visualStatus === 'offline'
@@ -138,11 +153,15 @@ export function ServerCard({ node, onOpen }: ServerCardProps) {
       <section className="node-head">
         <img alt={node.os || 'linux'} className="node-os" loading="lazy" src={osAssetFor(node.os)} />
         <div className="node-title-line">
-          <span className={`node-dot status-${visualStatus}`} />
           <ServerFlag countryCode={node.countryCode} className="node-flag" />
           <p>{node.displayName}</p>
         </div>
-        {expiry && <div className={`node-expiry is-${expiry.tone}`}>{expiry.text}</div>}
+        {(renewalCost || expiry) && (
+          <div className="node-renewal-meta">
+            {expiry && <span className={`node-expiry is-${expiry.tone}`}>{expiry.text}</span>}
+            {renewalCost && <span className={`node-renewal-cost${expiry ? ` is-${expiry.tone}` : ''}`} title={renewalCost}>{renewalCost}</span>}
+          </div>
+        )}
       </section>
 
       <section className="node-specs" aria-label={`${node.displayName} specs`}>

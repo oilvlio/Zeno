@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -240,6 +241,8 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			expiry_date TEXT,
 			expiry_permanent INTEGER NOT NULL DEFAULT 0,
 			billing_cycle TEXT,
+			renewal_amount REAL,
+			renewal_currency TEXT NOT NULL DEFAULT 'CNY',
 			display_order INTEGER NOT NULL DEFAULT 0,
 			public_ipv4 TEXT,
 			public_ipv6 TEXT,
@@ -331,6 +334,12 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			last_out_total_bytes INTEGER,
 			counter_source TEXT NOT NULL DEFAULT '',
 			last_sample_ts INTEGER,
+			updated_at INTEGER NOT NULL
+		);`,
+		`CREATE TABLE IF NOT EXISTS exchange_rates (
+			currency TEXT PRIMARY KEY,
+			cny_rate REAL NOT NULL,
+			source_date TEXT NOT NULL DEFAULT '',
 			updated_at INTEGER NOT NULL
 		);`,
 		`CREATE TABLE IF NOT EXISTS probe_targets (
@@ -553,6 +562,8 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 		"expiry_date":                  "TEXT",
 		"expiry_permanent":             "INTEGER NOT NULL DEFAULT 0",
 		"billing_cycle":                "TEXT",
+		"renewal_amount":               "REAL",
+		"renewal_currency":             "TEXT NOT NULL DEFAULT 'CNY'",
 		"billing_mode":                 "TEXT NOT NULL DEFAULT 'both'",
 		"monthly_quota_bytes":          "INTEGER",
 		"monthly_reset_day":            "INTEGER NOT NULL DEFAULT 1",
@@ -569,6 +580,13 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 		if err := s.ensureColumn(ctx, "nodes", column, columnType); err != nil {
 			return err
 		}
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT INTO exchange_rates (currency, cny_rate, source_date, updated_at)
+		VALUES ('CNY', 1, '', ?)
+		ON CONFLICT(currency) DO UPDATE SET cny_rate = 1
+	`, time.Now().UTC().Unix()); err != nil {
+		return err
 	}
 	if err := s.migrateLegacyAgentCredentials(ctx); err != nil {
 		return err
@@ -1026,6 +1044,10 @@ func (s *SQLiteStore) Summary(ctx context.Context) (SummaryResponse, error) {
 	if services == nil {
 		services = []ServiceTarget{}
 	}
+	exchangeRates, err := s.exchangeRateSnapshot(ctx)
+	if err != nil {
+		return SummaryResponse{}, err
+	}
 	for index := range nodes {
 		nodes[index].LatencySummary = homeSummaries[nodes[index].ID]
 		if summaries, ok := latencySummaries[nodes[index].ID]; ok {
@@ -1034,7 +1056,7 @@ func (s *SQLiteStore) Summary(ctx context.Context) (SummaryResponse, error) {
 			nodes[index].LatencySummaries = []LatencySummary{}
 		}
 	}
-	return SummaryResponse{Nodes: nodes, Services: services, LatencyPoints: []LatencyPoint{}}, nil
+	return SummaryResponse{Nodes: nodes, Services: services, LatencyPoints: []LatencyPoint{}, ExchangeRates: exchangeRates}, nil
 }
 
 func (s *SQLiteStore) summaryAggregates(ctx context.Context) (map[string]*LatencySummary, []ServiceTarget, map[string][]LatencySummary, error) {
@@ -1207,7 +1229,7 @@ const activeAdminProbeTargetExistsSQL = `
 func (s *SQLiteStore) AdminNodes(ctx context.Context) ([]AdminNode, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT n.id, n.display_name, n.status, n.country_code, n.region, n.disabled,
-		       n.home_probe_target_id, n.billing_mode, n.monthly_reset_day, n.expiry_date, n.expiry_permanent, n.billing_cycle, n.display_order, n.public_ipv4, n.public_ipv6,
+		       n.home_probe_target_id, n.billing_mode, n.monthly_reset_day, n.expiry_date, n.expiry_permanent, n.billing_cycle, n.renewal_amount, n.renewal_currency, n.display_order, n.public_ipv4, n.public_ipv6,
 		       n.monthly_quota_bytes, n.last_seen_at, n.created_at, n.updated_at,
 		       COALESCE((
 		         SELECT MAX(ar.duration_sec)
@@ -1241,7 +1263,8 @@ func (s *SQLiteStore) AdminNodes(ctx context.Context) ([]AdminNode, error) {
 	for rows.Next() {
 		var node AdminNode
 		var status string
-		var countryCode, region, homeProbeTargetID, billingMode, expiryDate, billingCycle, publicIPv4, publicIPv6 sql.NullString
+		var countryCode, region, homeProbeTargetID, billingMode, expiryDate, billingCycle, renewalCurrency, publicIPv4, publicIPv6 sql.NullString
+		var renewalAmount sql.NullFloat64
 		var disabled int
 		var expiryPermanent int
 		var monthlyResetDay int
@@ -1251,7 +1274,7 @@ func (s *SQLiteStore) AdminNodes(ctx context.Context) ([]AdminNode, error) {
 		var cpuCores, memoryTotal, diskTotal, bootTime sql.NullInt64
 		if err := rows.Scan(
 			&node.ID, &node.DisplayName, &status, &countryCode, &region, &disabled,
-			&homeProbeTargetID, &billingMode, &monthlyResetDay, &expiryDate, &expiryPermanent, &billingCycle, &displayOrder, &publicIPv4, &publicIPv6,
+			&homeProbeTargetID, &billingMode, &monthlyResetDay, &expiryDate, &expiryPermanent, &billingCycle, &renewalAmount, &renewalCurrency, &displayOrder, &publicIPv4, &publicIPv6,
 			&quota, &lastSeenAt, &createdAt, &updatedAt, &offlineDurationSec,
 			&hostname, &osName, &osVersion, &kernel, &arch, &virtualization,
 			&cpuModel, &cpuCores, &memoryTotal, &diskTotal,
@@ -1275,6 +1298,8 @@ func (s *SQLiteStore) AdminNodes(ctx context.Context) ([]AdminNode, error) {
 		node.ExpiryDate = nullStringOr(expiryDate, "")
 		node.ExpiryPermanent = expiryPermanent != 0
 		node.BillingCycle = nullStringOr(billingCycle, "")
+		node.RenewalAmount = nullFloat64Ptr(renewalAmount)
+		node.RenewalCurrency = nullStringOr(renewalCurrency, "CNY")
 		node.DisplayOrder = displayOrder
 		node.PublicIPv4 = nullStringOr(publicIPv4, "")
 		node.PublicIPv6 = nullStringOr(publicIPv6, "")
@@ -1771,8 +1796,8 @@ func (s *SQLiteStore) UpdateAdminNode(ctx context.Context, nodeID string, update
 		}
 	}
 
-	sets := make([]string, 0, 13)
-	args := make([]any, 0, 14)
+	sets := make([]string, 0, 15)
+	args := make([]any, 0, 16)
 	billingRebaseConditions := make([]string, 0, 2)
 	billingRebaseArgs := make([]any, 0, 2)
 	if update.DisplayName != nil {
@@ -1802,6 +1827,18 @@ func (s *SQLiteStore) UpdateAdminNode(ctx context.Context, nodeID string, update
 	if update.BillingCycle != nil {
 		sets = append(sets, "billing_cycle = ?")
 		args = append(args, nullIfEmpty(*update.BillingCycle))
+	}
+	if update.RenewalAmount.Set {
+		sets = append(sets, "renewal_amount = ?")
+		if update.RenewalAmount.Valid {
+			args = append(args, update.RenewalAmount.Value)
+		} else {
+			args = append(args, nil)
+		}
+	}
+	if update.RenewalCurrency != nil {
+		sets = append(sets, "renewal_currency = ?")
+		args = append(args, *update.RenewalCurrency)
 	}
 	if update.BillingMode != nil {
 		sets = append(sets, "billing_mode = ?")
@@ -1927,7 +1964,7 @@ func (s *SQLiteStore) UpdateAdminNode(ctx context.Context, nodeID string, update
 
 func (s *SQLiteStore) nodes(ctx context.Context) ([]Node, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT n.id, n.display_name, n.status, n.country_code, n.expiry_date, n.expiry_permanent, n.billing_cycle, n.billing_mode, n.monthly_reset_day, n.last_seen_at,
+		SELECT n.id, n.display_name, n.status, n.country_code, n.expiry_date, n.expiry_permanent, n.billing_cycle, n.renewal_amount, n.renewal_currency, fx.cny_rate, n.billing_mode, n.monthly_reset_day, n.last_seen_at,
 		       h.os_name, h.os_version, h.kernel, h.arch, h.virtualization, h.cpu_model, h.cpu_cores, h.memory_total_bytes, h.disk_total_bytes, h.boot_time,
 		       ss.cpu_percent, ss.load1, ss.load5, ss.load15, ss.uptime_seconds, ss.memory_used_bytes, ss.disk_used_bytes,
 		       ss.net_in_speed_bps, ss.net_out_speed_bps, ss.net_in_total_bytes, ss.net_out_total_bytes,
@@ -1962,6 +1999,7 @@ func (s *SQLiteStore) nodes(ctx context.Context) ([]Node, error) {
 			SELECT id FROM state_samples WHERE node_id = n.id ORDER BY ts DESC, id DESC LIMIT 1
 		)
 		LEFT JOIN traffic_lifetime lifetime ON lifetime.node_id = n.id
+		LEFT JOIN exchange_rates fx ON fx.currency = COALESCE(NULLIF(TRIM(n.renewal_currency), ''), 'CNY')
 		WHERE n.disabled = 0
 		ORDER BY n.display_order ASC, n.id ASC
 	`, int64(nodeHeartbeatOfflineAfter/time.Second))
@@ -1974,12 +2012,13 @@ func (s *SQLiteStore) nodes(ctx context.Context) ([]Node, error) {
 	now := time.Now()
 	for rows.Next() {
 		var id, displayName, status string
-		var countryCode, expiryDate, billingCycle, billingMode, osName, osVersion, kernel, arch, virtualization, cpuModel sql.NullString
+		var countryCode, expiryDate, billingCycle, renewalCurrency, billingMode, osName, osVersion, kernel, arch, virtualization, cpuModel sql.NullString
+		var renewalAmount, renewalCNYRate sql.NullFloat64
 		var expiryPermanent int
 		var monthlyResetDay, cpuCores, memoryTotal, diskTotal, bootTime, lastSeenAt, uptimeSeconds sql.NullInt64
 		var cpuPercent, load1, load5, load15, netInSpeed, netOutSpeed sql.NullFloat64
 		var memoryUsed, diskUsed, netInTotal, netOutTotal, netInLifetime, netOutLifetime, billable, quota, offlineDurationSec sql.NullInt64
-		if err := rows.Scan(&id, &displayName, &status, &countryCode, &expiryDate, &expiryPermanent, &billingCycle, &billingMode, &monthlyResetDay, &lastSeenAt, &osName, &osVersion, &kernel, &arch, &virtualization, &cpuModel, &cpuCores, &memoryTotal, &diskTotal, &bootTime, &cpuPercent, &load1, &load5, &load15, &uptimeSeconds, &memoryUsed, &diskUsed, &netInSpeed, &netOutSpeed, &netInTotal, &netOutTotal, &netInLifetime, &netOutLifetime, &billable, &quota, &offlineDurationSec); err != nil {
+		if err := rows.Scan(&id, &displayName, &status, &countryCode, &expiryDate, &expiryPermanent, &billingCycle, &renewalAmount, &renewalCurrency, &renewalCNYRate, &billingMode, &monthlyResetDay, &lastSeenAt, &osName, &osVersion, &kernel, &arch, &virtualization, &cpuModel, &cpuCores, &memoryTotal, &diskTotal, &bootTime, &cpuPercent, &load1, &load5, &load15, &uptimeSeconds, &memoryUsed, &diskUsed, &netInSpeed, &netOutSpeed, &netInTotal, &netOutTotal, &netInLifetime, &netOutLifetime, &billable, &quota, &offlineDurationSec); err != nil {
 			return nil, err
 		}
 		resetDay := 1
@@ -1999,6 +2038,10 @@ func (s *SQLiteStore) nodes(ctx context.Context) ([]Node, error) {
 			CPUModel:             nullStringOr(cpuModel, ""),
 			CountryCode:          nullStringOr(countryCode, ""),
 			ExpiryLabel:          expiryLabelValue(expiryDate, billingCycle, expiryPermanent != 0, now),
+			RenewalAmount:        nullFloat64Ptr(renewalAmount),
+			RenewalCurrency:      nullStringOr(renewalCurrency, "CNY"),
+			BillingCycle:         nullStringOr(billingCycle, ""),
+			MonthlyCostCNY:       monthlyRenewalCostCNY(renewalAmount, renewalCNYRate, billingCycle, expiryPermanent != 0),
 			CPUCores:             intPtr(cpuCores),
 			CPUPercent:           floatPtr(cpuPercent),
 			MemoryUsedBytes:      intPtr(memoryUsed),
@@ -2911,6 +2954,23 @@ func nullStringOr(value sql.NullString, fallback string) string {
 		return value.String
 	}
 	return fallback
+}
+
+func nullFloat64Ptr(value sql.NullFloat64) *float64 {
+	if !value.Valid {
+		return nil
+	}
+	parsed := value.Float64
+	return &parsed
+}
+
+func monthlyRenewalCostCNY(amount, cnyRate sql.NullFloat64, billingCycle sql.NullString, permanent bool) *float64 {
+	months := billingCycleMonths(billingCycle)
+	if permanent || months <= 0 || !amount.Valid || amount.Float64 <= 0 || !cnyRate.Valid || cnyRate.Float64 <= 0 {
+		return nil
+	}
+	monthly := math.Round((amount.Float64*cnyRate.Float64/float64(months))*100) / 100
+	return &monthly
 }
 
 func expiryLabelValue(expiryDate, billingCycle sql.NullString, permanent bool, now time.Time) string {

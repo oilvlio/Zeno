@@ -111,6 +111,7 @@ func buildController(config handlerConfig) (*controllerRuntime, error) {
 		options.RenewalNotificationInterval = time.Hour
 		options.HistoryRetentionInterval = time.Hour
 		options.NotificationDispatchInterval = 5 * time.Second
+		options.ExchangeRateRefreshInterval = 24 * time.Hour
 		cleanupHandlers = append(cleanupHandlers, func(context.Context) error { return store.Close() })
 		if config.SeedPreview {
 			if err := store.SeedPreviewData(context.Background(), api.PreviewSeedOptions{NodeID: config.NodeID, DisplayName: "Example Node A", CountryCode: "HK", AgentToken: config.AgentToken}); err != nil {

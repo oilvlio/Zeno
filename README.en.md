@@ -18,6 +18,7 @@ It has two parts: a Controller for the web UI, APIs, SQLite storage and notifica
 - **Server overview**: online status, OS info, CPU, memory, disk, load, uptime and Agent version.
 - **Live resource metrics**: upload/download speed, controller-persisted lifetime traffic, CPU / memory / disk usage and history. Lifetime traffic survives server and interface restarts.
 - **Monthly traffic accounting**: calculated from network counter deltas, with per-node reset day and billing mode.
+- **Renewal spending**: store each server's renewal amount, currency and cycle; the homepage defaults to CNY but can switch the top monthly spend and all server cards together using current-day Google Finance rates.
 - **Latency and service probes**: ICMP Ping, TCP Ping and HTTP GET with latency, packet loss and history charts.
 - **Public status page**: server cards, top summary, node details and service latency details for desktop and mobile.
 - **Admin dashboard**: manage servers, probe targets, notifications, branding, Agent endpoint and account settings.

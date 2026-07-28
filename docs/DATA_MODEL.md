@@ -16,6 +16,8 @@ CREATE TABLE nodes (
   region TEXT,
   expiry_date TEXT,
   billing_cycle TEXT,
+  renewal_amount REAL,
+  renewal_currency TEXT NOT NULL DEFAULT 'CNY',
   display_order INTEGER NOT NULL DEFAULT 0,
   public_ipv4 TEXT,
   public_ipv6 TEXT,
@@ -33,11 +35,27 @@ CREATE TABLE nodes (
 
 - `country_code` 用于国旗展示。
 - `expiry_date` / `billing_cycle` 用于后台和首页展示到期/账单信息。
+- `renewal_amount` / `renewal_currency` 保存每台服务器的原币种续费金额；公开 Summary 额外给出按当天 Google Finance 汇率折算后的人民币月均消费。
 - `display_order` 控制首页卡片和后台列表排序。
 - `public_ipv4` / `public_ipv6` 可由后台编辑，也会由新 Agent best-effort 自动识别后上报；识别失败不会清空已有值。
 - `billing_mode` 控制月流量口径：`both`、`in`、`out`、`max`。
 - `monthly_reset_day` 控制账单周期从每月第几天开始，范围 1–31。
 - `token_hash` 只存 hash，不通过 API 返回。
+
+## exchange_rates
+
+持久化最近一次从 Google Finance 成功获取的人民币汇率，避免外部汇率页面暂时不可用时让金额统计消失。
+
+```sql
+CREATE TABLE exchange_rates (
+  currency TEXT PRIMARY KEY,
+  cny_rate REAL NOT NULL,
+  source_date TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL
+);
+```
+
+Controller 启动时立即刷新一次，之后每 24 小时刷新；只有完整响应通过校验后才原子替换缓存。
 
 ## host_info
 

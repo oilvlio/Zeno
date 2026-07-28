@@ -20,6 +20,10 @@ describe('normalizeSummary', () => {
           subtitle: 'Hong Kong',
           cpu_cores: 2,
           expiry_label: '永 久',
+          renewal_amount: 20,
+          renewal_currency: 'USD',
+          billing_cycle: '年',
+          monthly_cost_cny: 11.75,
           cpu_percent: 12.5,
           memory_used_bytes: 100,
           memory_total_bytes: 200,
@@ -68,6 +72,7 @@ describe('normalizeSummary', () => {
       latency_points: [
         { ts: '2026-07-02T12:00:00Z', target_id: 'google', target_name: 'Google', median_ms: null, loss_percent: 100 },
       ],
+      exchange_rates: { CNY: 1, USD: 8, EUR: 9 },
     })
 
     expect(summary.nodes[0].displayName).toBe('Example Node A')
@@ -75,6 +80,10 @@ describe('normalizeSummary', () => {
     expect(summary.nodes[0].countryCode).toBe('HK')
     expect(summary.nodes[0].cpuCores).toBe(2)
     expect(summary.nodes[0].expiryLabel).toBe('永 久')
+    expect(summary.nodes[0].renewalAmount).toBe(20)
+    expect(summary.nodes[0].renewalCurrency).toBe('USD')
+    expect(summary.nodes[0].billingCycle).toBe('年')
+    expect(summary.nodes[0].monthlyCostCny).toBe(11.75)
     expect(summary.nodes[0].billingMode).toBe('max')
     expect(summary.nodes[0].monthlyResetDay).toBe(15)
     expect(summary.nodes[0].monthlyPeriodStart).toBe('2026-06-15')
@@ -99,6 +108,7 @@ describe('normalizeSummary', () => {
     expect(summary.services[0].name).toBe('Google')
     expect(summary.services[0].reportingNodeCount).toBe(9)
     expect(summary.services[0].avgMs).toBeNull()
+    expect(summary.exchangeRates).toEqual({ CNY: 1, USD: 8, EUR: 9 })
   })
 
   it('normalizes null collections from empty preview stores', () => {
@@ -111,6 +121,7 @@ describe('normalizeSummary', () => {
     expect(summary.nodes).toEqual([])
     expect(summary.services).toEqual([])
     expect(summary.latencyPoints).toEqual([])
+    expect(summary.exchangeRates).toEqual({ CNY: 1 })
   })
 })
 
@@ -548,6 +559,8 @@ describe('normalizeAdminNodes', () => {
           monthly_reset_day: 15,
           expiry_date: '2026-08-01',
           billing_cycle: '月付',
+          renewal_amount: 20,
+          renewal_currency: 'USD',
           display_order: 10,
           public_ipv4: '198.51.100.8',
           public_ipv6: '2001:db8::8',
@@ -577,6 +590,8 @@ describe('normalizeAdminNodes', () => {
     expect(data.nodes[0].agentVersion).toBe('d206817')
     expect(data.nodes[0].expiryDate).toBe('2026-08-01')
     expect(data.nodes[0].billingCycle).toBe('月付')
+    expect(data.nodes[0].renewalAmount).toBe(20)
+    expect(data.nodes[0].renewalCurrency).toBe('USD')
     expect(data.nodes[0].monthlyResetDay).toBe(15)
     expect(data.nodes[0].displayOrder).toBe(10)
     expect(data.nodes[0].publicIPv4).toBe('198.51.100.8')
@@ -1047,6 +1062,8 @@ describe('updateAdminNode', () => {
       homeProbeTargetId: 'cloudflare',
       expiryDate: '2026-08-01',
       billingCycle: '月付',
+      renewalAmount: 20,
+      renewalCurrency: 'USD',
       billingMode: 'max',
       monthlyResetDay: 20,
       displayOrder: 10,
@@ -1082,6 +1099,8 @@ describe('updateAdminNode', () => {
         home_probe_target_id: 'cloudflare',
         expiry_date: '2026-08-01',
         billing_cycle: '月付',
+        renewal_amount: 20,
+        renewal_currency: 'USD',
         billing_mode: 'max',
         monthly_reset_day: 20,
         display_order: 10,
@@ -1156,6 +1175,8 @@ describe('createAdminNode', () => {
       region: 'Los Angeles',
       expiryDate: '2026-09-01',
       billingCycle: '月付',
+      renewalAmount: 88,
+      renewalCurrency: 'CNY',
       billingMode: 'out',
       monthlyResetDay: 10,
       displayOrder: 20,
@@ -1181,6 +1202,8 @@ describe('createAdminNode', () => {
         region: 'Los Angeles',
         expiry_date: '2026-09-01',
         billing_cycle: '月付',
+        renewal_amount: 88,
+        renewal_currency: 'CNY',
         billing_mode: 'out',
         monthly_reset_day: 10,
         display_order: 20,

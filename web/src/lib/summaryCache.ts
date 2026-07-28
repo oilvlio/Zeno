@@ -1,4 +1,5 @@
 import type { SummaryData } from '../api/client'
+import { normalizeCurrencyRates } from './currency'
 
 export const summaryCacheKey = 'zeno_summary_cache_v2'
 export const legacySummaryCacheKey = 'zeno_summary_cache_v1'
@@ -23,6 +24,7 @@ function validateSummaryData(value: unknown): SummaryData | null {
     nodes: data.nodes as SummaryData['nodes'],
     services: data.services as SummaryData['services'],
     latencyPoints: Array.isArray(data.latencyPoints) ? data.latencyPoints as SummaryData['latencyPoints'] : [],
+    exchangeRates: normalizeCurrencyRates(data.exchangeRates),
   }
 }
 
