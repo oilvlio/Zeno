@@ -225,7 +225,7 @@ function summaryLatencyPoints(node: HomeCardNode | undefined): LatencyPoint[] {
 const defaultSettings: AdminSettings = {
   siteTitle: 'Zeno',
   siteSubtitle: '服务器运行概览',
-  logoUrl: 'https://cdn.jsdelivr.net/gh/shuijiao1/Fly@main/ID-128.webp',
+  logoUrl: 'https://cdn.jsdelivr.net/gh/shui1iao/Fly@main/ID-128.webp',
   theme: 'system',
   agentControllerUrl: '',
   backgroundUrl: '',
@@ -272,7 +272,7 @@ const appearancePresetOptions: Array<{ value: AppearancePreset; label: string }>
   { value: 'gaussian_blur', label: '高斯模糊主题' },
 ]
 
-const fallbackLogoUrl = 'https://cdn.jsdelivr.net/gh/shuijiao1/Fly@main/ID-128.png'
+const fallbackLogoUrl = 'https://cdn.jsdelivr.net/gh/shui1iao/Fly@main/ID-128.png'
 const maxSettingsCustomCodeLength = 60000
 
 function backgroundImageValue(url: string): string {

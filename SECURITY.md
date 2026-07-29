@@ -3,7 +3,7 @@
 ## Report privately / 私密报告
 
 Use GitHub Private Vulnerability Reporting:
-<https://github.com/shuijiao1/Zeno/security/advisories/new>
+<https://github.com/shui1iao/Zeno/security/advisories/new>
 
 请勿公开未修复漏洞，也不要附上 token、完整安装命令、数据库、备份、私钥或未脱敏日志。Do not publish an unpatched vulnerability or attach tokens, complete install commands, databases, backups, private keys, or unredacted logs.
 

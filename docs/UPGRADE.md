@@ -25,7 +25,7 @@ version=vX.Y.Z
 curl -fsS "https://zeno.shuijiao.de/$version/install.sh" -o install.sh
 curl -fsS "https://zeno.shuijiao.de/$version/install.sh.sha256" -o install.sh.sha256
 sha256sum -c install.sh.sha256
-sudo env ZENO_IMAGE="ghcr.io/shuijiao1/zeno:$version" ZENO_DB_CHECK_TIMEOUT=10m bash install.sh
+sudo env ZENO_IMAGE="ghcr.io/shui1iao/zeno:$version" ZENO_DB_CHECK_TIMEOUT=10m bash install.sh
 rm -f install.sh install.sh.sha256
 ```
 
@@ -81,7 +81,7 @@ https://zeno.shuijiao.de/vX.Y.Z/install.sh
 https://zeno.shuijiao.de/vX.Y.Z/install.sh.sha256
 ```
 
-该路由仅接受严格稳定 SemVer，并为脚本提供独立 SHA-256 元数据。先下载脚本和 checksum、运行 `sha256sum -c`，再以 root 执行；同时用同一版本固定 `ZENO_IMAGE=ghcr.io/shuijiao1/zeno:vX.Y.Z`。默认入口继续用于便利安装，但不要把它当作明确回滚目标。仓库 tag 的 raw URL 仍可用于源码审计。
+该路由仅接受严格稳定 SemVer，并为脚本提供独立 SHA-256 元数据。先下载脚本和 checksum、运行 `sha256sum -c`，再以 root 执行；同时用同一版本固定 `ZENO_IMAGE=ghcr.io/shui1iao/zeno:vX.Y.Z`。默认入口继续用于便利安装，但不要把它当作明确回滚目标。仓库 tag 的 raw URL 仍可用于源码审计。
 
 ## English summary
 

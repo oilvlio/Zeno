@@ -20,7 +20,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/shuijiao1/zeno/internal/shared/probe"
+	"github.com/shui1iao/zeno/internal/shared/probe"
 )
 
 type ProbeRunner func(ctx context.Context, target ProbeTarget) ([]probe.Sample, error)

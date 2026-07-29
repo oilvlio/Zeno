@@ -1,6 +1,6 @@
 services:
   zeno:
-    image: ${ZENO_IMAGE:-ghcr.io/shuijiao1/zeno:latest}
+    image: ${ZENO_IMAGE:-ghcr.io/shui1iao/zeno:latest}
     container_name: ${ZENO_CONTAINER_NAME:-zeno}
     restart: unless-stopped
     user: "${ZENO_UID:-10001}:${ZENO_GID:-10001}"

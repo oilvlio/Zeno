@@ -18,7 +18,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/shuijiao1/zeno/internal/controller/api"
+	"github.com/shui1iao/zeno/internal/controller/api"
 )
 
 type handlerConfig struct {

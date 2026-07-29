@@ -1,9 +1,9 @@
 # Zeno
 
-[![CI](https://github.com/shuijiao1/Zeno/actions/workflows/ci.yml/badge.svg)](https://github.com/shuijiao1/Zeno/actions/workflows/ci.yml)
-[![Docker](https://github.com/shuijiao1/Zeno/actions/workflows/docker.yml/badge.svg)](https://github.com/shuijiao1/Zeno/actions/workflows/docker.yml)
-[![Release](https://img.shields.io/github/v/release/shuijiao1/Zeno?color=2563eb)](https://github.com/shuijiao1/Zeno/releases)
-[![License](https://img.shields.io/github/license/shuijiao1/Zeno)](LICENSE)
+[![CI](https://github.com/shui1iao/Zeno/actions/workflows/ci.yml/badge.svg)](https://github.com/shui1iao/Zeno/actions/workflows/ci.yml)
+[![Docker](https://github.com/shui1iao/Zeno/actions/workflows/docker.yml/badge.svg)](https://github.com/shui1iao/Zeno/actions/workflows/docker.yml)
+[![Release](https://img.shields.io/github/v/release/shui1iao/Zeno?color=2563eb)](https://github.com/shui1iao/Zeno/releases)
+[![License](https://img.shields.io/github/license/shui1iao/Zeno)](LICENSE)
 
 **Zeno 是一个轻量、自托管的服务器监控面板。**
 
@@ -72,7 +72,7 @@ http://127.0.0.1:18980
 ```bash
 ZENO_INSTALL_DIR=/opt/zeno \
 ZENO_HOST_PORT=18980 \
-ZENO_IMAGE=ghcr.io/shuijiao1/zeno:vX.Y.Z \
+ZENO_IMAGE=ghcr.io/shui1iao/zeno:vX.Y.Z \
 ZENO_DB_CHECK_TIMEOUT=10m \
 bash <(curl -fsSL https://zeno.shuijiao.de)
 ```
@@ -91,7 +91,7 @@ zeno.example.com {
 
 ## 安装 Agent
 
-Agent 已拆分到独立仓库：[`shuijiao1/Zeno-Agent`](https://github.com/shuijiao1/Zeno-Agent)。
+Agent 已拆分到独立仓库：[`shui1iao/Zeno-Agent`](https://github.com/shui1iao/Zeno-Agent)。
 
 推荐方式：在 Zeno 后台创建服务器，选择 Linux / macOS / Windows，复制后台生成的安装命令到目标服务器执行。该命令会自动下载匹配系统和架构的 Agent Release；Linux 会安装 `zeno-agent.service`，macOS 会安装 LaunchDaemon，Windows 会安装 `zeno-agent` 服务。
 
@@ -126,7 +126,7 @@ version=vX.Y.Z
 curl -fsS "https://zeno.shuijiao.de/$version/install.sh" -o install.sh
 curl -fsS "https://zeno.shuijiao.de/$version/install.sh.sha256" -o install.sh.sha256
 sha256sum -c install.sh.sha256
-sudo env ZENO_IMAGE="ghcr.io/shuijiao1/zeno:$version" bash install.sh
+sudo env ZENO_IMAGE="ghcr.io/shui1iao/zeno:$version" bash install.sh
 rm -f install.sh install.sh.sha256
 ```
 

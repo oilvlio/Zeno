@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuijiao1/zeno/internal/controller/api"
+	"github.com/shui1iao/zeno/internal/controller/api"
 )
 
 func TestDBCheckTimeoutDefaultsAndValidation(t *testing.T) {

@@ -169,12 +169,12 @@ class InstallSafetyTest(unittest.TestCase):
                     printf '%s\n' 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
                   elif [[ "$*" == *"RepoDigests"* ]]; then
                     if [ "${FAKE_OFFICIAL_IMAGE:-}" = "1" ]; then
-                      printf '%s\n' 'ghcr.io/shuijiao1/zeno@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+                      printf '%s\n' 'ghcr.io/shui1iao/zeno@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
                     else
                       printf '%s\n' 'registry.example/zeno@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
                     fi
                   elif [[ "$*" == *"org.opencontainers.image.source"* ]]; then
-                    printf '%s\n' 'https://github.com/shuijiao1/Zeno'
+                    printf '%s\n' 'https://github.com/shui1iao/Zeno'
                   elif [[ "$*" == *"org.opencontainers.image.revision"* ]]; then
                     printf '%s\n' 'cccccccccccccccccccccccccccccccccccccccc'
                   elif [[ "$*" == *"org.opencontainers.image.version"* ]]; then
@@ -662,8 +662,13 @@ class InstallSafetyTest(unittest.TestCase):
         self.assertIn('gh_sha="762569efe785082b7d1feb06995efece1a9cecce16da8503ac6fdbcbea04085b"', script)
         self.assertIn('^v?[0-9]+\\.[0-9]+\\.[0-9]+', script)
         self.assertIn('TARGET_VERSION_LABEL="${version_label#v}"', script)
-        self.assertIn('https://ghcr.io/token?scope=repository%3Ashuijiao1%2Fzeno%3Apull', script)
-        self.assertIn('GH_TOKEN="$verifier_token" "$verifier" attestation verify', script)
+        self.assertIn('https://ghcr.io/token?scope=repository%3Ashui1iao%2Fzeno%3Apull', script)
+        self.assertIn('attestation verify', script)
+        self.assertIn('GH_TOKEN=${verifier_token}', script)
+        # 用户名迁移后，旧 tag 的 provenance 证书 owner 仍是 shuijiao1，
+        # 校验必须对新旧 owner 都尝试一次，否则旧版本无法安装或回滚。
+        self.assertIn('LEGACY_REPO="shuijiao1/Zeno"', script)
+        self.assertIn('for repo_candidate in "$REPO" "$LEGACY_REPO"', script)
         self.assertIn('--bundle-from-oci', script)
         self.assertNotIn('|| true', script)
 
@@ -699,7 +704,7 @@ class InstallSafetyTest(unittest.TestCase):
             result, install_dir, _ = self.run_install(
                 pathlib.Path(td),
                 extra_env={
-                    'ZENO_IMAGE': 'ghcr.io/shuijiao1/zeno:v0.6.1',
+                    'ZENO_IMAGE': 'ghcr.io/shui1iao/zeno:v0.6.1',
                     'ZENO_VERIFY_ATTESTATION': 'false',
                     'FAKE_OFFICIAL_IMAGE': '1',
                 },
@@ -707,8 +712,8 @@ class InstallSafetyTest(unittest.TestCase):
             env_text = (install_dir / '.env').read_text()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('已显式关闭官方镜像 provenance 验证', result.stderr)
-        self.assertIn('ZENO_IMAGE=ghcr.io/shuijiao1/zeno@sha256:', env_text)
-        self.assertIn('ZENO_UPDATE_IMAGE=ghcr.io/shuijiao1/zeno:v0.6.1', env_text)
+        self.assertIn('ZENO_IMAGE=ghcr.io/shui1iao/zeno@sha256:', env_text)
+        self.assertIn('ZENO_UPDATE_IMAGE=ghcr.io/shui1iao/zeno:v0.6.1', env_text)
 
     def test_dockerignore_excludes_secrets_and_sqlite_but_keeps_examples(self):
         dockerignore = (ROOT / '.dockerignore').read_text()

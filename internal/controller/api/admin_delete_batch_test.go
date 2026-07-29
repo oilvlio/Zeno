@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuijiao1/zeno/internal/shared/probe"
+	"github.com/shui1iao/zeno/internal/shared/probe"
 )
 
 func TestAdminNodeDeleteReturnsImmediatelyHidesAndRejectsNewReports(t *testing.T) {

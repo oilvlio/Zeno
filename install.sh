@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-REPO="shuijiao1/Zeno"
-DEFAULT_IMAGE="ghcr.io/shuijiao1/zeno:latest"
+REPO="shui1iao/Zeno"
+DEFAULT_IMAGE="ghcr.io/shui1iao/zeno:latest"
+# GitHub 用户名从 shuijiao1 改为 shui1iao。改名前发布的 tag 其 provenance
+# 证书签的是旧 owner，GHCR 不做用户名重定向，所以官方镜像路径只认新 owner，
+# 但 provenance 校验必须同时接受两个历史 owner，否则旧版本无法安装/回滚。
+LEGACY_REPO="shuijiao1/Zeno"
+OFFICIAL_IMAGE_REPO="ghcr.io/shui1iao/zeno"
+OFFICIAL_SOURCE_URLS=("https://github.com/shui1iao/Zeno" "https://github.com/shuijiao1/Zeno")
 PUBLIC_INSTALL_URL="https://zeno.shuijiao.de"
 AGENT_INSTALL_URL="https://zeno.shuijiao.de/agent/install.sh"
 AGENT_WINDOWS_INSTALL_URL="https://zeno.shuijiao.de/agent/install.ps1"
@@ -576,8 +582,8 @@ resolve_target_image() {
     version_label=""
   fi
 
-  if [[ "$REQUESTED_IMAGE" == ghcr.io/shuijiao1/zeno:* || "$REQUESTED_IMAGE" == ghcr.io/shuijiao1/zeno@sha256:* ]]; then
-    [ "$source_label" = "https://github.com/shuijiao1/Zeno" ] || fail "官方镜像 source label 不匹配，拒绝安装"
+  if is_official_image_ref "$REQUESTED_IMAGE"; then
+    is_official_source_label "$source_label" || fail "官方镜像 source label 不匹配，拒绝安装"
     [[ "$revision_label" =~ ^[0-9a-f]{40}$ ]] || fail "官方镜像 revision label 无效，拒绝安装"
     [[ "$version_label" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9][A-Za-z0-9.-]*)?$ ]] || fail "官方镜像 version label 无效，拒绝安装"
     TARGET_VERSION_LABEL="${version_label#v}"
@@ -598,13 +604,27 @@ resolve_target_image() {
   compose_staging config >/dev/null || fail "不可变目标镜像 Compose 验证失败"
 }
 
+is_official_image_ref() {
+  local ref="$1"
+  [[ "$ref" == "${OFFICIAL_IMAGE_REPO}":* || "$ref" == "${OFFICIAL_IMAGE_REPO}"@sha256:* ]]
+}
+
+is_official_source_label() {
+  local label="$1"
+  local candidate
+  for candidate in "${OFFICIAL_SOURCE_URLS[@]}"; do
+    [ "$label" = "$candidate" ] && return 0
+  done
+  return 1
+}
+
 verify_official_image_attestation() {
-  [[ "$REQUESTED_IMAGE" == ghcr.io/shuijiao1/zeno:* || "$REQUESTED_IMAGE" == ghcr.io/shuijiao1/zeno@sha256:* ]] || return 0
+  is_official_image_ref "$REQUESTED_IMAGE" || return 0
   [ "$VERIFY_ATTESTATION" = "true" ] || {
     echo "警告: 已显式关闭官方镜像 provenance 验证。" >&2
     return 0
   }
-  [[ "$IMAGE" == ghcr.io/shuijiao1/zeno@sha256:* ]] || fail "官方镜像未解析为 repo digest，无法验证 provenance"
+  [[ "$IMAGE" == "${OFFICIAL_IMAGE_REPO}"@sha256:* ]] || fail "官方镜像未解析为 repo digest，无法验证 provenance"
 
   local machine
   local gh_arch
@@ -637,7 +657,6 @@ verify_official_image_attestation() {
   tar -xzf "$archive" -C "$extract_dir" || fail "解压 provenance verifier 失败"
   local verifier="$extract_dir/gh_${gh_version}_linux_${gh_arch}/bin/gh"
   [ -x "$verifier" ] || fail "provenance verifier 缺少可执行文件"
-  local certificate_identity="https://github.com/shuijiao1/Zeno/.github/workflows/docker.yml@refs/tags/v${TARGET_VERSION_LABEL}"
   # gh requires a token even when it reads attestations from a public OCI
   # registry. Use a short-lived, pull-only anonymous GHCR token rather than
   # requiring every self-hosting user to authenticate the GitHub CLI.
@@ -645,14 +664,25 @@ verify_official_image_attestation() {
   if [ -z "$verifier_token" ]; then
     local token_response
     token_response=$(curl -fsSL --max-time 30 \
-      'https://ghcr.io/token?scope=repository%3Ashuijiao1%2Fzeno%3Apull') \
+      'https://ghcr.io/token?scope=repository%3Ashui1iao%2Fzeno%3Apull') \
       || fail "获取公开 GHCR provenance 验证凭据失败"
     verifier_token=$(printf '%s' "$token_response" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
     [ -n "$verifier_token" ] || fail "公开 GHCR provenance 验证凭据格式无效"
   fi
-  GH_TOKEN="$verifier_token" "$verifier" attestation verify "oci://${IMAGE}" --repo "$REPO" \
-    --bundle-from-oci --cert-identity "$certificate_identity" --deny-self-hosted-runners >/dev/null \
-    || fail "官方镜像 provenance 验证失败"
+
+  # 用户名迁移前发布的 tag，其 provenance 证书的 SourceRepositoryOwnerURI 仍是旧
+  # owner，gh 会拒绝 owner 不符的 --repo。依次尝试新旧仓库标识，任一通过即视为
+  # 官方镜像；全部失败才判定 provenance 不可信。
+  local repo_candidate
+  for repo_candidate in "$REPO" "$LEGACY_REPO"; do
+    local certificate_identity="https://github.com/${repo_candidate}/.github/workflows/docker.yml@refs/tags/v${TARGET_VERSION_LABEL}"
+    if env "GH_TOKEN=${verifier_token}" "$verifier" attestation verify "oci://${IMAGE}" \
+        --repo "$repo_candidate" --bundle-from-oci \
+        --cert-identity "$certificate_identity" --deny-self-hosted-runners >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+  fail "官方镜像 provenance 验证失败"
 }
 
 set_env_value_file() {

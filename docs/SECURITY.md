@@ -6,7 +6,7 @@ Zeno 的原则是 **Agent 只采集和上报，不接受远程命令**。本页�
 
 请使用 GitHub 的 **Private vulnerability reporting**：
 
-<https://github.com/shuijiao1/Zeno/security/advisories/new>
+<https://github.com/shui1iao/Zeno/security/advisories/new>
 
 维护者目标是在 7 天内确认收到、14 天内给出初步判断，并与报告者协调修复和披露时间。复杂度与可复现性可能影响时限；修复和 advisory 准备好之前请勿公开（法律强制披露除外）。安全修复面向最新稳定 Controller 与 [COMPATIBILITY.md](COMPATIBILITY.md) 中列为支持的 Agent 组合。
 
@@ -100,7 +100,7 @@ Zeno 不提供 command exec、shell、文件管理、脚本执行或通用任务
 
 ## English summary
 
-Report vulnerabilities privately at <https://github.com/shuijiao1/Zeno/security/advisories/new>. The response targets are acknowledgement within 7 days and an initial assessment within 14 days; coordinate disclosure. Security fixes cover the latest stable Controller and combinations listed in [COMPATIBILITY.md](COMPATIBILITY.md).
+Report vulnerabilities privately at <https://github.com/shui1iao/Zeno/security/advisories/new>. The response targets are acknowledgement within 7 days and an initial assessment within 14 days; coordinate disclosure. Security fixes cover the latest stable Controller and combinations listed in [COMPATIBILITY.md](COMPATIBILITY.md).
 
 Agents have independent runtime credentials; one-time enrollment expires after 10 minutes. Generating another command revokes the previous unused enrollment without interrupting the active runtime token. Admin, Agent, notification, and keyring credentials must never enter URLs, logs, screenshots, Issues, or backups without encryption/access controls. Keep the Controller loopback-only behind HTTPS/WebSocket proxying and narrowly configure trusted proxies. Admin is trusted to configure probes; Zeno is not a multi-tenant SSRF sandbox. Back up/restore the database and both notification keyrings together.
 

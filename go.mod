@@ -1,4 +1,4 @@
-module github.com/shuijiao1/zeno
+module github.com/shui1iao/zeno
 
 go 1.25.12
 

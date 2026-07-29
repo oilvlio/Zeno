@@ -1,9 +1,9 @@
 # Zeno
 
-[![CI](https://github.com/shuijiao1/Zeno/actions/workflows/ci.yml/badge.svg)](https://github.com/shuijiao1/Zeno/actions/workflows/ci.yml)
-[![Docker](https://github.com/shuijiao1/Zeno/actions/workflows/docker.yml/badge.svg)](https://github.com/shuijiao1/Zeno/actions/workflows/docker.yml)
-[![Release](https://img.shields.io/github/v/release/shuijiao1/Zeno?color=2563eb)](https://github.com/shuijiao1/Zeno/releases)
-[![License](https://img.shields.io/github/license/shuijiao1/Zeno)](LICENSE)
+[![CI](https://github.com/shui1iao/Zeno/actions/workflows/ci.yml/badge.svg)](https://github.com/shui1iao/Zeno/actions/workflows/ci.yml)
+[![Docker](https://github.com/shui1iao/Zeno/actions/workflows/docker.yml/badge.svg)](https://github.com/shui1iao/Zeno/actions/workflows/docker.yml)
+[![Release](https://img.shields.io/github/v/release/shui1iao/Zeno?color=2563eb)](https://github.com/shui1iao/Zeno/releases)
+[![License](https://img.shields.io/github/license/shui1iao/Zeno)](LICENSE)
 
 **Zeno is a lightweight, self-hosted server monitoring dashboard.**
 
@@ -72,7 +72,7 @@ Optional environment variables:
 ```bash
 ZENO_INSTALL_DIR=/opt/zeno \
 ZENO_HOST_PORT=18980 \
-ZENO_IMAGE=ghcr.io/shuijiao1/zeno:vX.Y.Z \
+ZENO_IMAGE=ghcr.io/shui1iao/zeno:vX.Y.Z \
 ZENO_DB_CHECK_TIMEOUT=10m \
 bash <(curl -fsSL https://zeno.shuijiao.de)
 ```
@@ -91,7 +91,7 @@ zeno.example.com {
 
 ## Install Agent
 
-The Agent is maintained in a separate repository: [`shuijiao1/Zeno-Agent`](https://github.com/shuijiao1/Zeno-Agent).
+The Agent is maintained in a separate repository: [`shui1iao/Zeno-Agent`](https://github.com/shui1iao/Zeno-Agent).
 
 Recommended flow: create a server in the Zeno admin dashboard, choose Linux / macOS / Windows, and run the generated install command on the target server. The command downloads the matching Agent release; Linux installs `zeno-agent.service`, macOS installs a LaunchDaemon, and Windows installs the `zeno-agent` service.
 
@@ -126,7 +126,7 @@ version=vX.Y.Z
 curl -fsS "https://zeno.shuijiao.de/$version/install.sh" -o install.sh
 curl -fsS "https://zeno.shuijiao.de/$version/install.sh.sha256" -o install.sh.sha256
 sha256sum -c install.sh.sha256
-sudo env ZENO_IMAGE="ghcr.io/shuijiao1/zeno:$version" bash install.sh
+sudo env ZENO_IMAGE="ghcr.io/shui1iao/zeno:$version" bash install.sh
 rm -f install.sh install.sh.sha256
 ```
 

@@ -30,7 +30,7 @@ sudo bash -o pipefail -c 'curl -fsSL https://zeno.shuijiao.de | bash'
 sudo env \
   ZENO_INSTALL_DIR=/opt/zeno \
   ZENO_HOST_PORT=18980 \
-  ZENO_IMAGE=ghcr.io/shuijiao1/zeno:vX.Y.Z \
+  ZENO_IMAGE=ghcr.io/shui1iao/zeno:vX.Y.Z \
   ZENO_DB_CHECK_TIMEOUT=10m \
   bash -o pipefail -c 'curl -fsSL https://zeno.shuijiao.de | bash'
 ```
@@ -121,7 +121,7 @@ Zeno 不自动修改 DNS、反向代理或防火墙。
 3. 打开服务器编辑弹窗，点击“复制安装命令”。
 4. 选择 Linux、macOS 或 Windows，并在目标机器执行命令。
 
-Agent 安装器和多平台 release 来自独立的 [Zeno-Agent](https://github.com/shuijiao1/Zeno-Agent) 仓库。Linux Agent 使用其自己的 `zeno-agent.service`；macOS 使用 LaunchDaemon；Windows 使用系统服务。
+Agent 安装器和多平台 release 来自独立的 [Zeno-Agent](https://github.com/shui1iao/Zeno-Agent) 仓库。Linux Agent 使用其自己的 `zeno-agent.service`；macOS 使用 LaunchDaemon；Windows 使用系统服务。
 
 ## 6. 验证 Agent
 
