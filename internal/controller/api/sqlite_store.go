@@ -352,7 +352,6 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			timeout_ms INTEGER NOT NULL,
 			interval_sec INTEGER NOT NULL,
 			display_order INTEGER NOT NULL DEFAULT 0,
-			enabled INTEGER NOT NULL DEFAULT 1,
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL
 		);`,
@@ -657,6 +656,9 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := s.migrateProbeTargetGlobalEnabled(ctx); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `
 		UPDATE traffic_monthly
 		SET last_sample_ts = COALESCE(
@@ -790,6 +792,15 @@ func (s *SQLiteStore) ensureColumn(ctx context.Context, table, column, columnTyp
 		return nil
 	}
 	_, err = s.db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, columnType))
+	return err
+}
+
+func (s *SQLiteStore) migrateProbeTargetGlobalEnabled(ctx context.Context) error {
+	exists, err := s.columnExists(ctx, "probe_targets", "enabled")
+	if err != nil || !exists {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `ALTER TABLE probe_targets DROP COLUMN enabled`)
 	return err
 }
 
@@ -1332,7 +1343,7 @@ func (s *SQLiteStore) AdminNodes(ctx context.Context) ([]AdminNode, error) {
 
 func (s *SQLiteStore) AdminProbeTargets(ctx context.Context) ([]AdminProbeTarget, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT pt.id, pt.name, pt.type, pt.address, pt.port, pt.count, pt.timeout_ms, pt.interval_sec, pt.display_order, pt.enabled,
+		SELECT pt.id, pt.name, pt.type, pt.address, pt.port, pt.count, pt.timeout_ms, pt.interval_sec, pt.display_order,
 		       n.id, n.display_name, npt.enabled
 		FROM probe_targets pt
 		LEFT JOIN node_probe_targets npt ON npt.target_id = pt.id
@@ -1361,10 +1372,9 @@ func (s *SQLiteStore) AdminProbeTargets(ctx context.Context) ([]AdminProbeTarget
 	for rows.Next() {
 		var target AdminProbeTarget
 		var port sql.NullInt64
-		var targetEnabled int
 		var nodeID, nodeDisplayName sql.NullString
 		var assignmentEnabled sql.NullInt64
-		if err := rows.Scan(&target.ID, &target.Name, &target.Type, &target.Address, &port, &target.Count, &target.TimeoutMS, &target.IntervalSec, &target.DisplayOrder, &targetEnabled, &nodeID, &nodeDisplayName, &assignmentEnabled); err != nil {
+		if err := rows.Scan(&target.ID, &target.Name, &target.Type, &target.Address, &port, &target.Count, &target.TimeoutMS, &target.IntervalSec, &target.DisplayOrder, &nodeID, &nodeDisplayName, &assignmentEnabled); err != nil {
 			return nil, err
 		}
 		if existingIndex, exists := indexByID[target.ID]; exists {
@@ -1377,7 +1387,6 @@ func (s *SQLiteStore) AdminProbeTargets(ctx context.Context) ([]AdminProbeTarget
 			converted := int(port.Int64)
 			target.Port = &converted
 		}
-		target.Enabled = targetEnabled != 0
 		target.Assignments = []AdminProbeTargetAssignment{}
 		if nodeID.Valid {
 			target.Assignments = append(target.Assignments, AdminProbeTargetAssignment{NodeID: nodeID.String, NodeDisplayName: nullStringOr(nodeDisplayName, ""), Enabled: assignmentEnabled.Valid && assignmentEnabled.Int64 != 0})
@@ -1403,10 +1412,6 @@ func (s *SQLiteStore) CreateAdminProbeTarget(ctx context.Context, create AdminPr
 		}
 		targetID = generated
 	}
-	enabled := 1
-	if create.Enabled != nil && !*create.Enabled {
-		enabled = 0
-	}
 	now := time.Now().UTC().Unix()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1421,9 +1426,9 @@ func (s *SQLiteStore) CreateAdminProbeTarget(ctx context.Context, create AdminPr
 		return AdminProbeTarget{}, err
 	}
 	result, err := tx.ExecContext(ctx, `
-		INSERT OR IGNORE INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, enabled, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, targetID, create.Name, create.Type, create.Address, adminOptionalInt64SQLValue(create.Port), create.Count, create.TimeoutMS, create.IntervalSec, create.DisplayOrder, enabled, now, now)
+		INSERT OR IGNORE INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, targetID, create.Name, create.Type, create.Address, adminOptionalInt64SQLValue(create.Port), create.Count, create.TimeoutMS, create.IntervalSec, create.DisplayOrder, now, now)
 	if err != nil {
 		return AdminProbeTarget{}, err
 	}
@@ -1525,7 +1530,7 @@ func (s *SQLiteStore) UpdateAdminProbeTarget(ctx context.Context, targetID strin
 	if update.IntervalSec != nil {
 		finalIntervalSec = *update.IntervalSec
 	}
-	validateResourceConfig := update.Count != nil || update.TimeoutMS != nil || update.IntervalSec != nil || (update.Enabled != nil && *update.Enabled)
+	validateResourceConfig := update.Count != nil || update.TimeoutMS != nil || update.IntervalSec != nil
 	if !validateResourceConfig && update.Assignments != nil {
 		for _, assignment := range update.Assignments {
 			if assignment.Enabled {
@@ -1537,8 +1542,8 @@ func (s *SQLiteStore) UpdateAdminProbeTarget(ctx context.Context, targetID strin
 	if validateResourceConfig && !validProbeTargetResourceConfig(finalCount, finalTimeoutMS, finalIntervalSec) {
 		return AdminProbeTarget{}, errInvalidAdminTargetWrite
 	}
-	sets := make([]string, 0, 9)
-	args := make([]any, 0, 10)
+	sets := make([]string, 0, 8)
+	args := make([]any, 0, 9)
 	if update.Name != nil {
 		sets = append(sets, "name = ?")
 		args = append(args, *update.Name)
@@ -1570,14 +1575,6 @@ func (s *SQLiteStore) UpdateAdminProbeTarget(ctx context.Context, targetID strin
 	if update.DisplayOrder != nil {
 		sets = append(sets, "display_order = ?")
 		args = append(args, *update.DisplayOrder)
-	}
-	if update.Enabled != nil {
-		sets = append(sets, "enabled = ?")
-		if *update.Enabled {
-			args = append(args, 1)
-		} else {
-			args = append(args, 0)
-		}
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1632,11 +1629,6 @@ func (s *SQLiteStore) UpdateAdminProbeTarget(ctx context.Context, targetID strin
 			}
 		}
 	}
-	if update.Enabled != nil && !*update.Enabled {
-		if _, err := tx.ExecContext(ctx, `UPDATE nodes SET home_probe_target_id = NULL WHERE home_probe_target_id = ?`, targetID); err != nil {
-			return AdminProbeTarget{}, err
-		}
-	}
 	usageAfter, err := probeNodeUsagesTx(ctx, tx)
 	if err != nil {
 		return AdminProbeTarget{}, err
@@ -1673,7 +1665,6 @@ func probeNodeUsagesTx(ctx context.Context, tx *sql.Tx) (map[string]probeNodeUsa
 		FROM node_probe_targets npt
 		JOIN probe_targets pt ON pt.id = npt.target_id
 		WHERE npt.enabled = 1
-		  AND pt.enabled = 1
 		GROUP BY npt.node_id
 	`)
 	if err != nil {
@@ -2104,7 +2095,6 @@ func (s *SQLiteStore) latestLatencySummaryForTarget(ctx context.Context, nodeID,
 		LEFT JOIN node_probe_targets npt ON npt.node_id = pr.node_id AND npt.target_id = pr.target_id
 		WHERE pr.node_id = ?
 		  AND pr.target_id = ?
-		  AND pt.enabled = 1
 		  AND COALESCE(npt.enabled, 0) = 1
 		  AND pr.ts >= ?
 		ORDER BY pr.ts DESC, pr.id DESC
@@ -2175,7 +2165,6 @@ func (s *SQLiteStore) latestLatencySummaries(ctx context.Context, nodeID string)
 		)
 		WHERE npt.node_id = ?
 		  AND npt.enabled = 1
-		  AND pt.enabled = 1
 		ORDER BY pt.display_order ASC, pt.name ASC, pt.id ASC
 	`, nodeID)
 	if err != nil {
@@ -2219,7 +2208,6 @@ func (s *SQLiteStore) latestHomeLatencySummaries(ctx context.Context) (map[strin
 			JOIN node_probe_targets npt ON npt.node_id = n.id AND npt.target_id = pt.id
 			WHERE n.disabled = 0
 			  AND TRIM(COALESCE(n.home_probe_target_id, '')) <> ''
-			  AND pt.enabled = 1
 			  AND npt.enabled = 1
 		),
 		loss_by_node AS (
@@ -2294,7 +2282,6 @@ func (s *SQLiteStore) latestLatencySummariesByNode(ctx context.Context) (map[str
 		)
 		WHERE n.disabled = 0
 		  AND npt.enabled = 1
-		  AND pt.enabled = 1
 		ORDER BY npt.node_id ASC, pt.display_order ASC, pt.name ASC, pt.id ASC
 	`)
 	if err != nil {
@@ -2332,7 +2319,12 @@ func (s *SQLiteStore) serviceTargets(ctx context.Context) ([]ServiceTarget, erro
 		FROM probe_targets pt
 		LEFT JOIN node_probe_targets npt ON npt.target_id = pt.id
 		LEFT JOIN nodes n ON n.id = npt.node_id
-		WHERE pt.enabled = 1
+		WHERE NOT EXISTS (
+			SELECT 1 FROM admin_deletion_jobs deletion
+			WHERE deletion.entity_kind = 'probe_target'
+			  AND deletion.entity_id = pt.id
+			  AND deletion.state IN ('pending', 'running')
+		)
 		GROUP BY pt.id, pt.name, pt.type, pt.display_order
 		ORDER BY pt.display_order ASC, pt.name ASC, pt.id ASC
 	`)
@@ -2367,7 +2359,13 @@ func (s *SQLiteStore) serviceTargetByID(ctx context.Context, targetID string) (S
 		FROM probe_targets pt
 		LEFT JOIN node_probe_targets npt ON npt.target_id = pt.id
 		LEFT JOIN nodes n ON n.id = npt.node_id
-		WHERE pt.enabled = 1 AND pt.id = ?
+		WHERE pt.id = ?
+		  AND NOT EXISTS (
+			SELECT 1 FROM admin_deletion_jobs deletion
+			WHERE deletion.entity_kind = 'probe_target'
+			  AND deletion.entity_id = pt.id
+			  AND deletion.state IN ('pending', 'running')
+		  )
 		GROUP BY pt.id, pt.name, pt.type
 	`, targetID).Scan(&target.ID, &target.Name, &target.Type, &assigned)
 	if err != nil {
@@ -2416,7 +2414,12 @@ func (s *SQLiteStore) populateServiceTargetLatencySummaries(ctx context.Context,
 			LIMIT 1
 		)
 		LEFT JOIN reporting ON reporting.target_id = pt.id
-		WHERE pt.enabled = 1
+		WHERE NOT EXISTS (
+			SELECT 1 FROM admin_deletion_jobs deletion
+			WHERE deletion.entity_kind = 'probe_target'
+			  AND deletion.entity_id = pt.id
+			  AND deletion.state IN ('pending', 'running')
+		)
 	`, since)
 	if err != nil {
 		return err
@@ -2506,7 +2509,6 @@ func (s *SQLiteStore) serviceLatencyPoints(ctx context.Context, targetID string,
 		LEFT JOIN node_probe_targets npt ON npt.node_id = pr.node_id AND npt.target_id = pr.target_id
 		WHERE pr.target_id = ?
 		  AND pr.ts >= ?
-		  AND pt.enabled = 1
 		  AND n.disabled = 0
 		  AND COALESCE(npt.enabled, 0) = 1
 		ORDER BY pr.ts ASC, n.display_order ASC, n.display_name ASC, pr.id ASC
@@ -2545,7 +2547,6 @@ func (s *SQLiteStore) latencyPoints(ctx context.Context, nodeID string, window l
 		LEFT JOIN node_probe_targets npt ON npt.node_id = pr.node_id AND npt.target_id = pr.target_id
 		WHERE pr.node_id = ?
 		  AND pr.ts >= ?
-		  AND pt.enabled = 1
 		  AND COALESCE(npt.enabled, 0) = 1
 		ORDER BY pr.ts ASC, pt.display_order ASC, pt.name ASC, pr.id ASC
 	`, nodeID, since)
@@ -2671,7 +2672,6 @@ func (s *SQLiteStore) latencyGridPoints(ctx context.Context, nodeID string, wind
 		WHERE pr.node_id = ?
 		  AND pr.ts >= ?
 		  AND pr.ts < ?
-		  AND pt.enabled = 1
 		  AND COALESCE(npt.enabled, 0) = 1
 		GROUP BY bucket_ts, pr.target_id
 	`, stepSeconds, stepSeconds, nodeID, start.Unix(), end.Add(gridWindow.Step).Unix())
@@ -2745,7 +2745,6 @@ func (s *SQLiteStore) serviceLatencyGridPoints(ctx context.Context, targetID str
 		WHERE pr.target_id = ?
 		  AND pr.ts >= ?
 		  AND pr.ts < ?
-		  AND pt.enabled = 1
 		  AND n.disabled = 0
 		  AND COALESCE(npt.enabled, 0) = 1
 		GROUP BY bucket_ts, pr.node_id
@@ -2800,7 +2799,7 @@ func (s *SQLiteStore) enabledLatencyTargetsForNode(ctx context.Context, nodeID s
 		SELECT pt.id, pt.name
 		FROM probe_targets pt
 		LEFT JOIN node_probe_targets npt ON npt.target_id = pt.id AND npt.node_id = ?
-		WHERE pt.enabled = 1 AND COALESCE(npt.enabled, 0) = 1
+		WHERE COALESCE(npt.enabled, 0) = 1
 		ORDER BY pt.display_order ASC, pt.name ASC, pt.id ASC
 	`, nodeID)
 	if err != nil {

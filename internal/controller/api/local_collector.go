@@ -399,7 +399,7 @@ func (s *SQLiteStore) insertProbeRoundsOnce(ctx context.Context, nodeID string, 
 			SELECT 1
 			FROM probe_targets pt
 			JOIN node_probe_targets npt ON npt.target_id = pt.id
-			WHERE pt.id = ? AND pt.enabled = 1
+			WHERE pt.id = ?
 			  AND npt.node_id = ? AND npt.enabled = 1
 			  AND NOT EXISTS (
 				SELECT 1 FROM admin_deletion_jobs deletion

@@ -42,6 +42,91 @@ func TestEmptyPublicSummaryUsesJSONArrays(t *testing.T) {
 	}
 }
 
+func TestProbeTargetsHaveNoGlobalEnabledColumn(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+
+	rows, err := store.db.QueryContext(context.Background(), `PRAGMA table_info(probe_targets)`)
+	if err != nil {
+		t.Fatalf("read probe target schema: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			t.Fatalf("scan probe target schema: %v", err)
+		}
+		if name == "enabled" {
+			t.Fatal("probe_targets still contains the removed global enabled column")
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate probe target schema: %v", err)
+	}
+}
+
+func TestOpenSQLiteStoreRemovesLegacyProbeTargetEnabledColumn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zeno.db")
+	store, err := OpenSQLiteStore(path)
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	ctx := context.Background()
+	if _, err := store.db.ExecContext(ctx, `ALTER TABLE probe_targets ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1`); err != nil {
+		t.Fatalf("add legacy enabled column: %v", err)
+	}
+	if err := store.SeedPreviewData(ctx, PreviewSeedOptions{NodeID: "example-node-a", DisplayName: "Example Node A", AgentToken: "test-agent-token"}); err != nil {
+		t.Fatalf("seed preview data: %v", err)
+	}
+	if _, err := store.db.ExecContext(ctx, `UPDATE probe_targets SET enabled = 0 WHERE id = 'google-dns'`); err != nil {
+		t.Fatalf("set legacy global enabled value: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close legacy sqlite store: %v", err)
+	}
+
+	reopened, err := OpenSQLiteStore(path)
+	if err != nil {
+		t.Fatalf("reopen migrated sqlite store: %v", err)
+	}
+	defer reopened.Close()
+	exists, err := reopened.columnExists(ctx, "probe_targets", "enabled")
+	if err != nil {
+		t.Fatalf("inspect migrated probe target schema: %v", err)
+	}
+	if exists {
+		t.Fatal("legacy probe target global enabled column still exists after migration")
+	}
+	targets, err := reopened.EnabledProbeTargets(ctx, "example-node-a")
+	if err != nil {
+		t.Fatalf("read assigned targets: %v", err)
+	}
+	assigned := false
+	for _, target := range targets {
+		if target.ID == "google-dns" {
+			assigned = true
+		}
+	}
+	if !assigned {
+		t.Fatalf("legacy global enabled=0 still suppressed google-dns from Agent config: %+v", targets)
+	}
+	services, err := reopened.serviceTargets(ctx)
+	if err != nil {
+		t.Fatalf("read public service targets: %v", err)
+	}
+	for _, target := range services {
+		if target.ID == "google-dns" {
+			return
+		}
+	}
+	t.Fatalf("legacy global enabled=0 still suppressed google-dns from public services: %+v", services)
+}
+
 func TestOpenSQLiteStoreMigratesLegacyNotificationDeliveryLeaseColumnsBeforeIndex(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "zeno.db")
 	db, err := sql.Open("sqlite", dbPath)
@@ -203,8 +288,8 @@ func TestSQLiteBackedHandlerReturnsPersistedLatencyInsteadOfMock(t *testing.T) {
 		t.Fatalf("insert host info: %v", err)
 	}
 	if _, err := store.db.ExecContext(ctx, `
-		INSERT INTO probe_targets (id, name, type, address, count, timeout_ms, interval_sec, enabled, created_at, updated_at)
-		VALUES ('google', 'Google', 'ping', '8.8.8.8', 3, 1000, 60, 1, ?, ?);
+		INSERT INTO probe_targets (id, name, type, address, count, timeout_ms, interval_sec, created_at, updated_at)
+		VALUES ('google', 'Google', 'ping', '8.8.8.8', 3, 1000, 60, ?, ?);
 	`, now.Unix(), now.Unix()); err != nil {
 		t.Fatalf("insert target: %v", err)
 	}
@@ -581,8 +666,8 @@ func TestSQLiteBackedLatencyUsesKulinMinuteGridAndAverageDelay(t *testing.T) {
 		t.Fatalf("insert node: %v", err)
 	}
 	if _, err := store.db.ExecContext(ctx, `
-		INSERT INTO probe_targets (id, name, type, address, count, timeout_ms, interval_sec, enabled, created_at, updated_at)
-		VALUES ('google', 'Google', 'ping', '8.8.8.8', 3, 1000, 60, 1, ?, ?);
+		INSERT INTO probe_targets (id, name, type, address, count, timeout_ms, interval_sec, created_at, updated_at)
+		VALUES ('google', 'Google', 'ping', '8.8.8.8', 3, 1000, 60, ?, ?);
 	`, now.Unix(), now.Unix()); err != nil {
 		t.Fatalf("insert target: %v", err)
 	}
@@ -674,8 +759,8 @@ func TestSQLiteBackedSummaryUsesPersistedNodeAndLatestLatency(t *testing.T) {
 		t.Fatalf("insert state sample: %v", err)
 	}
 	if _, err := store.db.ExecContext(ctx, `
-		INSERT INTO probe_targets (id, name, type, address, count, timeout_ms, interval_sec, enabled, created_at, updated_at)
-		VALUES ('google', 'Google', 'ping', '8.8.8.8', 3, 1000, 60, 1, ?, ?);
+		INSERT INTO probe_targets (id, name, type, address, count, timeout_ms, interval_sec, created_at, updated_at)
+		VALUES ('google', 'Google', 'ping', '8.8.8.8', 3, 1000, 60, ?, ?);
 	`, now.Unix(), now.Unix()); err != nil {
 		t.Fatalf("insert target: %v", err)
 	}
@@ -786,8 +871,8 @@ func TestSQLiteBackedSummaryUsesConfiguredHomeLatencyTarget(t *testing.T) {
 		{id: "cloudflare", name: "Cloudflare", addr: "1.1.1.1"},
 	} {
 		if _, err := store.db.ExecContext(ctx, `
-			INSERT INTO probe_targets (id, name, type, address, count, timeout_ms, interval_sec, enabled, created_at, updated_at)
-			VALUES (?, ?, 'ping', ?, 3, 1000, 60, 1, ?, ?);
+			INSERT INTO probe_targets (id, name, type, address, count, timeout_ms, interval_sec, created_at, updated_at)
+			VALUES (?, ?, 'ping', ?, 3, 1000, 60, ?, ?);
 		`, target.id, target.name, target.addr, now.Unix(), now.Unix()); err != nil {
 			t.Fatalf("insert target %s: %v", target.id, err)
 		}
@@ -1093,8 +1178,8 @@ func TestEnabledProbeTargetsBoundsLegacyUnsafeConfigForDownlinkAndCollector(t *t
 	}
 	now := time.Now().UTC().Unix()
 	if _, err := store.db.ExecContext(ctx, `
-		INSERT INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, enabled, created_at, updated_at)
-		VALUES ('unsafe-legacy', 'Unsafe Legacy', 'tcping', '203.0.113.1', 443, 100, 50000, 1, 5, 1, ?, ?)
+		INSERT INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, created_at, updated_at)
+		VALUES ('unsafe-legacy', 'Unsafe Legacy', 'tcping', '203.0.113.1', 443, 100, 50000, 1, 5, ?, ?)
 	`, now, now); err != nil {
 		t.Fatalf("insert unsafe legacy target: %v", err)
 	}
@@ -1104,8 +1189,8 @@ func TestEnabledProbeTargetsBoundsLegacyUnsafeConfigForDownlinkAndCollector(t *t
 	for index := 0; index < 40; index++ {
 		targetID := fmt.Sprintf("bulk-legacy-%02d", index)
 		if _, err := store.db.ExecContext(ctx, `
-			INSERT INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, enabled, created_at, updated_at)
-			VALUES (?, ?, 'tcping', '203.0.113.2', 443, 1, 100, 5, ?, 1, ?, ?)
+			INSERT INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, created_at, updated_at)
+			VALUES (?, ?, 'tcping', '203.0.113.2', 443, 1, 100, 5, ?, ?, ?)
 		`, targetID, targetID, 100+index, now, now); err != nil {
 			t.Fatalf("insert bulk legacy target %d: %v", index, err)
 		}

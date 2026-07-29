@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AdminCredentialField, AdminDashboard, AdminDeleteConfirmModal, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, applyCustomCode, documentBrandingForSettings, filterHomeNodesByRegion, homeMonthlyCostForNodes, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, remoteInsecureAgentControllerURL, renewalCurrencyOptions, shellStyleForSettings, shouldRefreshHomeRealtimeSnapshot, validateAdminSettingsInput } from './App'
+import { AdminCredentialField, AdminDashboard, AdminDeleteConfirmModal, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, applyCustomCode, documentBrandingForSettings, filterHomeNodesByRegion, formatTargetAssignmentSummary, homeMonthlyCostForNodes, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, remoteInsecureAgentControllerURL, renewalCurrencyOptions, shellStyleForSettings, shouldRefreshHomeRealtimeSnapshot, validateAdminSettingsInput } from './App'
 import type { AdminAlertRule, AdminNode, AdminNotificationChannel, AdminProbeTarget, AdminSettings, HomeCardNode } from './types'
 
 const overviewProps = {
@@ -154,7 +154,6 @@ const exampleNodeATarget: AdminProbeTarget = {
   timeoutMs: 1200,
   intervalSec: 60,
   displayOrder: 20,
-  enabled: true,
   assignments: [
     { nodeId: 'example-node-a', nodeDisplayName: 'Example Node A', enabled: true },
     { nodeId: 'backup', nodeDisplayName: 'Backup', enabled: false },
@@ -171,7 +170,6 @@ const pingTarget: AdminProbeTarget = {
   timeoutMs: 900,
   intervalSec: 45,
   displayOrder: 10,
-  enabled: true,
   assignments: [
     { nodeId: 'example-node-a', nodeDisplayName: 'Example Node A', enabled: true },
   ],
@@ -187,7 +185,6 @@ const httpTarget: AdminProbeTarget = {
   timeoutMs: 1500,
   intervalSec: 60,
   displayOrder: 30,
-  enabled: true,
   assignments: [
     { nodeId: 'example-node-a', nodeDisplayName: 'Example Node A', enabled: true },
   ],
@@ -390,7 +387,7 @@ describe('HomeTopPanel', () => {
     })
   })
 
-  it('keeps the homepage top controls inside one card with four separate overview tiles', () => {
+  it('keeps the homepage top controls inside one compact six-column summary row', () => {
     const html = renderToStaticMarkup(
       <HomeTopPanel
         {...overviewProps}
@@ -410,12 +407,15 @@ describe('HomeTopPanel', () => {
     expect(html).not.toContain('/assets/avatar/custom.webp')
     expect(html).not.toContain('VPS 状态总览')
     expect(html).toContain('home-summary')
-    expect(html).toContain('home-summary__status')
-    expect(html).toContain('home-summary__cost')
-    expect(html).toContain('home-summary__status-track')
-    expect(html.match(/home-summary__tile/g)).toHaveLength(4)
+    expect(html.match(/home-summary__metric(?: |")/g)).toHaveLength(6)
+    expect(html).toContain('home-summary__metric--status')
+    expect(html).toContain('home-summary__metric--cost')
+    expect(html).not.toContain('home-summary__status-track')
+    expect(html).not.toContain('home-summary__snapshot')
+    expect(html).not.toContain('home-summary__network-board')
+    expect(html).not.toContain('home-summary__tile')
     expect(html).toContain('home-summary__status-dot')
-    expect(html).toMatch(/home-summary__status[\s\S]*?home-summary__cost[\s\S]*?home-summary__network--upload[\s\S]*?home-summary__network--download/)
+    expect(html).toMatch(/home-summary__metric--status[\s\S]*?home-summary__metric--cost[\s\S]*?home-summary__metric--total home-summary__metric--upload[\s\S]*?home-summary__metric--total home-summary__metric--download[\s\S]*?home-summary__metric--rate home-summary__metric--upload[\s\S]*?home-summary__metric--rate home-summary__metric--download/)
     expect(html).toContain('在线节点')
     expect(html).toContain('月均消费')
     expect(html).toContain('¥ 88.50')
@@ -436,8 +436,8 @@ describe('HomeTopPanel', () => {
     expect(html).not.toContain('home-summary__status-meta')
     expect(html).not.toContain('运行中')
     expect(html).not.toContain('全部在线')
-    expect(html).toContain('home-summary__network--upload')
-    expect(html).toContain('home-summary__network--download')
+    expect(html).toContain('home-summary__metric--upload')
+    expect(html).toContain('home-summary__metric--download')
     expect(html).not.toContain('Zeno Overview')
     expect(html).not.toContain('服务器运行概览')
     expect(html).not.toContain('在线率')
@@ -446,10 +446,10 @@ describe('HomeTopPanel', () => {
     expect(html).toContain('累计接收')
     expect(html).toContain('上传速率')
     expect(html).toContain('下载速率')
-    expect(html).toContain('home-summary__network-icon')
+    expect(html).toContain('home-summary__metric-icon')
     expect(html).toMatch(/home-summary__status-dot[^>]*><\/span><span>在线节点<\/span>/)
-    expect(html).toMatch(/home-summary__cost-icon[\s\S]*?月均消费/)
-    expect(html).toMatch(/home-summary__network-icon[\s\S]*?上传速率<\/dt>/)
+    expect(html).toMatch(/home-summary__metric-icon[\s\S]*?月均消费/)
+    expect(html).toMatch(/home-summary__metric-icon[\s\S]*?上传速率<\/span>/)
     expect(html).not.toContain('实时')
     expect(html).not.toContain('累计上传')
     expect(html).not.toContain('累计下载')
@@ -535,7 +535,7 @@ describe('HomeTopPanel', () => {
       />,
     )
 
-    expect(html).toContain('home-summary__status-value')
+    expect(html).toContain('home-summary__metric-value--status')
     expect(html).toContain('<strong>0</strong><span>/ 11</span>')
     expect(html).not.toContain('home-summary__status-meta')
     expect(html).not.toContain('运行中')
@@ -925,6 +925,11 @@ describe('AdminDashboard', () => {
     expect(html).not.toContain('name="target-name"')
     expect(html).not.toContain('保存目标')
     expect(html).not.toContain('admin-pass')
+  })
+
+  it('reports monitor availability only through per-server assignments', () => {
+    expect(formatTargetAssignmentSummary(exampleNodeATarget)).toBe('1 / 2 服务器启用')
+    expect(formatTargetAssignmentSummary({ ...exampleNodeATarget, assignments: [] })).toBe('未分配服务器')
   })
 
   it('renders ping monitor targets without requiring a port', () => {

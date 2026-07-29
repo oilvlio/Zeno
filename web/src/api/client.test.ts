@@ -620,7 +620,6 @@ describe('normalizeAdminProbeTargets', () => {
           timeout_ms: 1200,
           interval_sec: 60,
           display_order: 20,
-          enabled: true,
           assignments: [
             { node_id: 'example-node-a', node_display_name: 'Example Node A', enabled: true },
           ],
@@ -648,7 +647,6 @@ describe('normalizeAdminProbeTargets', () => {
           timeout_ms: 1500,
           interval_sec: 60,
           display_order: 30,
-          enabled: true,
           assignments: [],
         },
       ],
@@ -672,7 +670,6 @@ describe('normalizeAdminProbeTargets', () => {
           timeout_ms: 1200,
           interval_sec: 60,
           display_order: 40,
-          enabled: true,
           assignments: null as never,
         },
       ],
@@ -1235,7 +1232,6 @@ describe('createAdminProbeTarget', () => {
         timeout_ms: 1500,
         interval_sec: 90,
         display_order: 20,
-        enabled: true,
         assignments: [{ node_id: 'example-node-a', node_display_name: 'Example Node A', enabled: true }],
       },
     }), { status: 201, headers: { 'Content-Type': 'application/json' } }))
@@ -1286,7 +1282,6 @@ describe('createAdminProbeTarget', () => {
         timeout_ms: 1500,
         interval_sec: 60,
         display_order: 30,
-        enabled: true,
         assignments: [],
       },
     }), { status: 201, headers: { 'Content-Type': 'application/json' } }))
@@ -1346,7 +1341,6 @@ describe('updateAdminProbeTarget', () => {
         timeout_ms: 900,
         interval_sec: 30,
         display_order: 40,
-        enabled: false,
         assignments: [{ node_id: 'example-node-a', node_display_name: 'Example Node A', enabled: true }],
       },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
@@ -1360,7 +1354,6 @@ describe('updateAdminProbeTarget', () => {
       timeoutMs: 900,
       intervalSec: 30,
       displayOrder: 40,
-      enabled: false,
       assignments: [
         { nodeId: 'example-node-a', enabled: false },
         { nodeId: 'backup', enabled: true },
@@ -1368,7 +1361,6 @@ describe('updateAdminProbeTarget', () => {
     })
 
     expect(target.name).toBe('Local Controller')
-    expect(target.enabled).toBe(false)
     expect(fetchMock).toHaveBeenCalledWith('/api/admin/v1/probe-targets/example-node-a-local', {
       method: 'PATCH',
       headers: {
@@ -1384,7 +1376,6 @@ describe('updateAdminProbeTarget', () => {
         timeout_ms: 900,
         interval_sec: 30,
         display_order: 40,
-        enabled: false,
         assignments: [
           { node_id: 'example-node-a', enabled: false },
           { node_id: 'backup', enabled: true },
@@ -1405,7 +1396,6 @@ describe('updateAdminProbeTarget', () => {
         timeout_ms: 1500,
         interval_sec: 60,
         display_order: 50,
-        enabled: true,
         assignments: [{ node_id: 'example-node-a', node_display_name: 'Example Node A', enabled: true }],
       },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
@@ -1420,7 +1410,6 @@ describe('updateAdminProbeTarget', () => {
       timeoutMs: 1500,
       intervalSec: 60,
       displayOrder: 50,
-      enabled: true,
     })
 
     expect(target.type).toBe('http_get')
@@ -1441,7 +1430,6 @@ describe('updateAdminProbeTarget', () => {
         timeout_ms: 1500,
         interval_sec: 60,
         display_order: 50,
-        enabled: true,
       }),
     })
   })

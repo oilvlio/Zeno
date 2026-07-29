@@ -347,7 +347,7 @@ Controller 对下发给单个节点的探针配置做资源上限：最多 32 �
 
 `net_in_total_bytes` / `net_out_total_bytes` 保留 Agent 当前网卡 counter，供节点详情和状态历史使用，服务器重启后可能归零。`net_in_lifetime_bytes` / `net_out_lifetime_bytes` 由 Controller 持久化累计：首次有效样本保留当时 counter，之后按 counter delta 累计；服务器、Agent 或网卡重启使 counter 降低时，重置后的较小 counter 会作为重置后已产生的流量计入永久累计，并成为下一次采样的基线。首页顶部“接收 / 发送”使用 lifetime 字段；旧缓存缺少字段时临时回退到 raw counter。
 
-`services` 是公开服务详情页使用的探针目标摘要。它按后台探针目标显示顺序返回已启用目标，`assigned_node_count` 是分配且启用的节点数量，`reporting_node_count` 是最近 24 小时内有上报的节点数量，延迟/丢包取该服务最新一条探测结果；公开 DTO 不返回探测地址或端口，完整端点只在管理员接口中可见；前台首页不单独展示监控服务列表。
+`services` 是公开服务详情页使用的探针目标摘要。它按后台探针目标显示顺序返回有效目标，`assigned_node_count` 是分配且启用的节点数量，`reporting_node_count` 是最近 24 小时内有上报的节点数量，延迟/丢包取该服务最新一条探测结果；公开 DTO 不返回探测地址或端口，完整端点只在管理员接口中可见；前台首页不单独展示监控服务列表。
 
 ### GET /api/public/v1/services/{target_id}/latency
 
@@ -598,7 +598,7 @@ X-Admin-Token: <admin-token>
 }
 ```
 
-响应返回新节点 DTO，但不会返回 Agent token 原文或 token hash。新节点默认 `status=no_data`，并自动分配当前启用的探针目标。`renewal_amount` 可为空或为大于 0 的金额；`renewal_currency` 支持 `CNY`、`USD`、`HKD`、`EUR`、`GBP`、`JPY`、`SGD`、`AUD`、`CAD`、`KRW`，默认 `CNY`。`billing_mode` 可选 `both`、`in`、`out`、`max`，默认 `both`；`monthly_reset_day` 范围 1–31，默认 1。`expiry_date` 为空时清空到期日；非空时必须是 `YYYY-MM-DD`。
+响应返回新节点 DTO，但不会返回 Agent token 原文或 token hash。新节点默认 `status=no_data`，并为现有探针目标建立默认未启用的服务器关联；管理员选择延迟监控后才会向该节点下发。`renewal_amount` 可为空或为大于 0 的金额；`renewal_currency` 支持 `CNY`、`USD`、`HKD`、`EUR`、`GBP`、`JPY`、`SGD`、`AUD`、`CAD`、`KRW`，默认 `CNY`。`billing_mode` 可选 `both`、`in`、`out`、`max`，默认 `both`；`monthly_reset_day` 范围 1–31，默认 1。`expiry_date` 为空时清空到期日；非空时必须是 `YYYY-MM-DD`。
 
 每次复制安装命令都会生成一个有效期 10 分钟、只能兑换一次的 enrollment token，并立即撤销该节点先前尚未使用的 enrollment；命令不会包含或复用 runtime token。生成命令本身不会中断已在线 Agent：当前 runtime token 继续有效。安装器兑换 enrollment 后会生成随机 runtime token；新 Agent 首次用该 token 成功鉴权时，Controller 才原子切换 runtime token，旧 runtime token 随即失效。后台 UI 提供 Linux / macOS / Windows 三种命令和复制按钮。命令中的 Controller 地址优先使用站点设置里的 `agent_controller_url`；未设置时才使用当前后台请求地址。未显式配置 Agent 版本时，安装脚本解析 Zeno-Agent 最新稳定 release。
 
@@ -660,7 +660,7 @@ X-Admin-Token: <admin-token>
 
 ### GET /api/admin/v1/probe-targets
 
-探针目标管理列表，返回 enabled + disabled 目标、显示顺序及分配到哪些节点。列表按 `display_order ASC, id ASC` 排序；后台列表操作只保留编辑目标，显示顺序可通过整理顺序或编辑表单写回 `display_order`。不会返回 Agent token、token hash 或 secret 字段。
+探针目标管理列表，返回所有有效目标、显示顺序及分配到哪些节点。目标创建后默认有效，不提供全局启用/停用开关；是否由某台服务器执行探测，只由 `assignments[].enabled` 控制。列表按 `display_order ASC, id ASC` 排序；后台列表操作只保留编辑目标，显示顺序可通过整理顺序或编辑表单写回 `display_order`。不会返回 Agent token、token hash 或 secret 字段。
 
 响应：
 
@@ -677,7 +677,6 @@ X-Admin-Token: <admin-token>
       "timeout_ms": 600,
       "interval_sec": 30,
       "display_order": 10,
-      "enabled": true,
       "assignments": [
         {
           "node_id": "example-node-a",
@@ -696,7 +695,6 @@ X-Admin-Token: <admin-token>
       "timeout_ms": 600,
       "interval_sec": 30,
       "display_order": 20,
-      "enabled": true,
       "assignments": []
     }
   ]
@@ -707,7 +705,7 @@ X-Admin-Token: <admin-token>
 
 ### POST /api/admin/v1/probe-targets
 
-新增探针目标。新目标默认分配到现有节点；响应仍不包含 Agent 凭据。
+新增探针目标。新目标创建后立即作为有效目标存在；未提交 `assignments` 时默认不关联任何服务器。响应仍不包含 Agent 凭据。
 
 HTTP GET 示例：
 

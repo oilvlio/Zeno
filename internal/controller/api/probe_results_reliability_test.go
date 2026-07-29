@@ -507,7 +507,7 @@ func TestAgentProbeRoundLookupAndMaximumBatchAtScale(t *testing.T) {
 	}
 	for i := 0; i < maxAgentProbeRounds; i++ {
 		id := fmt.Sprintf("scale-target-%02d", i)
-		if _, err := tx.ExecContext(ctx, `INSERT INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, enabled, created_at, updated_at) VALUES (?, ?, 'tcping', '127.0.0.1', 80, 1, 1000, 5, ?, 1, ?, ?)`, id, id, i, now, now); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, created_at, updated_at) VALUES (?, ?, 'tcping', '127.0.0.1', 80, 1, 1000, 5, ?, ?, ?)`, id, id, i, now, now); err != nil {
 			_ = tx.Rollback()
 			t.Fatalf("insert scale target: %v", err)
 		}

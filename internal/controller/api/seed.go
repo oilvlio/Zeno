@@ -89,8 +89,8 @@ func (s *SQLiteStore) SeedPreviewData(ctx context.Context, options PreviewSeedOp
 			target.DisplayOrder = (index + 1) * 10
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, enabled, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+			INSERT INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				name = excluded.name,
 				type = excluded.type,
@@ -100,7 +100,6 @@ func (s *SQLiteStore) SeedPreviewData(ctx context.Context, options PreviewSeedOp
 				timeout_ms = excluded.timeout_ms,
 				interval_sec = excluded.interval_sec,
 				display_order = CASE WHEN probe_targets.display_order = 0 THEN excluded.display_order ELSE probe_targets.display_order END,
-				enabled = 1,
 				updated_at = excluded.updated_at
 		`, target.ID, target.Name, target.Type, target.Address, nullablePort(target.Port), target.Count, target.TimeoutMS, target.IntervalSec, target.DisplayOrder, now, now); err != nil {
 			return err
@@ -192,7 +191,6 @@ func enabledProbeTargetsQuery(ctx context.Context, queryer probeTargetQueryer, n
 		JOIN nodes n ON n.id = npt.node_id
 		WHERE npt.node_id = ?
 		  AND n.disabled = 0
-		  AND pt.enabled = 1
 		  AND npt.enabled = 1
 		  AND NOT EXISTS (
 			SELECT 1 FROM admin_deletion_jobs deletion

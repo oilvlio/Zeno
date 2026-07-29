@@ -1114,10 +1114,6 @@ func TestAdminProbeTargetsListsTargetsAndAssignmentsWithoutSecrets(t *testing.T)
 	if err := store.SeedPreviewData(ctx, PreviewSeedOptions{NodeID: "example-node-a", DisplayName: "Example Node A", CountryCode: "HK", AgentToken: "agent-super-secret"}); err != nil {
 		t.Fatalf("seed preview data: %v", err)
 	}
-	if _, err := store.db.ExecContext(ctx, `UPDATE probe_targets SET enabled = 0 WHERE id = 'google-dns'`); err != nil {
-		t.Fatalf("disable target: %v", err)
-	}
-
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/probe-targets", nil)
 	request.Header.Set("X-Admin-Token", "admin-pass")
@@ -1141,7 +1137,6 @@ func TestAdminProbeTargetsListsTargetsAndAssignmentsWithoutSecrets(t *testing.T)
 			Count       int    `json:"count"`
 			TimeoutMS   int    `json:"timeout_ms"`
 			IntervalSec int    `json:"interval_sec"`
-			Enabled     bool   `json:"enabled"`
 			Assignments []struct {
 				NodeID          string `json:"node_id"`
 				NodeDisplayName string `json:"node_display_name"`
@@ -1164,7 +1159,6 @@ func TestAdminProbeTargetsListsTargetsAndAssignmentsWithoutSecrets(t *testing.T)
 		Count       int    `json:"count"`
 		TimeoutMS   int    `json:"timeout_ms"`
 		IntervalSec int    `json:"interval_sec"`
-		Enabled     bool   `json:"enabled"`
 		Assignments []struct {
 			NodeID          string `json:"node_id"`
 			NodeDisplayName string `json:"node_display_name"`
@@ -1185,7 +1179,6 @@ func TestAdminProbeTargetsListsTargetsAndAssignmentsWithoutSecrets(t *testing.T)
 			Count       int    `json:"count"`
 			TimeoutMS   int    `json:"timeout_ms"`
 			IntervalSec int    `json:"interval_sec"`
-			Enabled     bool   `json:"enabled"`
 			Assignments []struct {
 				NodeID          string `json:"node_id"`
 				NodeDisplayName string `json:"node_display_name"`
@@ -1194,14 +1187,25 @@ func TestAdminProbeTargetsListsTargetsAndAssignmentsWithoutSecrets(t *testing.T)
 		}{}
 	}
 	exampleNodeA := findTarget("example-node-a-local")
-	if exampleNodeA.ID == "" || exampleNodeA.Name != "Example Node A" || exampleNodeA.Type != "tcping" || exampleNodeA.Address != "192.0.2.1" || exampleNodeA.Port == nil || *exampleNodeA.Port != 443 || exampleNodeA.Count != 3 || exampleNodeA.TimeoutMS != 1000 || exampleNodeA.IntervalSec != 30 || !exampleNodeA.Enabled {
+	if exampleNodeA.ID == "" || exampleNodeA.Name != "Example Node A" || exampleNodeA.Type != "tcping" || exampleNodeA.Address != "192.0.2.1" || exampleNodeA.Port == nil || *exampleNodeA.Port != 443 || exampleNodeA.Count != 3 || exampleNodeA.TimeoutMS != 1000 || exampleNodeA.IntervalSec != 30 {
 		t.Fatalf("example-node-a target = %+v, want full target config", exampleNodeA)
 	}
 	if len(exampleNodeA.Assignments) != 1 || exampleNodeA.Assignments[0].NodeID != "example-node-a" || exampleNodeA.Assignments[0].NodeDisplayName != "Example Node A" || !exampleNodeA.Assignments[0].Enabled {
 		t.Fatalf("example-node-a assignments = %+v, want enabled example-node-a assignment", exampleNodeA.Assignments)
 	}
-	if google := findTarget("google-dns"); google.ID == "" || google.Enabled {
-		t.Fatalf("google-dns target = %+v, want disabled target still visible in admin inventory", google)
+	if google := findTarget("google-dns"); google.ID == "" {
+		t.Fatalf("google-dns target missing from admin inventory: %+v", response.Targets)
+	}
+	var wireResponse struct {
+		Targets []map[string]json.RawMessage `json:"targets"`
+	}
+	if err := json.NewDecoder(bytes.NewBufferString(raw)).Decode(&wireResponse); err != nil {
+		t.Fatalf("decode probe target wire shape: %v", err)
+	}
+	for _, target := range wireResponse.Targets {
+		if _, exists := target["enabled"]; exists {
+			t.Fatalf("probe target response still exposes removed global enabled field: %s", raw)
+		}
 	}
 }
 
@@ -1289,7 +1293,6 @@ func TestAdminProbeTargetCreateDefaultsToNoAssignedServersWithoutSecrets(t *test
 			Count       int    `json:"count"`
 			TimeoutMS   int    `json:"timeout_ms"`
 			IntervalSec int    `json:"interval_sec"`
-			Enabled     bool   `json:"enabled"`
 			Assignments []struct {
 				NodeID  string `json:"node_id"`
 				Enabled bool   `json:"enabled"`
@@ -1299,8 +1302,8 @@ func TestAdminProbeTargetCreateDefaultsToNoAssignedServersWithoutSecrets(t *test
 	if err := json.NewDecoder(bytes.NewBufferString(raw)).Decode(&response); err != nil {
 		t.Fatalf("decode created target: %v", err)
 	}
-	if response.Target.ID == "" || response.Target.Name != "Example HTTPS" || response.Target.Type != "tcping" || response.Target.Address != "example.com" || response.Target.Port != 443 || response.Target.Count != 5 || response.Target.TimeoutMS != 1500 || response.Target.IntervalSec != 90 || !response.Target.Enabled {
-		t.Fatalf("created target = %+v, want trimmed enabled tcping target", response.Target)
+	if response.Target.ID == "" || response.Target.Name != "Example HTTPS" || response.Target.Type != "tcping" || response.Target.Address != "example.com" || response.Target.Port != 443 || response.Target.Count != 5 || response.Target.TimeoutMS != 1500 || response.Target.IntervalSec != 90 {
+		t.Fatalf("created target = %+v, want trimmed tcping target", response.Target)
 	}
 	if len(response.Target.Assignments) != 0 {
 		t.Fatalf("created target assignments = %+v, want no server enabled by default", response.Target.Assignments)
@@ -1410,7 +1413,6 @@ func TestAdminProbeTargetCreateAcceptsPingWithoutPort(t *testing.T) {
 			Count       int    `json:"count"`
 			TimeoutMS   int    `json:"timeout_ms"`
 			IntervalSec int    `json:"interval_sec"`
-			Enabled     bool   `json:"enabled"`
 			Assignments []struct {
 				NodeID  string `json:"node_id"`
 				Enabled bool   `json:"enabled"`
@@ -1420,8 +1422,8 @@ func TestAdminProbeTargetCreateAcceptsPingWithoutPort(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewBufferString(recorder.Body.String())).Decode(&response); err != nil {
 		t.Fatalf("decode created ping target: %v", err)
 	}
-	if response.Target.ID == "" || response.Target.Name != "Example ICMP" || response.Target.Type != "ping" || response.Target.Address != "8.8.8.8" || response.Target.Port != nil || response.Target.Count != 4 || response.Target.TimeoutMS != 900 || response.Target.IntervalSec != 45 || !response.Target.Enabled {
-		t.Fatalf("created ping target = %+v, want normalized enabled ping target without port", response.Target)
+	if response.Target.ID == "" || response.Target.Name != "Example ICMP" || response.Target.Type != "ping" || response.Target.Address != "8.8.8.8" || response.Target.Port != nil || response.Target.Count != 4 || response.Target.TimeoutMS != 900 || response.Target.IntervalSec != 45 {
+		t.Fatalf("created ping target = %+v, want normalized ping target without port", response.Target)
 	}
 	if len(response.Target.Assignments) != 0 {
 		t.Fatalf("created ping assignments = %+v, want no server enabled by default", response.Target.Assignments)
@@ -1481,7 +1483,6 @@ func TestAdminProbeTargetCreateAcceptsHTTPGETWithoutPort(t *testing.T) {
 			Count       int    `json:"count"`
 			TimeoutMS   int    `json:"timeout_ms"`
 			IntervalSec int    `json:"interval_sec"`
-			Enabled     bool   `json:"enabled"`
 			Assignments []struct {
 				NodeID  string `json:"node_id"`
 				Enabled bool   `json:"enabled"`
@@ -1491,8 +1492,8 @@ func TestAdminProbeTargetCreateAcceptsHTTPGETWithoutPort(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewBufferString(recorder.Body.String())).Decode(&response); err != nil {
 		t.Fatalf("decode created http_get target: %v", err)
 	}
-	if response.Target.ID == "" || response.Target.Name != "Zeno Health" || response.Target.Type != "http_get" || response.Target.Address != "https://example.com/health" || response.Target.Port != nil || response.Target.Count != 2 || response.Target.TimeoutMS != 1500 || response.Target.IntervalSec != 30 || !response.Target.Enabled {
-		t.Fatalf("created http_get target = %+v, want normalized enabled HTTP GET target without port", response.Target)
+	if response.Target.ID == "" || response.Target.Name != "Zeno Health" || response.Target.Type != "http_get" || response.Target.Address != "https://example.com/health" || response.Target.Port != nil || response.Target.Count != 2 || response.Target.TimeoutMS != 1500 || response.Target.IntervalSec != 30 {
+		t.Fatalf("created http_get target = %+v, want normalized HTTP GET target without port", response.Target)
 	}
 	if len(response.Target.Assignments) != 0 {
 		t.Fatalf("created http_get assignments = %+v, want no server enabled by default", response.Target.Assignments)
@@ -1651,8 +1652,7 @@ func TestAdminProbeTargetPatchUpdatesEditableFieldsAndAffectsAgentTargets(t *tes
 		"port": 18981,
 		"count": 4,
 		"timeout_ms": 900,
-		"interval_sec": 30,
-		"enabled": false
+		"interval_sec": 30
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
 	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
@@ -1674,23 +1674,26 @@ func TestAdminProbeTargetPatchUpdatesEditableFieldsAndAffectsAgentTargets(t *tes
 			Count       int    `json:"count"`
 			TimeoutMS   int    `json:"timeout_ms"`
 			IntervalSec int    `json:"interval_sec"`
-			Enabled     bool   `json:"enabled"`
 		} `json:"target"`
 	}
 	if err := json.NewDecoder(bytes.NewBufferString(raw)).Decode(&response); err != nil {
 		t.Fatalf("decode updated target: %v", err)
 	}
-	if response.Target.ID != "example-node-a-local" || response.Target.Name != "Local Controller" || response.Target.Address != "127.0.0.1" || response.Target.Port != 18981 || response.Target.Count != 4 || response.Target.TimeoutMS != 900 || response.Target.IntervalSec != 30 || response.Target.Enabled {
-		t.Fatalf("updated target = %+v, want edited disabled target", response.Target)
+	if response.Target.ID != "example-node-a-local" || response.Target.Name != "Local Controller" || response.Target.Address != "127.0.0.1" || response.Target.Port != 18981 || response.Target.Count != 4 || response.Target.TimeoutMS != 900 || response.Target.IntervalSec != 30 {
+		t.Fatalf("updated target = %+v, want edited target", response.Target)
 	}
 	targets, err := store.EnabledProbeTargets(ctx, "example-node-a")
 	if err != nil {
 		t.Fatalf("enabled probe targets: %v", err)
 	}
+	found := false
 	for _, target := range targets {
 		if target.ID == "example-node-a-local" {
-			t.Fatalf("disabled target should be removed from agent target set, got %+v", target)
+			found = true
 		}
+	}
+	if !found {
+		t.Fatalf("edited target should remain in the assigned Agent target set: %+v", targets)
 	}
 }
 
@@ -1932,9 +1935,11 @@ func TestAdminProbeTargetWritesRejectUnauthorizedUnknownAndInvalidRequests(t *te
 		{name: "create count above resource cap", method: http.MethodPost, path: "/api/admin/v1/probe-targets", body: `{"name":"A","type":"tcping","address":"example.com","port":443,"count":33,"timeout_ms":1000,"interval_sec":60}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "create timeout below resource floor", method: http.MethodPost, path: "/api/admin/v1/probe-targets", body: `{"name":"A","type":"tcping","address":"example.com","port":443,"count":3,"timeout_ms":50,"interval_sec":30}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "create exceeds single round budget", method: http.MethodPost, path: "/api/admin/v1/probe-targets", body: `{"name":"A","type":"tcping","address":"example.com","port":443,"count":32,"timeout_ms":5000,"interval_sec":60}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
+		{name: "create rejects removed global enabled field", method: http.MethodPost, path: "/api/admin/v1/probe-targets", body: `{"name":"A","type":"tcping","address":"example.com","port":443,"count":3,"timeout_ms":1000,"interval_sec":30,"enabled":false}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "patch unknown target", method: http.MethodPatch, path: "/api/admin/v1/probe-targets/missing", body: `{"name":"Changed"}`, adminToken: "admin-pass", wantStatus: http.StatusNotFound},
 		{name: "patch negative count", method: http.MethodPatch, path: "/api/admin/v1/probe-targets/example-node-a-local", body: `{"count":0}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "patch interval too small for final budget", method: http.MethodPatch, path: "/api/admin/v1/probe-targets/example-node-a-local", body: `{"count":32}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
+		{name: "patch rejects removed global enabled field", method: http.MethodPatch, path: "/api/admin/v1/probe-targets/example-node-a-local", body: `{"enabled":false}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "patch unknown assignment node", method: http.MethodPatch, path: "/api/admin/v1/probe-targets/example-node-a-local", body: `{"assignments":[{"node_id":"missing","enabled":false}]}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "delete missing token", method: http.MethodDelete, path: "/api/admin/v1/probe-targets/example-node-a-local", adminToken: "", wantStatus: http.StatusUnauthorized},
 		{name: "delete unknown target", method: http.MethodDelete, path: "/api/admin/v1/probe-targets/missing", adminToken: "admin-pass", wantStatus: http.StatusNotFound},

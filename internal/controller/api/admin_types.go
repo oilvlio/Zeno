@@ -514,7 +514,6 @@ type AdminProbeTargetCreateRequest struct {
 	TimeoutMS    int                                `json:"timeout_ms"`
 	IntervalSec  int                                `json:"interval_sec"`
 	DisplayOrder int                                `json:"display_order,omitempty"`
-	Enabled      *bool                              `json:"enabled,omitempty"`
 	Assignments  []AdminProbeTargetAssignmentUpdate `json:"assignments,omitempty"`
 }
 
@@ -574,7 +573,6 @@ type AdminProbeTargetUpdateRequest struct {
 	TimeoutMS    *int                               `json:"timeout_ms,omitempty"`
 	IntervalSec  *int                               `json:"interval_sec,omitempty"`
 	DisplayOrder *int                               `json:"display_order,omitempty"`
-	Enabled      *bool                              `json:"enabled,omitempty"`
 	Assignments  []AdminProbeTargetAssignmentUpdate `json:"assignments,omitempty"`
 }
 
@@ -646,9 +644,6 @@ func (request *AdminProbeTargetUpdateRequest) normalize() error {
 		if *request.DisplayOrder < 0 {
 			return errInvalidAdminTargetWrite
 		}
-	}
-	if request.Enabled != nil {
-		changed = true
 	}
 	if request.Assignments != nil {
 		changed = true
@@ -734,7 +729,6 @@ type AdminProbeTarget struct {
 	TimeoutMS    int                          `json:"timeout_ms"`
 	IntervalSec  int                          `json:"interval_sec"`
 	DisplayOrder int                          `json:"display_order"`
-	Enabled      bool                         `json:"enabled"`
 	Assignments  []AdminProbeTargetAssignment `json:"assignments"`
 }
 

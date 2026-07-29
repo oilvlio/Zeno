@@ -223,7 +223,6 @@ interface ApiAdminProbeTarget {
   timeout_ms: number
   interval_sec: number
   display_order?: number
-  enabled: boolean
   assignments: ApiAdminProbeTargetAssignment[] | null
 }
 
@@ -464,7 +463,6 @@ export interface AdminProbeTargetInput {
   timeoutMs: number
   intervalSec: number
   displayOrder?: number
-  enabled?: boolean
   assignments?: Array<{ nodeId: string; enabled: boolean }>
 }
 
@@ -477,7 +475,6 @@ export interface AdminProbeTargetUpdateInput {
   timeoutMs?: number
   intervalSec?: number
   displayOrder?: number
-  enabled?: boolean
   assignments?: Array<{ nodeId: string; enabled: boolean }>
 }
 
@@ -1000,7 +997,6 @@ function serializeAdminProbeTargetCreate(input: AdminProbeTargetInput) {
     timeout_ms: input.timeoutMs,
     interval_sec: input.intervalSec,
     ...(input.displayOrder !== undefined ? { display_order: input.displayOrder } : {}),
-    ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
     ...(input.assignments !== undefined ? {
       assignments: input.assignments.map((assignment) => ({
         node_id: assignment.nodeId,
@@ -1020,7 +1016,6 @@ function serializeAdminProbeTargetUpdate(input: AdminProbeTargetUpdateInput) {
     ...(input.timeoutMs !== undefined ? { timeout_ms: input.timeoutMs } : {}),
     ...(input.intervalSec !== undefined ? { interval_sec: input.intervalSec } : {}),
     ...(input.displayOrder !== undefined ? { display_order: input.displayOrder } : {}),
-    ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
     ...(input.assignments !== undefined ? {
       assignments: input.assignments.map((assignment) => ({
         node_id: assignment.nodeId,
@@ -1306,7 +1301,6 @@ function normalizeAdminProbeTarget(target: ApiAdminProbeTarget): AdminProbeTarge
     timeoutMs: target.timeout_ms,
     intervalSec: target.interval_sec,
     displayOrder: target.display_order ?? 0,
-    enabled: target.enabled,
     assignments: (target.assignments ?? []).map((assignment) => ({
       nodeId: assignment.node_id,
       nodeDisplayName: assignment.node_display_name,

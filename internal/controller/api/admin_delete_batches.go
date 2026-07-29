@@ -191,7 +191,7 @@ func (s *SQLiteStore) enqueueAdminProbeTargetDeletion(ctx context.Context, targe
 		`, targetID, now, now); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE probe_targets SET enabled = 0, updated_at = ? WHERE id = ?`, now, targetID); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE probe_targets SET updated_at = ? WHERE id = ?`, now, targetID); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE node_probe_targets SET enabled = 0 WHERE target_id = ?`, targetID); err != nil {

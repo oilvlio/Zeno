@@ -378,6 +378,72 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
   } as CSSProperties
 }
 
+const documentThemeVariableNames = [
+  '--blue',
+  '--border',
+  '--metric-shadow',
+  '--surface-strong',
+  '--surface',
+  '--surface-soft',
+  '--secondary',
+  '--metric-bg',
+  '--field-bg',
+  '--control-bg',
+  '--radius-panel',
+  '--radius-card',
+  '--radius-field',
+  '--zeno-card-blur',
+  '--zeno-card-highlight',
+  '--zeno-card-shadow',
+  '--zeno-theme-rgb',
+] as const
+
+function useDocumentTheme(settings: AdminSettings) {
+  useLayoutEffect(() => {
+    if (typeof document === 'undefined') return undefined
+    const root = document.documentElement
+    const previousTheme = root.getAttribute('data-zeno-theme')
+    const previousValues = new Map(documentThemeVariableNames.map((name) => [name, root.style.getPropertyValue(name)]))
+    const previousPopoverBackground = root.style.getPropertyValue('--zeno-popover-bg')
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+    const apply = () => {
+      const theme = resolvedTheme(settings.theme)
+      const themeStyle = shellStyleForSettings(settings) as Record<string, string | number> | undefined
+      root.dataset.zenoTheme = theme
+      for (const name of documentThemeVariableNames) {
+        const value = themeStyle?.[name]
+        if (value === undefined || value === null || value === '') root.style.removeProperty(name)
+        else root.style.setProperty(name, String(value))
+      }
+      const popoverBackground = themeStyle?.['--surface-strong']
+      if (popoverBackground === undefined || popoverBackground === null || popoverBackground === '') root.style.removeProperty('--zeno-popover-bg')
+      else root.style.setProperty('--zeno-popover-bg', String(popoverBackground))
+    }
+    apply()
+    if (settings.theme === 'system') media?.addEventListener?.('change', apply)
+    return () => {
+      if (settings.theme === 'system') media?.removeEventListener?.('change', apply)
+      if (previousTheme === null) root.removeAttribute('data-zeno-theme')
+      else root.setAttribute('data-zeno-theme', previousTheme)
+      for (const [name, value] of previousValues) {
+        if (value === '') root.style.removeProperty(name)
+        else root.style.setProperty(name, value)
+      }
+      if (previousPopoverBackground === '') root.style.removeProperty('--zeno-popover-bg')
+      else root.style.setProperty('--zeno-popover-bg', previousPopoverBackground)
+    }
+  }, [
+    settings.theme,
+    settings.appearancePreset,
+    settings.cardOpacity,
+    settings.cardBlur,
+    settings.cardRadius,
+    settings.borderStrength,
+    settings.shadowStrength,
+    settings.themeColor,
+  ])
+}
+
 export function documentBrandingForSettings(settings: AdminSettings) {
   const siteTitle = (settings.siteTitle || defaultSettings.siteTitle).trim() || defaultSettings.siteTitle
   const logoUrl = (settings.logoUrl || defaultSettings.logoUrl).trim() || defaultSettings.logoUrl
@@ -463,6 +529,8 @@ export function App() {
   const [themeOverride, setThemeOverride] = useState<AdminTheme | null>(() => storedThemeOverride())
   const [backgroundEnabled, setBackgroundEnabled] = useState(() => storedBackgroundEnabled())
   const backgroundEnabledRef = useRef(backgroundEnabled)
+  const effectiveSettings = settingsForChrome(settings, themeOverride, backgroundEnabled)
+  useDocumentTheme(effectiveSettings)
 
   useEffect(() => {
     let cancelled = false
@@ -1122,7 +1190,6 @@ export function App() {
     setBackgroundEnabled(nextValue)
   }
 
-  const effectiveSettings = settingsForChrome(settings, themeOverride, backgroundEnabled)
   const backgroundConfigured = (settings.desktopBackgroundUrl || settings.backgroundUrl || settings.mobileBackgroundUrl).trim() !== ''
   const backgroundToggle = settingsReady && backgroundConfigured && (!backgroundEnabled || backgroundAssetsReady) ? toggleBackground : undefined
   const nodes = state.kind === 'ready' ? state.data.nodes : []
@@ -2694,7 +2761,6 @@ function AdminTargetEditModal({ target, nodes, onUpdate, onClose }: { target: Ad
       count: parsePositiveInt(String(formData.get('target-count') ?? '')) ?? target.count,
       timeoutMs: parsePositiveInt(String(formData.get('target-timeout-ms') ?? '')) ?? target.timeoutMs,
       intervalSec: parsePositiveInt(String(formData.get('target-interval-sec') ?? '')) ?? target.intervalSec,
-      enabled: formData.get('target-enabled') === 'on',
       assignments: assignmentRows.length > 0
         ? assignmentRows.map((assignment) => ({
             nodeId: assignment.nodeId,
@@ -2727,10 +2793,6 @@ function AdminTargetEditModal({ target, nodes, onUpdate, onClose }: { target: Ad
                 <input name="target-port" type="number" min="1" max="65535" defaultValue={target.port ?? ''} />
               </label>
             )}
-            <label className="admin-node-toggle">
-              <input name="target-enabled" type="checkbox" defaultChecked={target.enabled} />
-              <span>启用目标</span>
-            </label>
           </div>
         </AdminFormSection>
         <AdminFormSection title="探测参数">
@@ -3698,7 +3760,7 @@ function formatTargetEndpoint(target: AdminProbeTarget): string {
   return target.port ? `${target.address}:${target.port}` : target.address
 }
 
-function formatTargetAssignmentSummary(target: AdminProbeTarget): string {
+export function formatTargetAssignmentSummary(target: AdminProbeTarget): string {
   if (target.assignments.length === 0) return '未分配服务器'
   const enabled = target.assignments.filter((assignment) => assignment.enabled).length
   return `${enabled} / ${target.assignments.length} 服务器启用`
@@ -3853,27 +3915,36 @@ function HomeMonthlyCostIcon() {
 
 interface HomeTrafficSummaryProps {
   direction: 'upload' | 'download'
+  kind: 'rate' | 'total'
   rate: ReturnType<typeof compactRateParts>
   total: string
 }
 
-function HomeTrafficSummary({ direction, rate, total }: HomeTrafficSummaryProps) {
+function HomeTrafficSummary({ direction, kind, rate, total }: HomeTrafficSummaryProps) {
   const isUpload = direction === 'upload'
+  if (kind === 'rate') {
+    return (
+      <div className={`home-summary__metric home-summary__metric--rate home-summary__metric--${direction}`} aria-label={isUpload ? 'upload rate' : 'download rate'}>
+        <div className="home-summary__metric-label">
+          <span className="home-summary__metric-icon"><HomeTrafficDirectionIcon direction={direction} /></span>
+          <span>{isUpload ? '上传速率' : '下载速率'}</span>
+        </div>
+        <div className="home-summary__metric-value home-summary__metric-value--rate">
+          <strong>{rate.value}</strong>
+          <span>{rate.unit}</span>
+        </div>
+      </div>
+    )
+  }
   return (
-    <dl className={`home-summary__tile home-summary__network home-summary__network--${direction}`} aria-label={isUpload ? 'upload traffic' : 'download traffic'}>
-      <div className="home-summary__network-heading">
-        <span className="home-summary__network-icon"><HomeTrafficDirectionIcon direction={direction} /></span>
-        <dt>{isUpload ? '上传速率' : '下载速率'}</dt>
+    <div className={`home-summary__metric home-summary__metric--total home-summary__metric--${direction}`} aria-label={isUpload ? 'total sent' : 'total received'}>
+      <div className="home-summary__metric-label">
+        <span>{isUpload ? '累计发送' : '累计接收'}</span>
       </div>
-      <dd className="home-summary__network-rate">
-        <strong>{rate.value}</strong>
-        <span>{rate.unit}</span>
-      </dd>
-      <div className="home-summary__network-total">
-        <dt>{isUpload ? '累计发送' : '累计接收'}</dt>
-        <dd>{total}</dd>
+      <div className="home-summary__metric-value home-summary__metric-value--total">
+        <strong>{total}</strong>
       </div>
-    </dl>
+    </div>
   )
 }
 
@@ -3989,37 +4060,33 @@ function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
 export function HomeOverviewPanel({ totalCount, onlineCount, monthlyCost, displayCurrency = 'CNY', exchangeRates: inputExchangeRates = { CNY: 1 }, totalUp, totalDown, upSpeed, downSpeed }: HomeOverviewPanelProps) {
   const uploadRate = compactRateParts(upSpeed)
   const downloadRate = compactRateParts(downSpeed)
-  const onlineRatio = totalCount > 0 ? Math.min(100, Math.max(0, Math.round((onlineCount / totalCount) * 100))) : 0
   const exchangeRates = normalizeCurrencyRates(inputExchangeRates)
   const activeCurrency = normalizeCurrencyCode(displayCurrency)
   return (
     <section className="home-summary" aria-label="server overview">
-      <div className="home-summary__tile home-summary__status" aria-label="服务器在线摘要">
-        <div className="home-summary__status-heading">
-          <span className="home-summary__status-label">
-            <span className="home-summary__status-dot" aria-hidden="true" />
-            <span>在线节点</span>
-          </span>
+      <div className="home-summary__metric home-summary__metric--status" aria-label="服务器在线摘要">
+        <div className="home-summary__metric-label">
+          <span className="home-summary__status-dot" aria-hidden="true" />
+          <span>在线节点</span>
         </div>
-        <div className="home-summary__status-value">
+        <div className="home-summary__metric-value home-summary__metric-value--status">
           <strong>{onlineCount}</strong>
           <span>/ {totalCount}</span>
         </div>
-        <div className="home-summary__status-track" aria-hidden="true">
-          <span style={{ width: `${onlineRatio}%` }} />
-        </div>
       </div>
-      <div className="home-summary__tile home-summary__cost" aria-label="月均消费">
-        <div className="home-summary__cost-heading">
-          <span className="home-summary__cost-icon"><HomeMonthlyCostIcon /></span>
+      <div className="home-summary__metric home-summary__metric--cost" aria-label="月均消费">
+        <div className="home-summary__metric-label">
+          <span className="home-summary__metric-icon"><HomeMonthlyCostIcon /></span>
           <span>月均消费</span>
         </div>
-        <div className="home-summary__cost-value">
+        <div className="home-summary__metric-value home-summary__metric-value--cost">
           <strong>{formatCurrencyAmount(monthlyCost, activeCurrency, { fixed: true, spaced: true })}</strong>
         </div>
       </div>
-      <HomeTrafficSummary direction="upload" rate={uploadRate} total={compactBytes(totalUp)} />
-      <HomeTrafficSummary direction="download" rate={downloadRate} total={compactBytes(totalDown)} />
+      <HomeTrafficSummary direction="upload" kind="total" rate={uploadRate} total={compactBytes(totalUp)} />
+      <HomeTrafficSummary direction="download" kind="total" rate={downloadRate} total={compactBytes(totalDown)} />
+      <HomeTrafficSummary direction="upload" kind="rate" rate={uploadRate} total={compactBytes(totalUp)} />
+      <HomeTrafficSummary direction="download" kind="rate" rate={downloadRate} total={compactBytes(totalDown)} />
     </section>
   )
 }

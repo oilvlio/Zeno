@@ -30,12 +30,9 @@ func TestAdminProbeTargetMutationsCanRepairLegacyOverLimitNodesIndependently(t *
 	if _, err := store.db.ExecContext(ctx, `UPDATE node_probe_targets SET enabled = 0`); err != nil {
 		t.Fatalf("disable preview assignments: %v", err)
 	}
-	if _, err := store.db.ExecContext(ctx, `UPDATE probe_targets SET enabled = 0`); err != nil {
-		t.Fatalf("disable preview targets: %v", err)
-	}
 	if _, err := store.db.ExecContext(ctx, `
 		UPDATE probe_targets
-		SET enabled = 1, count = 32, timeout_ms = 5000, interval_sec = 30
+		SET count = 32, timeout_ms = 5000, interval_sec = 30
 		WHERE id IN ('google-dns', 'cloudflare-dns')
 	`); err != nil {
 		t.Fatalf("install legacy oversized targets: %v", err)
@@ -57,17 +54,9 @@ func TestAdminProbeTargetMutationsCanRepairLegacyOverLimitNodesIndependently(t *
 		t.Fatalf("repair legacy-a while legacy-b remains oversized: %v", err)
 	}
 
-	disabled := false
-	if _, err := store.UpdateAdminProbeTarget(ctx, "cloudflare-dns", AdminProbeTargetUpdateRequest{Enabled: &disabled}); err != nil {
-		t.Fatalf("disable oversized legacy target: %v", err)
-	}
-
-	// Recreate the old enabled target without bumping config metadata, then prove
-	// an administrator can still unassign it from one node. Re-enabling the same
-	// unsafe assignment through the Admin API must remain rejected.
-	if _, err := store.db.ExecContext(ctx, `UPDATE probe_targets SET enabled = 1 WHERE id = 'cloudflare-dns'`); err != nil {
-		t.Fatalf("re-enable legacy target directly: %v", err)
-	}
+	// An administrator can still unassign the remaining oversized target from
+	// one node. Re-enabling the same unsafe assignment through the Admin API must
+	// remain rejected.
 	unassign := []AdminProbeTargetAssignmentUpdate{{NodeID: "legacy-b", Enabled: false}}
 	if _, err := store.UpdateAdminProbeTarget(ctx, "cloudflare-dns", AdminProbeTargetUpdateRequest{Assignments: unassign}); err != nil {
 		t.Fatalf("unassign oversized legacy target: %v", err)

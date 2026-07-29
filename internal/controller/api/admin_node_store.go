@@ -68,7 +68,14 @@ func (s *SQLiteStore) CreateAdminNode(ctx context.Context, create AdminNodeCreat
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT OR IGNORE INTO node_probe_targets (node_id, target_id, enabled)
-		SELECT ?, id, 0 FROM probe_targets WHERE enabled = 1
+		SELECT ?, pt.id, 0
+		FROM probe_targets pt
+		WHERE NOT EXISTS (
+			SELECT 1 FROM admin_deletion_jobs deletion
+			WHERE deletion.entity_kind = 'probe_target'
+			  AND deletion.entity_id = pt.id
+			  AND deletion.state IN ('pending', 'running')
+		)
 	`, nodeID); err != nil {
 		return AdminNode{}, err
 	}

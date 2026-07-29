@@ -57,8 +57,8 @@ func TestPruneRawHistoryKeepsExactlyThirtyDayWindow(t *testing.T) {
 	if _, err := store.db.ExecContext(ctx, `
 		INSERT INTO nodes (id, display_name, token_hash, status, created_at, updated_at)
 		VALUES ('node-1', 'Node 1', 'hash', 'online', ?, ?);
-		INSERT INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, enabled, created_at, updated_at)
-		VALUES ('target-1', 'Target 1', 'tcp', '127.0.0.1', 443, 1, 1000, 30, 1, ?, ?);
+		INSERT INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, created_at, updated_at)
+		VALUES ('target-1', 'Target 1', 'tcp', '127.0.0.1', 443, 1, 1000, 30, ?, ?);
 	`, now.Unix(), now.Unix(), now.Unix(), now.Unix()); err != nil {
 		t.Fatalf("seed retention rows: %v", err)
 	}

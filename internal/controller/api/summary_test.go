@@ -385,7 +385,6 @@ func legacyServiceTargetsForTest(ctx context.Context, store *SQLiteStore) ([]Ser
 		FROM probe_targets pt
 		LEFT JOIN node_probe_targets npt ON npt.target_id = pt.id
 		LEFT JOIN nodes n ON n.id = npt.node_id
-		WHERE pt.enabled = 1
 		GROUP BY pt.id, pt.name, pt.type, pt.display_order
 		ORDER BY pt.display_order ASC, pt.name ASC, pt.id ASC
 	`)
@@ -486,8 +485,8 @@ func seedSummaryNode(t *testing.T, store *SQLiteStore, id, name, homeTargetID st
 func seedSummaryTarget(t *testing.T, store *SQLiteStore, id, name, targetType, address string, displayOrder int, now time.Time) {
 	t.Helper()
 	if _, err := store.db.ExecContext(context.Background(), `
-		INSERT INTO probe_targets (id, name, type, address, count, timeout_ms, interval_sec, display_order, enabled, created_at, updated_at)
-		VALUES (?, ?, ?, ?, 3, 1000, 30, ?, 1, ?, ?)
+		INSERT INTO probe_targets (id, name, type, address, count, timeout_ms, interval_sec, display_order, created_at, updated_at)
+		VALUES (?, ?, ?, ?, 3, 1000, 30, ?, ?, ?)
 	`, id, name, targetType, address, displayOrder, now.Unix(), now.Unix()); err != nil {
 		t.Fatalf("insert target %s: %v", id, err)
 	}
