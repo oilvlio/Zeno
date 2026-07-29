@@ -870,6 +870,27 @@ type probeRoundIdempotencyBackfill struct {
 	payloadHash    string
 }
 
+func (s *SQLiteStore) probeRoundIdempotencyMigrationCurrent(ctx context.Context) (bool, error) {
+	indexColumns, err := sqliteIndexColumns(ctx, s.db, "idx_probe_rounds_idempotency")
+	if err != nil {
+		return false, err
+	}
+	indexUnique, err := sqliteIndexUnique(ctx, s.db, "idx_probe_rounds_idempotency")
+	if err != nil {
+		return false, err
+	}
+	agentIndexColumns, err := sqliteIndexColumns(ctx, s.db, "idx_probe_rounds_agent_id")
+	if err != nil {
+		return false, err
+	}
+	agentIndexUnique, err := sqliteIndexUnique(ctx, s.db, "idx_probe_rounds_agent_id")
+	if err != nil {
+		return false, err
+	}
+	return stringSlicesEqual(indexColumns, []string{"node_id", "target_id", "ts", "type", "idempotency_key"}) && indexUnique &&
+		stringSlicesEqual(agentIndexColumns, []string{"node_id", "agent_round_id"}) && agentIndexUnique, nil
+}
+
 func (s *SQLiteStore) migrateProbeRoundIdempotency(ctx context.Context) error {
 	indexColumns, err := sqliteIndexColumns(ctx, s.db, "idx_probe_rounds_idempotency")
 	if err != nil {

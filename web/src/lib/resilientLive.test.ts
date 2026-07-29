@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { startResilientLiveData } from './resilientLive'
-import type { LiveWebSocketStatus } from '../api/client'
+import type { LiveWebSocketStatus } from '../api/publicClient'
 
 afterEach(() => {
   vi.useRealTimers()

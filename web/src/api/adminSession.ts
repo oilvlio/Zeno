@@ -61,9 +61,10 @@ export async function logoutAdmin(adminToken: string): Promise<void> {
   if (!response.ok) throw new Error(`admin logout failed: ${response.status}`)
 }
 
-export async function updateAdminAccount(adminToken: string, username: string, currentPassword: string, newPassword: string): Promise<AdminLoginData> {
+export async function updateAdminAccount(adminToken: string, username: string, currentPassword: string, newPassword: string, signal?: AbortSignal): Promise<AdminLoginData> {
   const response = await fetch('/api/admin/v1/account', {
     method: 'POST',
+    signal,
     headers: adminHeaders(adminToken, { Accept: 'application/json', 'Content-Type': 'application/json' }),
     body: JSON.stringify({ username, current_password: currentPassword, new_password: newPassword }),
   })

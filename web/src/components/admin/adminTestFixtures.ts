@@ -1,0 +1,157 @@
+import type { AdminAlertRule, AdminNode, AdminNotificationChannel, AdminProbeTarget, AdminSettings } from '../../types'
+
+export const exampleNodeANode: AdminNode = {
+  id: 'example-node-a',
+  displayName: 'Example Node A',
+  status: 'online',
+  countryCode: 'HK',
+  region: 'Hong Kong',
+  disabled: false,
+  billingMode: 'both',
+  monthlyResetDay: 1,
+  expiryDate: '2026-08-01',
+  billingCycle: '月付',
+  displayOrder: 10,
+  publicIPv4: '198.51.100.8',
+  publicIPv6: '2001:db8::8',
+  monthlyQuotaBytes: 1099511627776,
+  lastSeenAt: '2026-07-03T00:00:00Z',
+  createdAt: '2026-07-02T00:00:00Z',
+  updatedAt: '2026-07-03T00:00:00Z',
+  hostname: 'example-node-a-real',
+  osName: 'debian',
+  osVersion: '13',
+  kernel: '6.12.0',
+  arch: 'x86_64',
+  virtualization: 'kvm',
+  cpuModel: 'AMD EPYC',
+  cpuCores: 2,
+  memoryTotalBytes: 2147483648,
+  diskTotalBytes: 42949672960,
+  bootTime: '2026-07-02T01:00:00Z',
+  agentVersion: 'agent-test',
+}
+
+export const backupNode: AdminNode = {
+  ...exampleNodeANode,
+  id: 'backup',
+  displayName: 'Backup',
+  status: 'no_data',
+  countryCode: undefined,
+  region: undefined,
+  agentVersion: undefined,
+}
+
+export const exampleNodeATarget: AdminProbeTarget = {
+  id: 'example-node-a-local',
+  name: 'Example Node A',
+  type: 'tcping',
+  address: '127.0.0.1',
+  port: 18980,
+  count: 3,
+  timeoutMs: 1200,
+  intervalSec: 60,
+  displayOrder: 20,
+  assignments: [
+    { nodeId: 'example-node-a', nodeDisplayName: 'Example Node A', enabled: true },
+    { nodeId: 'backup', nodeDisplayName: 'Backup', enabled: false },
+  ],
+}
+
+export const pingTarget: AdminProbeTarget = {
+  id: 'google-icmp',
+  name: 'Example ICMP',
+  type: 'ping',
+  address: '8.8.8.8',
+  port: null,
+  count: 4,
+  timeoutMs: 900,
+  intervalSec: 45,
+  displayOrder: 10,
+  assignments: [
+    { nodeId: 'example-node-a', nodeDisplayName: 'Example Node A', enabled: true },
+  ],
+}
+
+export const httpTarget: AdminProbeTarget = {
+  id: 'zeno-health-http',
+  name: 'Zeno Health HTTP',
+  type: 'http_get',
+  address: 'https://example.com/health',
+  port: null,
+  count: 2,
+  timeoutMs: 1500,
+  intervalSec: 60,
+  displayOrder: 30,
+  assignments: [
+    { nodeId: 'example-node-a', nodeDisplayName: 'Example Node A', enabled: true },
+  ],
+}
+
+export const telegramChannel: AdminNotificationChannel = {
+  id: 'zeno-telegram',
+  name: 'Zeno Telegram',
+  destination: '7579942307',
+  credentialSet: true,
+  enabled: true,
+  createdAt: '2026-07-03T00:00:00Z',
+  updatedAt: '2026-07-03T00:00:00Z',
+}
+
+export const alertRules: AdminAlertRule[] = [
+  {
+    id: 'cpu_high',
+    name: 'CPU 使用率',
+    category: 'resource',
+    metric: 'cpu_percent',
+    comparator: '>=',
+    threshold: 90,
+    thresholdUnit: '%',
+    durationSec: 300,
+    enabled: true,
+    notificationEventType: 'probe_unhealthy',
+    notificationLabel: '异常',
+    description: '',
+    scopeNodeIds: [],
+    createdAt: '2026-07-03T00:00:00Z',
+    updatedAt: '2026-07-03T00:00:00Z',
+  },
+  {
+    id: 'node_offline',
+    name: '离线通知',
+    category: 'liveness',
+    metric: 'heartbeat_age_sec',
+    comparator: '>=',
+    threshold: 180,
+    thresholdUnit: 's',
+    durationSec: 30,
+    enabled: true,
+    notificationEventType: 'node_offline',
+    notificationLabel: '离线',
+    description: '',
+    scopeNodeIds: ['backup'],
+    createdAt: '2026-07-03T00:00:00Z',
+    updatedAt: '2026-07-03T00:00:00Z',
+  },
+]
+
+export const settings: AdminSettings = {
+  siteTitle: '水饺监控',
+  siteSubtitle: 'VPS 状态总览',
+  logoUrl: '/assets/logo/custom.png',
+  theme: 'dark',
+  agentControllerUrl: 'https://zeno.example.com',
+  backgroundUrl: 'https://example.com/desktop-bg.webp',
+  desktopBackgroundUrl: 'https://example.com/desktop-bg.webp',
+  mobileBackgroundUrl: 'https://example.com/mobile-bg.webp',
+  appearancePreset: 'gaussian_blur',
+  cardOpacity: 0.58,
+  cardBlur: 18,
+  cardRadius: 24,
+  borderStrength: 0.34,
+  shadowStrength: 0.34,
+  backgroundOverlay: 0.08,
+  themeColor: '#6366f1',
+  customCode: '<style>.home-top-card { border-color: #2563eb; }</style><script>window.ZenoCustomLoaded = true;</script>',
+  updatedAt: '2026-07-04T12:00:00Z',
+}

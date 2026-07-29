@@ -1,0 +1,263 @@
+import { type CSSProperties, useLayoutEffect } from 'react'
+import type { AdminSettings, AdminTheme, AppearancePreset } from '../types'
+
+export const defaultSettings: AdminSettings = {
+  siteTitle: 'Zeno',
+  siteSubtitle: '服务器运行概览',
+  logoUrl: 'https://cdn.jsdelivr.net/gh/shui1iao/Fly@main/ID-128.webp',
+  theme: 'system',
+  agentControllerUrl: '',
+  backgroundUrl: '',
+  desktopBackgroundUrl: '',
+  mobileBackgroundUrl: '',
+  appearancePreset: 'default',
+  cardOpacity: 0.72,
+  cardBlur: 0,
+  cardRadius: 20,
+  borderStrength: 0.26,
+  shadowStrength: 0.22,
+  backgroundOverlay: 0,
+  themeColor: '#2563eb',
+  customCode: '',
+}
+
+export type AppearanceValues = Pick<AdminSettings, 'appearancePreset' | 'cardOpacity' | 'cardBlur' | 'cardRadius' | 'borderStrength' | 'shadowStrength' | 'backgroundOverlay' | 'themeColor'>
+
+export const appearancePresets: Record<AppearancePreset, AppearanceValues> = {
+  default: {
+    appearancePreset: 'default',
+    cardOpacity: 0.72,
+    cardBlur: 0,
+    cardRadius: 20,
+    borderStrength: 0.26,
+    shadowStrength: 0.22,
+    backgroundOverlay: 0,
+    themeColor: '#2563eb',
+  },
+  gaussian_blur: {
+    appearancePreset: 'gaussian_blur',
+    cardOpacity: 0.58,
+    cardBlur: 18,
+    cardRadius: 24,
+    borderStrength: 0.34,
+    shadowStrength: 0.34,
+    backgroundOverlay: 0.08,
+    themeColor: '#6366f1',
+  },
+}
+
+export const appearancePresetOptions: Array<{ value: AppearancePreset; label: string }> = [
+  { value: 'default', label: '默认主题' },
+  { value: 'gaussian_blur', label: '高斯模糊主题' },
+]
+
+export const fallbackLogoUrl = 'https://cdn.jsdelivr.net/gh/shui1iao/Fly@main/ID-128.png'
+
+function backgroundImageValue(url: string): string {
+  return `url("${url.replaceAll('"', '%22')}")`
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : min
+}
+
+export function appearanceValuesForSettings(settings: AdminSettings): AppearanceValues {
+  const preset = settings.appearancePreset === 'gaussian_blur' ? 'gaussian_blur' : 'default'
+  const fallback = appearancePresets[preset]
+  return {
+    appearancePreset: preset,
+    cardOpacity: clampNumber(settings.cardOpacity ?? fallback.cardOpacity, 0.2, 1),
+    cardBlur: clampNumber(settings.cardBlur ?? fallback.cardBlur, 0, 40),
+    cardRadius: clampNumber(settings.cardRadius ?? fallback.cardRadius, 8, 36),
+    borderStrength: clampNumber(settings.borderStrength ?? fallback.borderStrength, 0, 1),
+    shadowStrength: clampNumber(settings.shadowStrength ?? fallback.shadowStrength, 0, 1),
+    backgroundOverlay: clampNumber(settings.backgroundOverlay ?? fallback.backgroundOverlay, 0, 0.8),
+    themeColor: /^#[0-9a-fA-F]{6}$/.test(settings.themeColor ?? '') ? settings.themeColor : fallback.themeColor,
+  }
+}
+
+function usesDefaultAppearance(appearance: AppearanceValues): boolean {
+  const defaults = appearancePresets.default
+  return appearance.appearancePreset === defaults.appearancePreset
+    && appearance.cardOpacity === defaults.cardOpacity
+    && appearance.cardBlur === defaults.cardBlur
+    && appearance.cardRadius === defaults.cardRadius
+    && appearance.borderStrength === defaults.borderStrength
+    && appearance.shadowStrength === defaults.shadowStrength
+    && appearance.backgroundOverlay === defaults.backgroundOverlay
+    && appearance.themeColor.toLowerCase() === defaults.themeColor
+}
+
+function hexToRgb(value: string): { r: number; g: number; b: number } {
+  const normalized = /^#[0-9a-fA-F]{6}$/.test(value) ? value.slice(1) : '2563eb'
+  return {
+    r: Number.parseInt(normalized.slice(0, 2), 16),
+    g: Number.parseInt(normalized.slice(2, 4), 16),
+    b: Number.parseInt(normalized.slice(4, 6), 16),
+  }
+}
+
+function rgbaFromHex(value: string, alpha: number): string {
+  const { r, g, b } = hexToRgb(value)
+  return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`
+}
+
+export function storedThemeOverride(): AdminTheme | null {
+  if (typeof window === 'undefined') return null
+  const value = window.localStorage.getItem('zeno_theme_override')
+  return value === 'system' || value === 'light' || value === 'dark' ? value : null
+}
+
+export function storedBackgroundEnabled(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.localStorage.getItem('zeno_background_enabled') === 'true'
+}
+
+function systemTheme(): Exclude<AdminTheme, 'system'> {
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 'dark'
+  return 'light'
+}
+
+export function resolvedTheme(theme: AdminTheme): Exclude<AdminTheme, 'system'> {
+  return theme === 'system' ? systemTheme() : theme
+}
+
+export function settingsForChrome(settings: AdminSettings, themeOverride: AdminTheme | null, backgroundEnabled: boolean): AdminSettings {
+  const nextSettings = { ...settings, theme: themeOverride ?? settings.theme }
+  if (backgroundEnabled) return nextSettings
+  return { ...nextSettings, backgroundUrl: '', desktopBackgroundUrl: '', mobileBackgroundUrl: '' }
+}
+
+export function shellStyleForSettings(settings: AdminSettings): CSSProperties | undefined {
+  const desktopBackgroundUrl = (settings.desktopBackgroundUrl || settings.backgroundUrl).trim()
+  const mobileBackgroundUrl = settings.mobileBackgroundUrl.trim()
+  const hasDedicatedMobileBackground = mobileBackgroundUrl !== ''
+  const appearance = appearanceValuesForSettings(settings)
+  const resolved = resolvedTheme(settings.theme)
+  const themeColor = appearance.themeColor
+  const themeRgb = hexToRgb(themeColor)
+  const cardOpacity = appearance.cardOpacity
+  const surfaceBase = resolved === 'dark' ? '15, 23, 42' : '255, 255, 255'
+  const shadowBase = resolved === 'dark' ? '0, 0, 0' : '15, 23, 42'
+  const shadowAlpha = 0.04 + appearance.shadowStrength * (resolved === 'dark' ? 0.44 : 0.22)
+  const backgroundOverlayBase = resolved === 'dark' ? '0, 0, 0' : '255, 255, 255'
+  return {
+    '--zeno-desktop-background-image': desktopBackgroundUrl === '' ? 'none' : backgroundImageValue(desktopBackgroundUrl),
+    '--zeno-mobile-background-image': hasDedicatedMobileBackground ? backgroundImageValue(mobileBackgroundUrl) : (desktopBackgroundUrl === '' ? 'none' : backgroundImageValue(desktopBackgroundUrl)),
+    '--zeno-mobile-background-size': hasDedicatedMobileBackground ? 'contain' : 'cover',
+    '--blue': themeColor,
+    '--border': rgbaFromHex(themeColor, appearance.borderStrength),
+    '--metric-shadow': rgbaFromHex(themeColor, Math.max(0.06, appearance.shadowStrength * 0.22)),
+    '--admin-secondary-surface': usesDefaultAppearance(appearance) ? `rgb(${surfaceBase})` : `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})`,
+    '--surface-strong': `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})`,
+    '--surface': `rgba(${surfaceBase}, ${Math.max(0.16, cardOpacity - 0.1).toFixed(3)})`,
+    '--surface-soft': `rgba(${surfaceBase}, ${Math.max(0.12, cardOpacity - 0.34).toFixed(3)})`,
+    '--secondary': `rgba(${surfaceBase}, ${Math.max(0.16, cardOpacity - 0.26).toFixed(3)})`,
+    '--metric-bg': `rgba(${surfaceBase}, ${Math.max(0.18, cardOpacity - 0.2).toFixed(3)})`,
+    '--field-bg': `rgba(${surfaceBase}, ${Math.max(0.18, cardOpacity - 0.14).toFixed(3)})`,
+    '--control-bg': `rgba(${surfaceBase}, ${Math.max(0.18, cardOpacity - 0.1).toFixed(3)})`,
+    '--radius-panel': `${appearance.cardRadius}px`,
+    '--radius-card': `${Math.max(10, appearance.cardRadius - 4)}px`,
+    '--radius-field': `${Math.max(8, appearance.cardRadius - 8)}px`,
+    '--zeno-card-blur': `${appearance.cardBlur}px`,
+    '--zeno-card-highlight': resolved === 'dark' ? `rgba(255, 255, 255, ${Math.min(0.18, 0.04 + appearance.shadowStrength * 0.12).toFixed(3)})` : `rgba(255, 255, 255, ${Math.min(0.9, 0.28 + cardOpacity * 0.42).toFixed(3)})`,
+    '--zeno-card-shadow': `0 10px 26px -24px rgba(${shadowBase}, ${shadowAlpha.toFixed(3)}), 0 1px 2px rgba(${shadowBase}, ${(0.02 + appearance.shadowStrength * 0.05).toFixed(3)})`,
+    '--zeno-background-overlay-color': `rgba(${backgroundOverlayBase}, ${appearance.backgroundOverlay.toFixed(3)})`,
+    '--zeno-theme-rgb': `${themeRgb.r}, ${themeRgb.g}, ${themeRgb.b}`,
+    backgroundSize: 'cover',
+    backgroundAttachment: 'fixed',
+  } as CSSProperties
+}
+
+const documentThemeVariableNames = [
+  '--blue',
+  '--border',
+  '--metric-shadow',
+  '--admin-secondary-surface',
+  '--surface-strong',
+  '--surface',
+  '--surface-soft',
+  '--secondary',
+  '--metric-bg',
+  '--field-bg',
+  '--control-bg',
+  '--radius-panel',
+  '--radius-card',
+  '--radius-field',
+  '--zeno-card-blur',
+  '--zeno-card-highlight',
+  '--zeno-card-shadow',
+  '--zeno-theme-rgb',
+] as const
+
+export function useDocumentTheme(settings: AdminSettings) {
+  useLayoutEffect(() => {
+    if (typeof document === 'undefined') return undefined
+    const root = document.documentElement
+    const previousTheme = root.getAttribute('data-zeno-theme')
+    const previousValues = new Map(documentThemeVariableNames.map((name) => [name, root.style.getPropertyValue(name)]))
+    const previousPopoverBackground = root.style.getPropertyValue('--zeno-popover-bg')
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+    const apply = () => {
+      const theme = resolvedTheme(settings.theme)
+      const themeStyle = shellStyleForSettings(settings) as Record<string, string | number> | undefined
+      root.dataset.zenoTheme = theme
+      for (const name of documentThemeVariableNames) {
+        const value = themeStyle?.[name]
+        if (value === undefined || value === null || value === '') root.style.removeProperty(name)
+        else root.style.setProperty(name, String(value))
+      }
+      const popoverBackground = themeStyle?.['--surface-strong']
+      if (popoverBackground === undefined || popoverBackground === null || popoverBackground === '') root.style.removeProperty('--zeno-popover-bg')
+      else root.style.setProperty('--zeno-popover-bg', String(popoverBackground))
+    }
+    apply()
+    if (settings.theme === 'system') media?.addEventListener?.('change', apply)
+    return () => {
+      if (settings.theme === 'system') media?.removeEventListener?.('change', apply)
+      if (previousTheme === null) root.removeAttribute('data-zeno-theme')
+      else root.setAttribute('data-zeno-theme', previousTheme)
+      for (const [name, value] of previousValues) {
+        if (value === '') root.style.removeProperty(name)
+        else root.style.setProperty(name, value)
+      }
+      if (previousPopoverBackground === '') root.style.removeProperty('--zeno-popover-bg')
+      else root.style.setProperty('--zeno-popover-bg', previousPopoverBackground)
+    }
+  }, [
+    settings.theme,
+    settings.appearancePreset,
+    settings.cardOpacity,
+    settings.cardBlur,
+    settings.cardRadius,
+    settings.borderStrength,
+    settings.shadowStrength,
+    settings.themeColor,
+  ])
+}
+
+export function documentBrandingForSettings(settings: AdminSettings) {
+  const siteTitle = (settings.siteTitle || defaultSettings.siteTitle).trim() || defaultSettings.siteTitle
+  const logoUrl = (settings.logoUrl || defaultSettings.logoUrl).trim() || defaultSettings.logoUrl
+  return { title: siteTitle, iconHref: logoUrl }
+}
+
+export const themeOptions: Array<{ value: AdminTheme; label: string }> = [
+  { value: 'system', label: '跟随系统' },
+  { value: 'light', label: '浅色' },
+  { value: 'dark', label: '深色' },
+]
+
+
+export function applyDocumentBranding(settings: AdminSettings) {
+  if (typeof document === 'undefined') return
+  const branding = documentBrandingForSettings(settings)
+  document.title = branding.title
+  let icon = document.head.querySelector<HTMLLinkElement>('link[rel="icon"]')
+  if (!icon) {
+    icon = document.createElement('link')
+    icon.rel = 'icon'
+    document.head.appendChild(icon)
+  }
+  icon.href = branding.iconHref
+}

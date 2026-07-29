@@ -5,10 +5,11 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const stylesDirectory = dirname(fileURLToPath(import.meta.url))
-const styles = [
-  readFileSync(join(stylesDirectory, 'styles.css'), 'utf8'),
-  readFileSync(join(stylesDirectory, 'styles/detail.css'), 'utf8'),
-].join('\n')
+const baseStyles = readFileSync(join(stylesDirectory, 'styles.css'), 'utf8')
+const detailStyles = readFileSync(join(stylesDirectory, 'styles/detail.css'), 'utf8')
+const adminStyles = readFileSync(join(stylesDirectory, 'styles/admin.css'), 'utf8')
+const styles = [baseStyles, detailStyles, adminStyles].join('\n')
+
 
 describe('mobile latency target layout', () => {
   it('keeps latency target buttons readable as card tiles on phones', () => {
@@ -35,6 +36,16 @@ describe('mobile server detail layout', () => {
     expect(styles).toContain('.monitor-heading-actions { width: auto; flex: none; flex-wrap: nowrap; align-items: flex-start; justify-content: flex-end; margin-left: auto; }')
     expect(styles).toContain('.resource-history-header { padding: 16px 14px 10px; flex-direction: row; align-items: flex-start; gap: 8px; }')
     expect(styles).toContain('.resource-range-row { width: auto; flex: none; flex-wrap: nowrap; justify-content: flex-end; margin-left: auto; }')
+  })
+})
+
+describe('route stylesheet boundaries', () => {
+  it('keeps heavyweight admin workspace styles out of the public entry stylesheet', () => {
+    expect(baseStyles).not.toContain('.admin-modal-backdrop')
+    expect(baseStyles).not.toContain('.admin-server-sort-list')
+    expect(adminStyles).toContain('.admin-modal-backdrop')
+    expect(adminStyles).toContain('.admin-server-sort-list')
+    expect(adminStyles).toContain('@media (max-width: 767px)')
   })
 })
 

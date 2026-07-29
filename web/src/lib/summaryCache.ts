@@ -1,4 +1,4 @@
-import type { SummaryData } from '../api/client'
+import type { SummaryData } from '../api/publicClient'
 import { normalizeCurrencyRates } from './currency'
 
 export const summaryCacheKey = 'zeno_summary_cache_v2'

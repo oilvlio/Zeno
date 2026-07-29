@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { extractSafeCustomCSS } from './customCode'
 import { availableHistoryRanges, coerceHistoryRange } from './historyRange'
 import { loadStoredSummary, rememberSummary, summaryFreshTtlMs } from './summaryCache'
-import type { SummaryData } from '../api/client'
+import type { SummaryData } from '../api/publicClient'
 
 const summary: SummaryData = {
   nodes: [],

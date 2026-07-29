@@ -1,4 +1,4 @@
-import type { LiveWebSocketStatus } from '../api/client'
+import type { LiveWebSocketStatus } from '../api/publicClient'
 
 export type LiveDataSource = 'http' | 'ws'
 
