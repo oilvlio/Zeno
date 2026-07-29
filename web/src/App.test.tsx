@@ -359,6 +359,7 @@ describe('HomeTopPanel', () => {
       '--blue': '#6366f1',
       '--border': 'rgba(99, 102, 241, 0.340)',
       '--metric-shadow': 'rgba(99, 102, 241, 0.075)',
+      '--admin-secondary-surface': 'rgba(15, 23, 42, 0.580)',
       '--surface-strong': 'rgba(15, 23, 42, 0.580)',
       '--surface': 'rgba(15, 23, 42, 0.480)',
       '--surface-soft': 'rgba(15, 23, 42, 0.240)',
@@ -385,6 +386,21 @@ describe('HomeTopPanel', () => {
       '--zeno-mobile-background-image': 'url("https://example.com/desktop-bg.webp")',
       '--zeno-mobile-background-size': 'cover',
     })
+    const defaultAppearanceSettings = {
+      ...settings,
+      theme: 'light' as const,
+      appearancePreset: 'default' as const,
+      cardOpacity: 0.72,
+      cardBlur: 0,
+      cardRadius: 20,
+      borderStrength: 0.26,
+      shadowStrength: 0.22,
+      backgroundOverlay: 0,
+      themeColor: '#2563eb',
+    }
+    expect(shellStyleForSettings(defaultAppearanceSettings)).toMatchObject({ '--admin-secondary-surface': 'rgb(255, 255, 255)' })
+    expect(shellStyleForSettings({ ...defaultAppearanceSettings, theme: 'dark' })).toMatchObject({ '--admin-secondary-surface': 'rgb(15, 23, 42)' })
+    expect(shellStyleForSettings({ ...defaultAppearanceSettings, cardOpacity: 0.8 })).toMatchObject({ '--admin-secondary-surface': 'rgba(255, 255, 255, 0.800)' })
   })
 
   it('keeps the homepage top controls inside one compact six-column summary row', () => {
@@ -449,6 +465,8 @@ describe('HomeTopPanel', () => {
     expect(html).toContain('home-summary__metric-icon')
     expect(html).toMatch(/home-summary__status-dot[^>]*><\/span><span>在线节点<\/span>/)
     expect(html).toMatch(/home-summary__metric-icon[\s\S]*?月均消费/)
+    expect(html).toMatch(/aria-label="total sent"[\s\S]*?home-summary__metric-icon home-summary__metric-icon--total[\s\S]*?累计发送/)
+    expect(html).toMatch(/aria-label="total received"[\s\S]*?home-summary__metric-icon home-summary__metric-icon--total[\s\S]*?累计接收/)
     expect(html).toMatch(/home-summary__metric-icon[\s\S]*?上传速率<\/span>/)
     expect(html).not.toContain('实时')
     expect(html).not.toContain('累计上传')

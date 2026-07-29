@@ -298,6 +298,18 @@ function appearanceValuesForSettings(settings: AdminSettings): AppearanceValues 
   }
 }
 
+function usesDefaultAppearance(appearance: AppearanceValues): boolean {
+  const defaults = appearancePresets.default
+  return appearance.appearancePreset === defaults.appearancePreset
+    && appearance.cardOpacity === defaults.cardOpacity
+    && appearance.cardBlur === defaults.cardBlur
+    && appearance.cardRadius === defaults.cardRadius
+    && appearance.borderStrength === defaults.borderStrength
+    && appearance.shadowStrength === defaults.shadowStrength
+    && appearance.backgroundOverlay === defaults.backgroundOverlay
+    && appearance.themeColor.toLowerCase() === defaults.themeColor
+}
+
 function hexToRgb(value: string): { r: number; g: number; b: number } {
   const normalized = /^#[0-9a-fA-F]{6}$/.test(value) ? value.slice(1) : '2563eb'
   return {
@@ -358,6 +370,7 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
     '--blue': themeColor,
     '--border': rgbaFromHex(themeColor, appearance.borderStrength),
     '--metric-shadow': rgbaFromHex(themeColor, Math.max(0.06, appearance.shadowStrength * 0.22)),
+    '--admin-secondary-surface': usesDefaultAppearance(appearance) ? `rgb(${surfaceBase})` : `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})`,
     '--surface-strong': `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})`,
     '--surface': `rgba(${surfaceBase}, ${Math.max(0.16, cardOpacity - 0.1).toFixed(3)})`,
     '--surface-soft': `rgba(${surfaceBase}, ${Math.max(0.12, cardOpacity - 0.34).toFixed(3)})`,
@@ -382,6 +395,7 @@ const documentThemeVariableNames = [
   '--blue',
   '--border',
   '--metric-shadow',
+  '--admin-secondary-surface',
   '--surface-strong',
   '--surface',
   '--surface-soft',
@@ -3913,6 +3927,17 @@ function HomeMonthlyCostIcon() {
   )
 }
 
+function HomeTrafficTotalIcon({ direction }: { direction: 'upload' | 'download' }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
+      <path d="M7 17h.01M10 17h.01" />
+      <path d={direction === 'upload' ? 'M12 12V3' : 'M12 3v9'} />
+      <path d={direction === 'upload' ? 'm8.5 6.5 3.5-3.5 3.5 3.5' : 'm8.5 8.5 3.5 3.5 3.5-3.5'} />
+    </svg>
+  )
+}
+
 interface HomeTrafficSummaryProps {
   direction: 'upload' | 'download'
   kind: 'rate' | 'total'
@@ -3939,6 +3964,7 @@ function HomeTrafficSummary({ direction, kind, rate, total }: HomeTrafficSummary
   return (
     <div className={`home-summary__metric home-summary__metric--total home-summary__metric--${direction}`} aria-label={isUpload ? 'total sent' : 'total received'}>
       <div className="home-summary__metric-label">
+        <span className="home-summary__metric-icon home-summary__metric-icon--total"><HomeTrafficTotalIcon direction={direction} /></span>
         <span>{isUpload ? '累计发送' : '累计接收'}</span>
       </div>
       <div className="home-summary__metric-value home-summary__metric-value--total">
