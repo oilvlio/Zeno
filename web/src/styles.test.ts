@@ -157,7 +157,6 @@ describe('homepage and admin shell layout', () => {
     expect(styles).not.toContain('.node-status-dot')
     expect(styles).not.toContain('.node-status.is-online')
     expect(styles).not.toContain('.node-status.is-offline')
-    expect(styles).not.toContain('.kulin-node-card.is-offline')
     expect(styles).not.toContain('.node-title-line::after')
     expect(styles).not.toContain('.node-dot')
     expect(styles).not.toContain('.node-title-copy')
@@ -404,10 +403,13 @@ describe('state history layout', () => {
     expect(styles).toContain('border-radius: var(--radius-pill)')
   })
 
-  it('keeps homepage cards status-neutral without offline overlays or grayscale filtering', () => {
-    expect(styles).not.toContain('.kulin-node-card.is-offline')
-    expect(styles).not.toContain('.node-offline-watermark')
+  it('freezes offline homepage cards by dimming colored content without grayscale', () => {
+    expect(styles).toMatch(/\.kulin-node-card\.is-offline \.node-head,[\s\S]*?\.node-usage \{[^}]*opacity: \.56;[^}]*\}/)
+    expect(styles).toMatch(/\.node-offline-watermark\s*\{[^}]*position: absolute;[^}]*z-index: 2;[^}]*pointer-events: none;[^}]*transform: rotate\(-24deg\);[^}]*color: color-mix\(in srgb, var\(--red\) 24%, transparent\);[^}]*font-size: 52px;[^}]*\}/)
+    // Offline cards must never grayscale or tint the card surface (2026-07-05 decision).
     expect(styles).not.toContain('filter: grayscale')
+    expect(styles).not.toMatch(/\.kulin-node-card\.is-offline\s*\{/)
+    expect(styles).not.toContain('.kulin-node-card.is-offline::before')
   })
 
   it('keeps server-card usage tracks visible on white cards', () => {

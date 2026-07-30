@@ -700,6 +700,27 @@ svg { display: block; }
   outline: 1px solid transparent;
 }
 .kulin-node-card:hover { transform: translateY(-4px); box-shadow: 0 16px 38px -30px rgba(15, 23, 42, .34), 0 8px 24px -22px rgba(37, 99, 235, .22); }
+.kulin-node-card.is-offline .node-head,
+.kulin-node-card.is-offline .node-specs,
+.kulin-node-card.is-offline .node-usage {
+  opacity: .56;
+}
+.node-offline-watermark {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-24deg);
+  color: color-mix(in srgb, var(--red) 24%, transparent);
+  font-size: 52px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-indent: .18em;
+  line-height: 1;
+}
 .node-head {
   position: relative;
   min-height: 24px;

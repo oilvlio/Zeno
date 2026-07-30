@@ -48,27 +48,38 @@ const baseNode: HomeCardNode = {
 }
 
 describe('ServerCard', () => {
-  it('keeps non-online nodes in the normal card style and shows uptime days', () => {
+  it('renders non-online nodes as frozen cards with a diagonal offline watermark', () => {
     const html = renderToStaticMarkup(
       <ServerCard node={{ ...baseNode, status: 'warning' }} onOpen={vi.fn()} />,
     )
 
-    expect(html).toContain('class="kulin-node-card"')
+    expect(html).toContain('class="kulin-node-card is-offline"')
+    expect(html).toContain('node-offline-watermark')
+    expect(html).toContain('>离线</span>')
     expect(html).toContain('node-head')
     expect(html).toContain('node-usage-grid')
     expect(html).toContain('node-specs')
     expect(html).toContain('<p>Example Node A</p>')
     expect(html).toContain('class="node-uptime">在线 3 天</span>')
-    expect(html).not.toContain('is-offline')
-    expect(html).not.toContain('node-status')
     expect(html).not.toContain('node-status-dot')
-    expect(html).not.toContain('>离线</span>')
   })
 
-  it('keeps an online uptime placeholder without colored status dots when uptime is unavailable', () => {
+  it('renders offline nodes with the watermark as well', () => {
+    const html = renderToStaticMarkup(
+      <ServerCard node={{ ...baseNode, status: 'offline' }} onOpen={vi.fn()} />,
+    )
+
+    expect(html).toContain('class="kulin-node-card is-offline"')
+    expect(html).toContain('node-offline-watermark')
+  })
+
+  it('keeps online cards clean without offline overlay markup', () => {
     const html = renderToStaticMarkup(<ServerCard node={{ ...baseNode, uptimeSeconds: null }} onOpen={vi.fn()} />)
 
+    expect(html).toContain('class="kulin-node-card"')
     expect(html).toContain('class="node-uptime">在线 -- 天</span>')
+    expect(html).not.toContain('is-offline')
+    expect(html).not.toContain('node-offline-watermark')
     expect(html).not.toContain('node-status-dot')
     expect(html).not.toContain('>离线</span>')
   })

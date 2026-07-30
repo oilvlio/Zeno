@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { HomeCardNode, HourlyLatencyPoint } from '../types'
+import type { HomeCardNode, HourlyLatencyPoint, NodeStatus } from '../types'
 import { formatLatency } from '../lib/format'
 import { convertCurrencyAmount, formatCurrencyAmount, normalizeCurrencyCode, normalizeCurrencyRates, type CurrencyCode, type CurrencyRates } from '../lib/currency'
 import { ServerFlag } from './ServerFlag'
@@ -83,6 +83,10 @@ function formatUsage(value: number | null | undefined): string {
 function formatOnlineDays(uptimeSeconds: number | null | undefined): string {
   if (uptimeSeconds === null || uptimeSeconds === undefined || !Number.isFinite(uptimeSeconds) || uptimeSeconds < 0) return '在线 -- 天'
   return `在线 ${Math.floor(uptimeSeconds / 86400)} 天`
+}
+
+function isOfflineStatus(status: NodeStatus | null | undefined): boolean {
+  return status !== 'online'
 }
 
 function normalizeLoss(value: number | null | undefined): string {
@@ -181,11 +185,12 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
   const expiry = expiryBadge(node.expiryLabel)
   const exchangeRates = normalizeCurrencyRates(inputExchangeRates)
   const renewalCost = formatRenewalCost(node.renewalAmount, node.renewalCurrency, node.billingCycle, displayCurrency, exchangeRates)
+  const isOfflineCard = isOfflineStatus(node.status)
   const open = () => onOpen?.(node.id)
 
   return (
     <article
-      className="kulin-node-card"
+      className={`kulin-node-card${isOfflineCard ? ' is-offline' : ''}`}
       role={onOpen ? 'link' : undefined}
       tabIndex={onOpen ? 0 : undefined}
       onClick={open}
@@ -205,6 +210,12 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
         </div>
         <span className="node-uptime">{formatOnlineDays(node.uptimeSeconds)}</span>
       </section>
+
+      {isOfflineCard && (
+        <span className="node-offline-watermark" aria-label={`${node.displayName} 离线`}>
+          离线
+        </span>
+      )}
 
       <section className="node-specs" aria-label={`${node.displayName} specs`}>
         <SpecIcon kind="cpu" label={formatCores(node.cpuCores)} />
