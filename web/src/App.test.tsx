@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, documentBrandingForSettings, filterHomeNodesByRegion, homeMonthlyCostForNodes, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, shellStyleForSettings, shouldRefreshHomeRealtimeSnapshot } from './App'
+import { DashboardRouteState, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, documentBrandingForSettings, filterHomeNodesByRegion, homeMonthlyCostForNodes, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, shellStyleForSettings, shouldRefreshHomeRealtimeSnapshot } from './App'
 import type { HomeCardNode } from './types'
 import { settings } from './components/admin/adminTestFixtures'
 
@@ -64,6 +64,26 @@ describe('homeTrafficTotalsForNodes', () => {
 describe('HomeTopPanel', () => {
   it('keeps local admin tokens for at most one day', () => {
     expect(adminTokenMaxAgeMs).toBe(24 * 60 * 60 * 1000)
+  })
+
+  it('keeps route loading content inside the same top-card shell used by destination pages', () => {
+    const html = renderToStaticMarkup(
+      <DashboardRouteState
+        settings={settings}
+        message="加载中…"
+        isAdmin
+        onHome={() => {}}
+        onAdmin={() => {}}
+        onThemeChange={() => {}}
+        backgroundEnabled
+      />,
+    )
+
+    expect(html).toContain('class="kulin-container route-state-container"')
+    expect(html).toContain('class="home-top-card route-state-panel is-admin"')
+    expect(html).toContain('class="route-state-card">加载中…</div>')
+    expect(html).toContain('>前台</button>')
+    expect(html).not.toContain('class="state-panel"')
   })
 
   it('recognizes expired admin session API responses', () => {

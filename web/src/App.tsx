@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, useTransition } from 'react'
 import { LatencyDetail } from './components/LatencyDetail'
 import { ServerCard } from './components/ServerCard'
 import { ServiceDetail } from './components/ServiceDetail'
 import { applyCustomCode } from './lib/customCode'
 import { availableCurrencyOptions, billingCycleMonths, convertCurrencyAmount, normalizeCurrencyRates, rememberHomeCurrency, storedHomeCurrency, type CurrencyCode, type CurrencyRates } from './lib/currency'
-import type { AdminTheme, HomeCardNode, LatencyPoint } from './types'
+import type { AdminSettings, AdminTheme, HomeCardNode, LatencyPoint } from './types'
 import { DashboardHeader } from './components/DashboardHeader'
 import { AdminDashboardLoadError, AdminModuleErrorBoundary } from './components/admin/AdminDashboardBoundary'
 import { applyDocumentBranding, settingsForChrome, shellStyleForSettings, storedBackgroundEnabled, storedThemeOverride, useDocumentTheme } from './lib/appearance'
@@ -25,7 +25,47 @@ export { isAdminUnauthorizedError } from './lib/adminSettings'
 export { shouldRefreshHomeRealtimeSnapshot } from './hooks/useSummaryController'
 export { HomeOverviewPanel, HomeRegionFilter, HomeTopPanel } from './components/HomeOverviewPanel'
 
-const LazyAdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then((module) => ({ default: module.AdminDashboardContainer })))
+const loadAdminDashboard = () => import('./components/admin/AdminDashboard').then((module) => ({ default: module.AdminDashboardContainer }))
+const LazyAdminDashboard = lazy(loadAdminDashboard)
+
+export function DashboardRouteState({
+  settings,
+  message,
+  isError = false,
+  isAdmin = false,
+  onHome,
+  onAdmin,
+  onThemeChange,
+  onBackgroundToggle,
+  backgroundEnabled,
+}: {
+  settings: AdminSettings
+  message: string
+  isError?: boolean
+  isAdmin?: boolean
+  onHome: () => void
+  onAdmin: () => void
+  onThemeChange: (theme: AdminTheme) => void
+  onBackgroundToggle?: () => void
+  backgroundEnabled: boolean
+}) {
+  return (
+    <div className="kulin-container route-state-container">
+      <section className={`home-top-card route-state-panel${isAdmin ? ' is-admin' : ''}`}>
+        <DashboardHeader
+          settings={settings}
+          onHome={onHome}
+          onAdmin={isAdmin ? onHome : onAdmin}
+          adminLabel={isAdmin ? '前台' : undefined}
+          onThemeChange={onThemeChange}
+          onBackgroundToggle={onBackgroundToggle}
+          backgroundEnabled={backgroundEnabled}
+        />
+        <div className={`route-state-card${isError ? ' is-error' : ''}`}>{message}</div>
+      </section>
+    </div>
+  )
+}
 
 function sum(values: Array<number | null | undefined>): number {
   return values.reduce<number>((total, value) => total + (value ?? 0), 0)
@@ -102,6 +142,7 @@ export function App() {
   const [homeRegion, setHomeRegion] = useState('ALL')
   const [homeCurrency, setHomeCurrency] = useState<CurrencyCode>(storedHomeCurrency)
   const { route, navigateHome, navigateAdmin, navigateNode: navigateNodeRoute } = useDashboardRouter()
+  const [, startRouteTransition] = useTransition()
   const { settings, settingsReady, setSettings } = usePublicSettings()
   const { adminToken, setAdminToken, expireAdminSession } = useAdminAccess()
   const { nodeLatencyRange, stateRange, latencyState, stateHistoryState, setNodeLatencyRange, setStateRange, resetNodeRanges } = useNodeDetailController({
@@ -215,12 +256,24 @@ export function App() {
     rememberHomeCurrency(currency)
     setHomeCurrency(currency)
   }
+  const navigateAdminSmoothly = () => {
+    void loadAdminDashboard()
+    startRouteTransition(() => navigateAdmin())
+  }
+  const routeStateProps = {
+    settings: effectiveSettings,
+    onHome: navigateHome,
+    onAdmin: navigateAdminSmoothly,
+    onThemeChange: setThemeMode,
+    onBackgroundToggle: backgroundToggle,
+    backgroundEnabled: hasBackgroundImage,
+  }
 
   return (
     <main className="kulin-shell" data-theme={effectiveSettings.theme} data-background={hasBackgroundImage ? 'on' : 'off'} style={shellStyleForSettings(effectiveSettings)}>
       {route.kind === 'admin' && (
         <AdminModuleErrorBoundary fallback={<AdminDashboardLoadError />}>
-          <Suspense fallback={<section className="state-panel">加载中…</section>}>
+          <Suspense fallback={<DashboardRouteState {...routeStateProps} isAdmin message="加载中…" />}>
             <LazyAdminDashboard
               onHome={navigateHome}
               settings={settings}
@@ -235,8 +288,8 @@ export function App() {
         </AdminModuleErrorBoundary>
       )}
 
-      {route.kind !== 'admin' && state.kind === 'loading' && <section className="state-panel">正在读取 Controller API…</section>}
-      {route.kind !== 'admin' && state.kind === 'error' && <section className="state-panel is-error">API 读取失败：{state.message}</section>}
+      {route.kind !== 'admin' && state.kind === 'loading' && <DashboardRouteState {...routeStateProps} message="正在读取 Controller API…" />}
+      {route.kind !== 'admin' && state.kind === 'error' && <DashboardRouteState {...routeStateProps} isError message={`API 读取失败：${state.message}`} />}
 
       {state.kind === 'ready' && route.kind === 'node' && selectedNode && (
         <LatencyDetail
@@ -253,12 +306,12 @@ export function App() {
           onBack={navigateHome}
           onRangeChange={setNodeLatencyRange}
           onStateRangeChange={setStateRange}
-          topHeader={<DashboardHeader settings={effectiveSettings} onHome={navigateHome} onAdmin={navigateAdmin} onThemeChange={setThemeMode} onBackgroundToggle={backgroundToggle} backgroundEnabled={hasBackgroundImage} />}
+          topHeader={<DashboardHeader settings={effectiveSettings} onHome={navigateHome} onAdmin={navigateAdminSmoothly} onThemeChange={setThemeMode} onBackgroundToggle={backgroundToggle} backgroundEnabled={hasBackgroundImage} />}
         />
       )}
 
       {state.kind === 'ready' && route.kind === 'node' && !selectedNode && (
-        <section className="state-panel is-error">没有找到这台服务器：{route.nodeId}</section>
+        <DashboardRouteState {...routeStateProps} isError message={`没有找到这台服务器：${route.nodeId}`} />
       )}
 
       {state.kind === 'ready' && route.kind === 'service' && (selectedService || serviceLatencyState.kind === 'ready') && (
@@ -271,12 +324,12 @@ export function App() {
           canUseExtendedRanges={hasAdminToken}
           onBack={navigateHome}
           onRangeChange={setServiceLatencyRange}
-          topHeader={<DashboardHeader settings={effectiveSettings} onHome={navigateHome} onAdmin={navigateAdmin} onThemeChange={setThemeMode} onBackgroundToggle={backgroundToggle} backgroundEnabled={hasBackgroundImage} />}
+          topHeader={<DashboardHeader settings={effectiveSettings} onHome={navigateHome} onAdmin={navigateAdminSmoothly} onThemeChange={setThemeMode} onBackgroundToggle={backgroundToggle} backgroundEnabled={hasBackgroundImage} />}
         />
       )}
 
       {state.kind === 'ready' && route.kind === 'service' && !selectedService && serviceLatencyState.kind === 'error' && (
-        <section className="state-panel is-error">没有找到这个监控服务：{route.targetId}</section>
+        <DashboardRouteState {...routeStateProps} isError message={`没有找到这个监控服务：${route.targetId}`} />
       )}
 
       {state.kind === 'ready' && route.kind === 'home' && (
@@ -296,7 +349,7 @@ export function App() {
             upSpeed={upSpeed}
             downSpeed={downSpeed}
             onHome={navigateHome}
-            onAdmin={navigateAdmin}
+            onAdmin={navigateAdminSmoothly}
             onThemeChange={setThemeMode}
             onBackgroundToggle={backgroundToggle}
             backgroundEnabled={hasBackgroundImage}

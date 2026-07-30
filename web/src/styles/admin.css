@@ -1600,9 +1600,15 @@
 .admin-server-sort-actions { gap: 8px; margin-top: 12px; padding-top: 10px; }
 .admin-server-sort-actions button { min-height: 34px; padding: 0 12px; font-size: 13px; }
 .admin-state-card {
-  padding: 18px;
+  min-height: 96px;
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 20px;
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
+  background: var(--control-bg);
   color: var(--muted);
   font-weight: 500;
 }
@@ -1612,6 +1618,8 @@
 @media (max-width: 767px) {
   .admin-container { gap: 14px; }
   .admin-panel { min-height: calc(100dvh - 92px); }
+  .admin-state-card { min-height: 84px; margin-top: 18px; padding: 16px; }
+  .admin-panel--loading .admin-state-card { margin-top: 14px; }
   .admin-panel--login { min-height: calc(100dvh - 28px); }
   .admin-toolbar { flex-direction: column; align-items: stretch; }
   .admin-section-nav {

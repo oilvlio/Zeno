@@ -1,4 +1,4 @@
-import { type ComponentType, type CSSProperties, type FormEvent, useEffect, useState } from 'react'
+import { type ComponentType, type CSSProperties, type FormEvent, useEffect, useState, useTransition } from 'react'
 import type { AdminAlertRuleUpdateInput, AdminNodeCreateInput, AdminNodeUpdateInput, AdminNotificationChannelCreateInput, AdminNotificationChannelUpdateInput, AdminProbeTargetInput, AdminProbeTargetUpdateInput, AdminSettingsUpdateInput } from '../../api/adminClient'
 import type { AdminAccountData } from '../../api/adminSession'
 import { DashboardHeader } from '../DashboardHeader'
@@ -21,6 +21,7 @@ export interface AdminDashboardProps {
   settings?: AdminSettings
   chromeSettings?: AdminSettings
   hasAdminToken?: boolean
+  adminSessionReady?: boolean
   authState?: AdminAuthState
   adminState?: AdminLoadState
   showAdminLoading?: boolean
@@ -79,6 +80,7 @@ export function AdminDashboardContainer({
       settings={controller.settings}
       chromeSettings={chromeSettings}
       hasAdminToken={controller.adminToken !== ''}
+      adminSessionReady={controller.adminSessionReady}
       authState={controller.adminAuthState}
       adminState={controller.adminState}
       showAdminLoading={controller.showAdminLoading}
@@ -110,6 +112,7 @@ export function AdminDashboard({
   settings = defaultSettings,
   chromeSettings = settings,
   hasAdminToken = false,
+  adminSessionReady = true,
   authState = { kind: 'idle' },
   adminState = { kind: 'idle' },
   showAdminLoading = false,
@@ -136,6 +139,7 @@ export function AdminDashboard({
   operationalWorkspace,
 }: AdminDashboardProps) {
   const [activeSection, setActiveSection] = useState<AdminSection>(initialSection)
+  const [, startSectionTransition] = useTransition()
   const OperationalWorkspace = operationalWorkspace ?? AdminOperationalWorkspace
   const handleTokenSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -149,7 +153,7 @@ export function AdminDashboard({
 
   return (
     <div className="kulin-container admin-container">
-      <section className={`home-top-card admin-panel${hasAdminToken ? '' : ' admin-panel--login'}`} aria-label="admin dashboard">
+      <section className={`home-top-card admin-panel${!adminSessionReady ? ' admin-panel--loading' : hasAdminToken ? '' : ' admin-panel--login'}`} aria-label="admin dashboard">
         <DashboardHeader
           settings={chromeSettings}
           onHome={onHome}
@@ -161,7 +165,9 @@ export function AdminDashboard({
           backgroundEnabled={backgroundEnabled}
         />
 
-        {!hasAdminToken && (
+        {!adminSessionReady && <div className="admin-state-card">加载中…</div>}
+
+        {adminSessionReady && !hasAdminToken && (
           <form className="admin-login-card" aria-label="admin login form" onSubmit={handleTokenSubmit}>
               <div className="admin-login-title">
                 <strong>后台登录</strong>
@@ -179,12 +185,12 @@ export function AdminDashboard({
           </form>
         )}
 
-        {hasAdminToken && (
+        {adminSessionReady && hasAdminToken && (
           <>
             <div className="admin-toolbar">
               <AdminSectionNav
                 activeSection={activeSection}
-                onSectionChange={setActiveSection}
+                onSectionChange={(section) => startSectionTransition(() => setActiveSection(section))}
               />
             </div>
 

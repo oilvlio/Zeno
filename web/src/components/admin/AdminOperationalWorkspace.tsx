@@ -15,6 +15,10 @@ export interface AdminOperationalWorkspaceRouterProps extends AdminOperationalWo
   sectionComponents?: Partial<AdminOperationalSectionComponents>
 }
 
+function AdminWorkspaceLoading() {
+  return <div className="admin-state-card">加载中…</div>
+}
+
 export function AdminOperationalWorkspace({
   activeSection,
   nodes,
@@ -37,14 +41,14 @@ export function AdminOperationalWorkspace({
 }: AdminOperationalWorkspaceRouterProps) {
   if (activeSection === 'nodes') {
     const NodeWorkspace = sectionComponents?.nodes ?? LazyAdminNodeWorkspace
-    return <Suspense fallback={<div className="admin-state-card">加载中…</div>}><NodeWorkspace nodes={nodes} targets={targets} onCreate={onNodeCreate} onUpdate={onNodeUpdate} onDelete={onNodeDelete} onInstallCommand={onInstallCommand} /></Suspense>
+    return <Suspense fallback={<AdminWorkspaceLoading />}><NodeWorkspace nodes={nodes} targets={targets} onCreate={onNodeCreate} onUpdate={onNodeUpdate} onDelete={onNodeDelete} onInstallCommand={onInstallCommand} /></Suspense>
   }
   if (activeSection === 'targets') {
     const TargetWorkspace = sectionComponents?.targets ?? LazyAdminTargetWorkspace
-    return <Suspense fallback={<div className="admin-state-card">加载中…</div>}><TargetWorkspace targets={targets} nodes={nodes} onCreate={onProbeTargetCreate} onUpdate={onProbeTargetUpdate} onDelete={onProbeTargetDelete} /></Suspense>
+    return <Suspense fallback={<AdminWorkspaceLoading />}><TargetWorkspace targets={targets} nodes={nodes} onCreate={onProbeTargetCreate} onUpdate={onProbeTargetUpdate} onDelete={onProbeTargetDelete} /></Suspense>
   }
   const NotificationsWorkspace = sectionComponents?.notifications ?? LazyAdminNotificationsWorkspace
-  return <Suspense fallback={<div className="admin-state-card">加载中…</div>}><NotificationsWorkspace channels={notificationChannels} rules={alertRules} nodes={nodes} onChannelCreate={onNotificationChannelCreate} onChannelUpdate={onNotificationChannelUpdate} onChannelDelete={onNotificationChannelDelete} onChannelTest={onNotificationChannelTest} onRuleUpdate={onAlertRuleUpdate} /></Suspense>
+  return <Suspense fallback={<AdminWorkspaceLoading />}><NotificationsWorkspace channels={notificationChannels} rules={alertRules} nodes={nodes} onChannelCreate={onNotificationChannelCreate} onChannelUpdate={onNotificationChannelUpdate} onChannelDelete={onNotificationChannelDelete} onChannelTest={onNotificationChannelTest} onRuleUpdate={onAlertRuleUpdate} /></Suspense>
 }
 
 export type { AdminOperationalSection, AdminOperationalWorkspaceProps } from './adminOperationalTypes'

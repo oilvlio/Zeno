@@ -346,6 +346,28 @@ svg { display: block; }
 @media (hover: hover) and (pointer: fine) {
   .home-top-card .nav-icon-button:not(.is-solid):hover:not(:disabled) { background: color-mix(in srgb, var(--control-bg) 84%, var(--blue) 10%); color: var(--blue); }
 }
+.route-state-container { display: flex; flex-direction: column; gap: 24px; }
+.route-state-panel { min-height: 180px; display: flex; flex-direction: column; }
+.route-state-panel.is-admin { min-height: 360px; }
+.route-state-card {
+  min-height: 96px;
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--control-bg);
+  color: var(--muted);
+  font-weight: 500;
+}
+.route-state-card.is-error { color: var(--red); }
+@media (max-width: 767px) {
+  .route-state-container { gap: 14px; }
+  .route-state-panel.is-admin { min-height: calc(100dvh - 92px); }
+  .route-state-card { min-height: 84px; margin-top: 14px; padding: 16px; }
+}
 .home-top-card .home-summary {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));

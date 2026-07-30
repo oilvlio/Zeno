@@ -190,6 +190,15 @@ describe('AdminDashboard', () => {
     expect(html).not.toContain('telegram-bot-secret')
   })
 
+  it('keeps the login form hidden until the HttpOnly cookie session probe finishes', () => {
+    const html = renderToStaticMarkup(<AdminDashboard onHome={() => {}} adminSessionReady={false} />)
+
+    expect(html).toContain('admin-panel admin-panel--loading')
+    expect(html).toContain('class="admin-state-card">加载中…</div>')
+    expect(html).not.toContain('admin-login-card')
+    expect(html).not.toContain('后台登录')
+  })
+
   it('uses the same card shell and opens backend directly on the server list', () => {
     const html = renderAdmin()
 

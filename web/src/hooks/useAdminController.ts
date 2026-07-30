@@ -22,6 +22,7 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
   const adminMutationCoordinatorRef = useRef(createAdminMutationCoordinator<AdminTokenIdentity>(isAdminTokenIdentityCurrent))
   const adminSessionProbeRef = useRef(0)
   const [adminToken, setAdminToken] = useState(loadStoredAdminToken)
+  const [adminSessionReady, setAdminSessionReady] = useState(adminToken !== '')
   const adminTokenRef = useRef(adminToken)
   const [adminAuthState, setAdminAuthState] = useState<AdminAuthState>({ kind: 'idle' })
   const [adminState, dispatchAdminState] = useReducer(adminStateReducer, { kind: 'idle' })
@@ -46,6 +47,9 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
         commitAdminToken(adminCookieSessionMarker)
       })
       .catch(() => {})
+      .finally(() => {
+        if (!cancelled && probe === adminSessionProbeRef.current) setAdminSessionReady(true)
+      })
     return () => { cancelled = true }
   }, [])
 
@@ -333,6 +337,7 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
 
   return {
     adminToken,
+    adminSessionReady,
     adminAuthState,
     adminState,
     showAdminLoading,

@@ -7,8 +7,9 @@ import { describe, expect, it } from 'vitest'
 const stylesDirectory = dirname(fileURLToPath(import.meta.url))
 const baseStyles = readFileSync(join(stylesDirectory, 'styles.css'), 'utf8')
 const detailStyles = readFileSync(join(stylesDirectory, 'styles/detail.css'), 'utf8')
+const adminShellStyles = readFileSync(join(stylesDirectory, 'styles/admin-shell.css'), 'utf8')
 const adminStyles = readFileSync(join(stylesDirectory, 'styles/admin.css'), 'utf8')
-const styles = [baseStyles, detailStyles, adminStyles].join('\n')
+const styles = [baseStyles, detailStyles, adminShellStyles, adminStyles].join('\n')
 
 
 describe('mobile latency target layout', () => {
@@ -43,6 +44,10 @@ describe('route stylesheet boundaries', () => {
   it('keeps heavyweight admin workspace styles out of the public entry stylesheet', () => {
     expect(baseStyles).not.toContain('.admin-modal-backdrop')
     expect(baseStyles).not.toContain('.admin-server-sort-list')
+    expect(adminShellStyles).toContain('.admin-login-card')
+    expect(adminShellStyles).toContain('.admin-state-card')
+    expect(adminShellStyles).not.toContain('.admin-modal-backdrop')
+    expect(adminShellStyles).not.toContain('.admin-server-sort-list')
     expect(adminStyles).toContain('.admin-modal-backdrop')
     expect(adminStyles).toContain('.admin-server-sort-list')
     expect(adminStyles).toContain('@media (max-width: 767px)')
@@ -54,6 +59,18 @@ describe('homepage and admin shell layout', () => {
     expect(styles).toContain('.home-top-card')
     expect(styles).toContain('.home-top-card .kulin-nav')
     expect(styles).toContain('.home-top-card .home-summary')
+  })
+
+  it('keeps route and admin workspace loading cards at one stable destination-aligned position', () => {
+    expect(baseStyles).toContain('.route-state-container { display: flex; flex-direction: column; gap: 24px; }')
+    expect(baseStyles).toMatch(/\.route-state-panel\s*\{[^}]*min-height: 180px;[^}]*display: flex;[^}]*flex-direction: column;[^}]*\}/)
+    expect(baseStyles).toMatch(/\.route-state-card\s*\{[^}]*min-height: 96px;[^}]*margin-top: 18px;[^}]*display: flex;[^}]*gap: 10px;[^}]*padding: 18px 20px;[^}]*border: 1px solid var\(--border\);[^}]*background: var\(--control-bg\);[^}]*\}/)
+    expect(adminShellStyles).toMatch(/\.admin-state-card\s*\{[^}]*min-height: 96px;[^}]*margin-top: 18px;[^}]*display: flex;[^}]*gap: 10px;[^}]*padding: 18px 20px;[^}]*border: 1px solid var\(--border\);[^}]*background: var\(--control-bg\);[^}]*\}/)
+    expect(adminStyles).toMatch(/\.admin-state-card\s*\{[^}]*min-height: 96px;[^}]*margin-top: 18px;[^}]*display: flex;[^}]*gap: 10px;[^}]*padding: 18px 20px;[^}]*border: 1px solid var\(--border\);[^}]*background: var\(--control-bg\);[^}]*\}/)
+    expect(adminShellStyles).toContain('.admin-state-card { min-height: 84px; margin-top: 18px; padding: 16px; }')
+    expect(adminShellStyles).toContain('.admin-panel--loading .admin-state-card { margin-top: 14px; }')
+    expect(adminStyles).toContain('.admin-state-card { min-height: 84px; margin-top: 18px; padding: 16px; }')
+    expect(adminStyles).toContain('.admin-panel--loading .admin-state-card { margin-top: 14px; }')
   })
 
   it('keeps the theme menu above later homepage sections', () => {
