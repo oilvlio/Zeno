@@ -718,7 +718,7 @@ svg { display: block; }
 .usage-row__meta .usage-row__icon { width: 13px; height: 13px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--resource-accent); }
 .usage-row__icon svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; }
 .usage-row__meta strong { color: var(--foreground); font-weight: 500; font-variant-numeric: tabular-nums; }
-.usage-track { position: relative; width: 100%; height: 7px; overflow: hidden; border: 0; border-radius: var(--radius-pill); background: var(--usage-track-bg); }
+.usage-track { position: relative; width: 100%; height: 10px; overflow: hidden; border: 0; border-radius: var(--radius-pill); background: var(--usage-track-bg); }
 .usage-fill { height: 100%; width: 100%; transform-origin: left center; transition: transform 180ms ease; }
 .usage-fill.is-good { background: #22c55e; }
 .usage-fill.is-warning { background: #f59e0b; }
@@ -732,7 +732,7 @@ svg { display: block; }
   gap: 8px;
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -751,7 +751,7 @@ svg { display: block; }
 .node-metric {
   --metric-accent: var(--blue);
   min-width: 0;
-  min-height: 38px;
+  min-height: 40px;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -786,6 +786,7 @@ svg { display: block; }
 .node-health-metric {
   --metric-accent: var(--green);
   min-width: 0;
+  min-height: 40px;
   display: grid;
   grid-template-columns: minmax(108px, auto) minmax(0, 1fr);
   align-items: center;
