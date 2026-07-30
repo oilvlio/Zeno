@@ -83,6 +83,11 @@ function formatCapacity(used: number | null | undefined, total: number | null | 
   return `${formatKulinBytes(used)} / ${formatKulinBytes(total)}`
 }
 
+function formatOnlineDays(uptimeSeconds: number | null | undefined): string {
+  if (uptimeSeconds === null || uptimeSeconds === undefined || !Number.isFinite(uptimeSeconds) || uptimeSeconds < 0) return '在线 -- 天'
+  return `在线 ${Math.floor(uptimeSeconds / 86400)} 天`
+}
+
 function normalizeLoss(value: number | null | undefined): string {
   if (value === null || value === undefined) return '--'
   return `${value.toFixed(2)}%`
@@ -180,12 +185,10 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
   const exchangeRates = normalizeCurrencyRates(inputExchangeRates)
   const renewalCost = formatRenewalCost(node.renewalAmount, node.renewalCurrency, node.billingCycle, displayCurrency, exchangeRates)
   const open = () => onOpen?.(node.id)
-  const visualStatus = node.status === 'online' ? 'online' : 'offline'
-  const isOfflineCard = visualStatus === 'offline'
 
   return (
     <article
-      className={`kulin-node-card${isOfflineCard ? ' is-offline' : ''}`}
+      className="kulin-node-card"
       role={onOpen ? 'link' : undefined}
       tabIndex={onOpen ? 0 : undefined}
       onClick={open}
@@ -203,18 +206,15 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
           <ServerFlag countryCode={node.countryCode} className="node-flag" />
           <p>{node.displayName}</p>
         </div>
-        <span className={`node-status is-${visualStatus}`}>
-          <i className="node-status-dot" aria-hidden="true" />
-          {visualStatus === 'online' ? '在线' : '离线'}
-        </span>
+        <span className="node-uptime">{formatOnlineDays(node.uptimeSeconds)}</span>
       </section>
 
       <section className="node-usage" aria-label={`${node.displayName} usage`}>
         <div className="node-usage-grid">
-          <UsageBar tone="cpu" icon={<CpuIcon />} label="CPU" valueText={`${formatUsage(node.cpuPercent)}%`} detailLabel="负载" detailValue={formatLoad(node.load1, node.load5, node.load15)} percent={node.cpuPercent} />
-          <UsageBar tone="memory" icon={<MemoryIcon />} label="内存" valueText={`${formatUsage(memoryPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.memoryUsedBytes, node.memoryTotalBytes)} percent={memoryPercent} />
-          <UsageBar tone="disk" icon={<DiskIcon />} label="存储" valueText={`${formatUsage(diskPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.diskUsedBytes, node.diskTotalBytes)} percent={diskPercent} />
-          <UsageBar tone="traffic" icon={<TrafficIcon />} label={formatTrafficLabel()} valueText={`${formatUsage(trafficPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.monthlyBillableBytes, node.monthlyQuotaBytes)} percent={trafficPercent} />
+          <UsageBar tone="cpu" icon={<CpuIcon />} label="CPU" valueText={`${formatUsage(node.cpuPercent)}%`} detailValue={formatLoad(node.load1, node.load5, node.load15)} percent={node.cpuPercent} />
+          <UsageBar tone="memory" icon={<MemoryIcon />} label="内存" valueText={`${formatUsage(memoryPercent)}%`} detailValue={formatCapacity(node.memoryUsedBytes, node.memoryTotalBytes)} percent={memoryPercent} />
+          <UsageBar tone="disk" icon={<DiskIcon />} label="存储" valueText={`${formatUsage(diskPercent)}%`} detailValue={formatCapacity(node.diskUsedBytes, node.diskTotalBytes)} percent={diskPercent} />
+          <UsageBar tone="traffic" icon={<TrafficIcon />} label={formatTrafficLabel()} valueText={`${formatUsage(trafficPercent)}%`} detailValue={formatCapacity(node.monthlyBillableBytes, node.monthlyQuotaBytes)} percent={trafficPercent} />
         </div>
         <section className="node-footer-grid" aria-label={`${node.displayName} network and billing`}>
           <Metric tone="up" icon={<UploadIcon />} label="上传" value={formatRate(node.netOutSpeedBps)} />
@@ -233,7 +233,7 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
 
 type ResourceTone = 'cpu' | 'memory' | 'disk' | 'traffic'
 
-function UsageBar({ tone, icon, label, valueText, detailLabel, detailValue, percent }: { tone: ResourceTone; icon: ReactNode; label: string; valueText: string; detailLabel: string; detailValue: string; percent: number | null | undefined }) {
+function UsageBar({ tone, icon, label, valueText, detailValue, percent }: { tone: ResourceTone; icon: ReactNode; label: string; valueText: string; detailValue: string; percent: number | null | undefined }) {
   const value = clampPercent(percent)
   return (
     <div className={`usage-row usage-row--${tone}`}>
@@ -247,10 +247,7 @@ function UsageBar({ tone, icon, label, valueText, detailLabel, detailValue, perc
       <div className="usage-track" role="progressbar" aria-label={`${label} usage`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}>
         <div className={`usage-fill is-${barTone(percent)}`} style={{ transform: `translateX(-${100 - value}%)` }} />
       </div>
-      <small className="usage-row__detail">
-        <span>{detailLabel}</span>
-        <span>{detailValue}</span>
-      </small>
+      <small className="usage-row__detail">{detailValue}</small>
     </div>
   )
 }

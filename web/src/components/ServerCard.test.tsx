@@ -33,6 +33,7 @@ const baseNode: HomeCardNode = {
   netOutSpeedBps: 256,
   netInTotalBytes: 1024,
   netOutTotalBytes: 2048,
+  uptimeSeconds: 262800,
   monthlyBillableBytes: 1024,
   monthlyQuotaBytes: 4096,
   latencySummary: {
@@ -47,28 +48,29 @@ const baseNode: HomeCardNode = {
 }
 
 describe('ServerCard', () => {
-  it('renders non-online nodes as frozen metric cards with a concise offline status', () => {
+  it('keeps non-online nodes in the normal card style and shows uptime days', () => {
     const html = renderToStaticMarkup(
       <ServerCard node={{ ...baseNode, status: 'warning' }} onOpen={vi.fn()} />,
     )
 
-    expect(html).toContain('kulin-node-card is-offline')
+    expect(html).toContain('class="kulin-node-card"')
     expect(html).toContain('node-head')
     expect(html).toContain('node-usage-grid')
     expect(html).not.toContain('node-specs')
     expect(html).toContain('<p>Example Node A</p>')
-    expect(html).not.toContain('node-offline-watermark')
-    expect(html).toContain('node-status is-offline')
-    expect(html).toContain('node-status-dot')
-    expect(html).toContain('>离线</span>')
+    expect(html).toContain('class="node-uptime">在线 3 天</span>')
+    expect(html).not.toContain('is-offline')
+    expect(html).not.toContain('node-status')
+    expect(html).not.toContain('node-status-dot')
+    expect(html).not.toContain('>离线</span>')
   })
 
-  it('shows a green concise online status in the card header', () => {
-    const html = renderToStaticMarkup(<ServerCard node={baseNode} onOpen={vi.fn()} />)
+  it('keeps an online uptime placeholder without colored status dots when uptime is unavailable', () => {
+    const html = renderToStaticMarkup(<ServerCard node={{ ...baseNode, uptimeSeconds: null }} onOpen={vi.fn()} />)
 
-    expect(html).toContain('node-status is-online')
-    expect(html).toContain('node-status-dot')
-    expect(html).toContain('>在线</span>')
+    expect(html).toContain('class="node-uptime">在线 -- 天</span>')
+    expect(html).not.toContain('node-status-dot')
+    expect(html).not.toContain('>离线</span>')
   })
 
   it('lays out four resource bars as CPU-memory then disk-traffic with details below each bar', () => {
@@ -85,14 +87,14 @@ describe('ServerCard', () => {
     expect(html).toContain('usage-row--traffic')
     expect(html.match(/class="usage-row__icon"/g)).toHaveLength(4)
     expect(html).toMatch(/>CPU<\/span>[\s\S]*<strong>12.50%<\/strong>[\s\S]*>内存<\/span>[\s\S]*<strong>25.00%<\/strong>[\s\S]*>存储<\/span>[\s\S]*<strong>25.00%<\/strong>[\s\S]*>流量<\/span>[\s\S]*<strong>25.00%<\/strong>/)
-    expect(html).toContain('>负载</span>')
-    expect(html).toContain('>0.42 / 0.35 / 0.28</span>')
-    expect(html.match(/>占用<\/span>/g)).toHaveLength(3)
+    expect(html).not.toContain('>负载<')
+    expect(html).not.toContain('>占用<')
+    expect(html).toContain('class="usage-row__detail">0.42 / 0.35 / 0.28</small>')
     expect(html).toContain('1.00 KB / 4.00 KB')
     expect(html).toContain('2.00 KB / 8.00 KB')
   })
 
-  it('uses a compact two-column grid for upload, download, expiry and billing', () => {
+  it('uses compact individual frames for upload, download, expiry and billing', () => {
     const html = renderToStaticMarkup(
       <ServerCard node={{ ...baseNode, renewalAmount: 20, renewalCurrency: 'USD', billingCycle: '年' }} displayCurrency="CNY" exchangeRates={{ CNY: 1, USD: 8 }} onOpen={vi.fn()} />,
     )
@@ -106,7 +108,7 @@ describe('ServerCard', () => {
     expect(html).toMatch(/metric-down[\s\S]*>下载<\/span>[\s\S]*>128 B\/s<\/strong>/)
   })
 
-  it('renders latency and packet loss in one grouped frame with twelve hourly cells each', () => {
+  it('renders latency and packet loss in separate compact frames with twelve hourly cells each', () => {
     const html = renderToStaticMarkup(<ServerCard node={baseNode} onOpen={vi.fn()} />)
 
     expect(html).toMatch(/class="node-health-history"[\s\S]*health-latency[\s\S]*health-loss/)
