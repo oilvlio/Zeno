@@ -24,6 +24,12 @@ export interface AdminSettings {
   updatedAt?: string
 }
 
+export interface HourlyLatencyPoint {
+  startedAt: string
+  latencyMs: number | null
+  lossPercent: number | null
+}
+
 export interface LatencySummary {
   targetId: string
   targetName: string
@@ -31,6 +37,7 @@ export interface LatencySummary {
   avgMs?: number | null
   lossPercent: number | null
   updatedAt: string
+  hourlyHistory?: HourlyLatencyPoint[]
 }
 
 export interface HomeCardNode {

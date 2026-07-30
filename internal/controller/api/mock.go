@@ -53,10 +53,29 @@ func mockCPUModel(osName string, cores float64) string {
 	return "Intel Xeon Virtual CPU"
 }
 
+func mockHourlyLatencyHistory(latency, loss *float64) []HourlyLatencyPoint {
+	start := time.Date(2026, 7, 2, 2, 0, 0, 0, time.UTC)
+	latencyScale := []float64{0.72, 0.84, 0.93, 1.08, 1.22, 0.96, 1.42, 1.16, 0.88, 1.31, 1.04, 1}
+	lossOffset := []float64{0, 0.1, 0, 0.35, 1.2, 0.05, 3.8, 0.2, 0, 1.6, 0.1, 0}
+	history := make([]HourlyLatencyPoint, homeLatencyHistoryBucketCount)
+	for index := range history {
+		history[index].StartedAt = start.Add(time.Duration(index) * time.Hour).Format(time.RFC3339)
+		if latency != nil {
+			value := *latency * latencyScale[index]
+			history[index].LatencyMS = &value
+		}
+		if loss != nil {
+			value := *loss + lossOffset[index]
+			history[index].LossPercent = &value
+		}
+	}
+	return history
+}
+
 func mockNode(id, name, osName, countryCode string, cores float64, expiry string, cpuPercent float64, memoryTotal *float64, memoryPercent float64, diskTotal *float64, diskPercent float64, monthlyBillable, monthlyQuota, netOutSpeed, netInSpeed *float64, latency, loss *float64) Node {
 	var latencySummary *LatencySummary
 	if latency != nil || loss != nil {
-		latencySummary = &LatencySummary{TargetID: "default", TargetName: "Default", MedianMS: latency, AvgMS: latency, LossPercent: loss, UpdatedAt: "2026-07-02T12:10:00Z"}
+		latencySummary = &LatencySummary{TargetID: "default", TargetName: "Default", MedianMS: latency, AvgMS: latency, LossPercent: loss, UpdatedAt: "2026-07-02T12:10:00Z", HourlyHistory: mockHourlyLatencyHistory(latency, loss)}
 	}
 	return Node{
 		ID:                   id,
@@ -71,7 +90,13 @@ func mockNode(id, name, osName, countryCode string, cores float64, expiry string
 		CountryCode:          countryCode,
 		CPUCores:             ptr(cores),
 		ExpiryLabel:          expiry,
+		RenewalAmount:        ptr(5 + cores*2.5),
+		RenewalCurrency:      "USD",
+		BillingCycle:         "月",
 		CPUPercent:           ptr(cpuPercent),
+		Load1:                ptr(cpuPercent * cores / 100),
+		Load5:                ptr(cpuPercent * cores / 125),
+		Load15:               ptr(cpuPercent * cores / 150),
 		MemoryUsedBytes:      used(memoryTotal, memoryPercent),
 		MemoryTotalBytes:     memoryTotal,
 		DiskUsedBytes:        used(diskTotal, diskPercent),

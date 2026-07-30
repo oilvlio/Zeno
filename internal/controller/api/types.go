@@ -70,12 +70,19 @@ type Node struct {
 }
 
 type LatencySummary struct {
-	TargetID    string   `json:"target_id"`
-	TargetName  string   `json:"target_name"`
-	MedianMS    *float64 `json:"median_ms"`
-	AvgMS       *float64 `json:"avg_ms"`
+	TargetID      string               `json:"target_id"`
+	TargetName    string               `json:"target_name"`
+	MedianMS      *float64             `json:"median_ms"`
+	AvgMS         *float64             `json:"avg_ms"`
+	LossPercent   *float64             `json:"loss_percent"`
+	UpdatedAt     string               `json:"updated_at"`
+	HourlyHistory []HourlyLatencyPoint `json:"hourly_history,omitempty"`
+}
+
+type HourlyLatencyPoint struct {
+	StartedAt   string   `json:"started_at"`
+	LatencyMS   *float64 `json:"latency_ms"`
 	LossPercent *float64 `json:"loss_percent"`
-	UpdatedAt   string   `json:"updated_at"`
 }
 
 type LatencyPoint struct {

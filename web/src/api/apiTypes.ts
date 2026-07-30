@@ -22,6 +22,12 @@ export interface ApiSettings {
   updated_at?: string
 }
 
+export interface ApiHourlyLatencyPoint {
+  started_at: string
+  latency_ms: number | null
+  loss_percent: number | null
+}
+
 export interface ApiLatencySummary {
   target_id: string
   target_name: string
@@ -29,6 +35,7 @@ export interface ApiLatencySummary {
   avg_ms: number | null
   loss_percent: number | null
   updated_at: string
+  hourly_history?: ApiHourlyLatencyPoint[] | null
 }
 
 export interface ApiNode {

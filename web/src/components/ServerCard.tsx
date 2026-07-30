@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { HomeCardNode } from '../types'
+import type { HomeCardNode, HourlyLatencyPoint } from '../types'
 import { formatLatency } from '../lib/format'
 import { convertCurrencyAmount, formatCurrencyAmount, normalizeCurrencyCode, normalizeCurrencyRates, type CurrencyCode, type CurrencyRates } from '../lib/currency'
 import { ServerFlag } from './ServerFlag'
@@ -49,7 +49,7 @@ function barTone(value: number | null | undefined): 'good' | 'warning' | 'danger
   return 'good'
 }
 
-function formatKulinBytes(value: number | null | undefined, options: { compact?: boolean } = {}): string {
+function formatKulinBytes(value: number | null | undefined): string {
   if (value === null || value === undefined) return '--'
   if (value === 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
@@ -61,8 +61,7 @@ function formatKulinBytes(value: number | null | undefined, options: { compact?:
   }
   const signed = value < 0 ? -size : size
   const digits = unit === 0 ? 0 : 2
-  const joiner = options.compact ? '' : ' '
-  return `${signed.toFixed(digits)}${joiner}${units[unit]}`
+  return `${signed.toFixed(digits)} ${units[unit]}`
 }
 
 function formatRate(value: number | null | undefined): string {
@@ -70,19 +69,60 @@ function formatRate(value: number | null | undefined): string {
   return `${formatKulinBytes(value)}/s`
 }
 
-function formatCores(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '-- Cores'
-  return `${value.toFixed(value % 1 === 0 ? 0 : 1)} ${value === 1 ? 'Core' : 'Cores'}`
-}
-
 function formatUsage(value: number | null | undefined): string {
   if (value === null || value === undefined) return '--'
   return value.toFixed(2)
 }
 
+function formatLoad(...values: Array<number | null | undefined>): string {
+  const formatted = values.map((value) => value === null || value === undefined ? '--' : value.toFixed(2))
+  return formatted.join(' / ')
+}
+
+function formatCapacity(used: number | null | undefined, total: number | null | undefined): string {
+  return `${formatKulinBytes(used)} / ${formatKulinBytes(total)}`
+}
+
 function normalizeLoss(value: number | null | undefined): string {
   if (value === null || value === undefined) return '--'
   return `${value.toFixed(2)}%`
+}
+
+type HistoryKind = 'latency' | 'loss'
+type HistoryTone = 'good' | 'warning' | 'danger' | 'empty'
+
+function normalizeHourlyHistory(history: HourlyLatencyPoint[] | null | undefined): HourlyLatencyPoint[] {
+  const values = (history ?? []).slice(-12)
+  return [
+    ...Array.from({ length: Math.max(0, 12 - values.length) }, () => ({ startedAt: '', latencyMs: null, lossPercent: null })),
+    ...values,
+  ]
+}
+
+function historyTone(kind: HistoryKind, value: number | null | undefined): HistoryTone {
+  if (value === null || value === undefined || !Number.isFinite(value)) return 'empty'
+  if (kind === 'latency') {
+    if (value >= 150) return 'danger'
+    if (value >= 80) return 'warning'
+    return 'good'
+  }
+  if (value >= 5) return 'danger'
+  if (value >= 1) return 'warning'
+  return 'good'
+}
+
+function historyTimestamp(value: string): string {
+  const parsed = new Date(value)
+  if (value.trim() === '' || Number.isNaN(parsed.getTime())) return '暂无数据'
+  return parsed.toISOString().slice(0, 13).replace('T', ' ') + ':00'
+}
+
+function historyTitle(kind: HistoryKind, point: HourlyLatencyPoint): string {
+  const value = kind === 'latency' ? point.latencyMs : point.lossPercent
+  const label = kind === 'latency' ? '延迟' : '丢包'
+  const suffix = kind === 'latency' ? 'ms' : '%'
+  const separator = kind === 'latency' && value !== null && value !== undefined ? ' ' : ''
+  return `${historyTimestamp(point.startedAt)} · ${label} ${value === null || value === undefined ? '--' : value.toFixed(2)}${separator}${suffix}`
 }
 
 function formatTrafficLabel(): string {
@@ -114,6 +154,11 @@ function expiryBadge(expiryLabel: string | null | undefined): { text: string; to
   return { text: `余 ${days} 天`, tone: 'safe' }
 }
 
+function expiryMetricValue(expiry: ReturnType<typeof expiryBadge>): string {
+  if (!expiry) return '--'
+  return expiry.text.replace(/^余\s*/, '')
+}
+
 function formatRenewalCost(amount: number | null | undefined, currency: string | null | undefined, cycle: string | null | undefined, displayCurrency: CurrencyCode, exchangeRates: CurrencyRates): string | null {
   if (amount === null || amount === undefined || !Number.isFinite(amount) || amount <= 0) return null
   const sourceCurrency = normalizeCurrencyCode(currency)
@@ -129,6 +174,7 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
   const diskPercent = ratio(node.diskUsedBytes, node.diskTotalBytes)
   const trafficPercent = ratio(node.monthlyBillableBytes, node.monthlyQuotaBytes)
   const latency = node.latencySummary
+  const hourlyHistory = normalizeHourlyHistory(latency?.hourlyHistory)
   const expiry = expiryBadge(node.expiryLabel)
   const exchangeRates = normalizeCurrencyRates(inputExchangeRates)
   const renewalCost = formatRenewalCost(node.renewalAmount, node.renewalCurrency, node.billingCycle, displayCurrency, exchangeRates)
@@ -156,75 +202,105 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
           <ServerFlag countryCode={node.countryCode} className="node-flag" />
           <p>{node.displayName}</p>
         </div>
-        {expiry && (
-          <div className="node-expiry-meta">
-            <span className={`node-expiry is-${expiry.tone}`}>{expiry.text}</span>
-          </div>
-        )}
-        <div className="node-renewal-slot">
-          {renewalCost && <span className="node-renewal-cost" title={renewalCost}>{renewalCost}</span>}
-        </div>
-      </section>
-
-      <section className="node-specs" aria-label={`${node.displayName} specs`}>
-        <SpecIcon kind="cpu" label={formatCores(node.cpuCores)} />
-        <SpecIcon kind="memory" label={formatKulinBytes(node.memoryTotalBytes)} />
-        <SpecIcon kind="disk" label={formatKulinBytes(node.diskTotalBytes)} />
+        <span className={`node-status is-${visualStatus}`}>
+          <i className="node-status-dot" aria-hidden="true" />
+          {visualStatus === 'online' ? '在线' : '离线'}
+        </span>
       </section>
 
       <section className="node-usage" aria-label={`${node.displayName} usage`}>
-        <UsageBar label="CPU" valueText={`${formatUsage(node.cpuPercent)}%`} percent={node.cpuPercent} />
-        <div className="node-usage-rest">
-          <UsageBar label="内存" valueText={`${formatUsage(memoryPercent)}%`} percent={memoryPercent} />
-          <UsageBar label="存储" valueText={`${formatUsage(diskPercent)}%`} percent={diskPercent} />
-          <UsageBar label={formatTrafficLabel()} valueText={`${formatKulinBytes(node.monthlyBillableBytes, { compact: true })} / ${formatKulinBytes(node.monthlyQuotaBytes, { compact: true })}`} percent={trafficPercent} />
-          <section className="node-footer-grid" aria-label={`${node.displayName} network and latency`}>
-            <Metric tone="up" icon={<UploadIcon />} label="上传" value={formatRate(node.netOutSpeedBps)} />
-            <Metric tone="down" icon={<DownloadIcon />} label="下载" value={formatRate(node.netInSpeedBps)} />
-            <Metric tone="latency" icon={<ActivityIcon />} label="延迟" value={latency?.avgMs != null ? formatLatency(latency.avgMs) : '--ms'} />
-            <Metric tone="loss" icon={<TriangleAlertIcon />} label="丢包率" value={latency ? normalizeLoss(latency.lossPercent) : '--%'} />
-          </section>
+        <div className="node-usage-grid">
+          <UsageBar icon={<CpuIcon />} label="CPU" valueText={`${formatUsage(node.cpuPercent)}%`} detailLabel="负载" detailValue={formatLoad(node.load1, node.load5, node.load15)} percent={node.cpuPercent} />
+          <UsageBar label="内存" valueText={`${formatUsage(memoryPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.memoryUsedBytes, node.memoryTotalBytes)} percent={memoryPercent} />
+          <UsageBar label="存储" valueText={`${formatUsage(diskPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.diskUsedBytes, node.diskTotalBytes)} percent={diskPercent} />
+          <UsageBar label={formatTrafficLabel()} valueText={`${formatUsage(trafficPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.monthlyBillableBytes, node.monthlyQuotaBytes)} percent={trafficPercent} />
         </div>
+        <section className="node-footer-grid" aria-label={`${node.displayName} network and billing`}>
+          <Metric tone="up" icon={<UploadIcon />} label="上传" value={formatRate(node.netOutSpeedBps)} />
+          <Metric tone="down" icon={<DownloadIcon />} label="下载" value={formatRate(node.netInSpeedBps)} />
+          <Metric tone="expiry" stateTone={expiry?.tone} icon={<CalendarIcon />} label="剩余" value={expiryMetricValue(expiry)} />
+          <Metric tone="billing" icon={<WalletIcon />} label="账单" value={renewalCost ?? '--'} />
+        </section>
+        <section className="node-health-history" aria-label={`${node.displayName} latency and packet loss history`}>
+          <HealthHistoryRow kind="latency" icon={<ActivityIcon />} label="延迟" value={latency?.avgMs != null ? formatLatency(latency.avgMs) : '--ms'} points={hourlyHistory} />
+          <HealthHistoryRow kind="loss" icon={<TriangleAlertIcon />} label="丢包率" value={latency ? normalizeLoss(latency.lossPercent) : '--%'} points={hourlyHistory} />
+        </section>
       </section>
     </article>
   )
 }
 
-function UsageBar({ label, valueText, percent }: { label: string; valueText: string; percent: number | null | undefined }) {
+function UsageBar({ icon, label, valueText, detailLabel, detailValue, percent }: { icon?: ReactNode; label: string; valueText: string; detailLabel: string; detailValue: string; percent: number | null | undefined }) {
   const value = clampPercent(percent)
   return (
     <div className="usage-row">
       <div className="usage-row__meta">
-        <span>{label}</span>
+        <span className="usage-row__label">
+          {icon && <span className="usage-row__icon">{icon}</span>}
+          <span>{label}</span>
+        </span>
         <strong>{valueText}</strong>
       </div>
-      <div className="usage-track" role="progressbar" aria-label="Server Usage Bar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}>
+      <div className="usage-track" role="progressbar" aria-label={`${label} usage`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}>
         <div className={`usage-fill is-${barTone(percent)}`} style={{ transform: `translateX(-${100 - value}%)` }} />
+      </div>
+      <small className="usage-row__detail">
+        <span>{detailLabel}</span>
+        <span>{detailValue}</span>
+      </small>
+    </div>
+  )
+}
+
+type MetricTone = 'up' | 'down' | 'expiry' | 'billing'
+type ExpiryTone = 'safe' | 'soon' | 'urgent' | 'expired'
+
+function HealthHistoryRow({ kind, icon, label, value, points }: { kind: HistoryKind; icon: ReactNode; label: string; value: string; points: HourlyLatencyPoint[] }) {
+  return (
+    <div className={`node-health-metric health-${kind}`}>
+      <div className="health-history-heading">
+        <span className="metric-heading">
+          <span className="metric-icon">{icon}</span>
+          <span className="metric-label">{label}</span>
+        </span>
+        <strong>{value}</strong>
+      </div>
+      <div className="health-history-strip" aria-label={`${label} 12小时趋势`}>
+        {points.map((point, index) => {
+          const metricValue = kind === 'latency' ? point.latencyMs : point.lossPercent
+          return (
+            <span
+              key={`${point.startedAt || 'empty'}-${index}`}
+              className={`history-cell history-${kind} is-${historyTone(kind, metricValue)}`}
+              title={historyTitle(kind, point)}
+              aria-label={historyTitle(kind, point)}
+            />
+          )
+        })}
       </div>
     </div>
   )
 }
 
-function Metric({ tone, icon, label, value }: { tone: 'up' | 'down' | 'latency' | 'loss'; icon: ReactNode; label: string; value: string }) {
+function Metric({ tone, stateTone, icon, label, value }: { tone: MetricTone; stateTone?: ExpiryTone; icon: ReactNode; label: string; value: string }) {
   return (
-    <div className={`node-metric metric-${tone}`}>
-      <span className="metric-icon">{icon}</span>
-      <span className="metric-label">{label}</span>
+    <div className={`node-metric metric-${tone}${stateTone ? ` is-${stateTone}` : ''}`}>
+      <span className="metric-heading">
+        <span className="metric-icon">{icon}</span>
+        <span className="metric-label">{label}</span>
+      </span>
       <strong>{value}</strong>
     </div>
   )
 }
 
-function SpecIcon({ kind, label }: { kind: 'cpu' | 'memory' | 'disk'; label: string }) {
+function CpuIcon() {
   return (
-    <div className={`node-spec spec-${kind}`}>
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        {kind === 'cpu' && <><rect x="5" y="5" width="14" height="14" rx="2" /><rect x="9" y="9" width="6" height="6" rx="1" /><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3" /></>}
-        {kind === 'memory' && <><rect x="3" y="7" width="18" height="10" rx="2" /><path d="M7 11v2M11 11v2M15 11v2M19 11v2M5 17v3M9 17v3M15 17v3M19 17v3" /></>}
-        {kind === 'disk' && <><path d="M5 5h14l3 7v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5l3-7Z" /><path d="M3 12h18" /><circle cx="7" cy="16" r="1" /><circle cx="11" cy="16" r="1" /></>}
-      </svg>
-      <span>{label}</span>
-    </div>
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+      <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
+      <rect x="9" y="9" width="6" height="6" rx="1" />
+    </svg>
   )
 }
 
@@ -262,6 +338,24 @@ function TriangleAlertIcon() {
       <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
       <path d="M12 9v4" />
       <path d="M12 17h.01" />
+    </svg>
+  )
+}
+
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 2v4M16 2v4M3 9h18" />
+      <rect x="3" y="4" width="18" height="17" rx="2" />
+    </svg>
+  )
+}
+
+function WalletIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20 7V6a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h15v10H5a3 3 0 0 1-3-3V7" />
+      <path d="M16 14h4" />
     </svg>
   )
 }

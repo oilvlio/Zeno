@@ -74,6 +74,54 @@ func TestSummaryBatchQueriesMatchLegacySemantics(t *testing.T) {
 	}
 }
 
+func TestSummaryIncludesTwelveHourlyHomeLatencyBuckets(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+
+	now := time.Now().UTC()
+	bucketStart := now.Truncate(time.Hour).Add(-3 * time.Hour)
+	seedSummaryNode(t, store, "node-history", "History Node", "target-history", 1, false, now)
+	seedSummaryTarget(t, store, "target-history", "History Target", "tcp", "1.1.1.1", 1, now)
+	seedSummaryAssignment(t, store, "node-history", "target-history", true)
+	seedSummaryRound(t, store, "node-history", "target-history", bucketStart.Add(10*time.Minute), 2, float64Ptr(40), float64Ptr(30))
+	seedSummaryRound(t, store, "node-history", "target-history", bucketStart.Add(20*time.Minute), 4, float64Ptr(60), float64Ptr(50))
+
+	summary, err := store.Summary(ctx)
+	if err != nil {
+		t.Fatalf("summary: %v", err)
+	}
+	if len(summary.Nodes) != 1 || summary.Nodes[0].LatencySummary == nil {
+		t.Fatalf("summary node latency = %#v", summary.Nodes)
+	}
+	history := summary.Nodes[0].LatencySummary.HourlyHistory
+	if len(history) != 12 {
+		t.Fatalf("hourly history len = %d, want 12", len(history))
+	}
+	var matched *HourlyLatencyPoint
+	for index := range history {
+		if history[index].StartedAt == bucketStart.Format(time.RFC3339) {
+			matched = &history[index]
+			break
+		}
+	}
+	if matched == nil {
+		t.Fatalf("missing bucket %s in %#v", bucketStart.Format(time.RFC3339), history)
+	}
+	if matched.LatencyMS == nil || *matched.LatencyMS != 50 {
+		t.Fatalf("bucket latency = %v, want 50", matched.LatencyMS)
+	}
+	if matched.LossPercent == nil || *matched.LossPercent != 3 {
+		t.Fatalf("bucket loss = %v, want 3", matched.LossPercent)
+	}
+	if history[0].LatencyMS != nil || history[0].LossPercent != nil {
+		t.Fatalf("empty bucket should remain nil: %#v", history[0])
+	}
+}
+
 func TestSummaryQueryCountDoesNotGrowWithNodesOrServices(t *testing.T) {
 	ctx := context.Background()
 	smallStore, smallCounter := openCountingSummaryStore(t)
@@ -97,8 +145,8 @@ func TestSummaryQueryCountDoesNotGrowWithNodesOrServices(t *testing.T) {
 	if smallQueries != largeQueries {
 		t.Fatalf("summary query count grew with fixture size: small=%d large=%d", smallQueries, largeQueries)
 	}
-	if smallQueries != 6 {
-		t.Fatalf("summary query count = %d, want fixed 6 statements (nodes, home summaries, per-node summaries, service list, service summaries, exchange rates)", smallQueries)
+	if smallQueries != 7 {
+		t.Fatalf("summary query count = %d, want fixed 7 statements (nodes, home summaries, home history, per-node summaries, service list, service summaries, exchange rates)", smallQueries)
 	}
 
 	largeCounter.reset()
@@ -116,8 +164,8 @@ func TestSummaryQueryCountDoesNotGrowWithNodesOrServices(t *testing.T) {
 	if _, err := largeStore.Summary(ctx); err != nil {
 		t.Fatalf("expired large summary: %v", err)
 	}
-	if expiredQueries := largeCounter.count(); expiredQueries != 6 {
-		t.Fatalf("expired summary query count = %d, want full 6 statements", expiredQueries)
+	if expiredQueries := largeCounter.count(); expiredQueries != 7 {
+		t.Fatalf("expired summary query count = %d, want full 7 statements", expiredQueries)
 	}
 }
 
@@ -130,7 +178,7 @@ func TestSummaryAggregateDirtyMarkDoesNotBlockInflightSQLAndOldGenerationDoesNot
 	oldRelease := make(chan struct{})
 	newStarted := make(chan struct{})
 	newRelease := make(chan struct{})
-	const homeAggregateQuery = "WITH eligible_nodes AS"
+	const homeAggregateQuery = "loss_by_node AS"
 	counter.blockQuery(homeAggregateQuery, oldStarted, oldRelease)
 	counter.blockQuery(homeAggregateQuery, newStarted, newRelease)
 
@@ -194,8 +242,8 @@ func TestSummaryAggregatesContinuousInvalidationReturnsAfterBoundedRetry(t *test
 	firstRelease := make(chan struct{})
 	secondStarted := make(chan struct{})
 	secondRelease := make(chan struct{})
-	counter.blockQuery("WITH eligible_nodes AS", firstStarted, firstRelease)
-	counter.blockQuery("WITH eligible_nodes AS", secondStarted, secondRelease)
+	counter.blockQuery("loss_by_node AS", firstStarted, firstRelease)
+	counter.blockQuery("loss_by_node AS", secondStarted, secondRelease)
 
 	done := make(chan error, 1)
 	go func() {
@@ -243,7 +291,7 @@ func TestAgentProbeResults202DoesNotWaitForInflightAggregateSQL(t *testing.T) {
 
 	aggregateStarted := make(chan struct{})
 	aggregateRelease := make(chan struct{})
-	counter.blockQuery("WITH eligible_nodes AS", aggregateStarted, aggregateRelease)
+	counter.blockQuery("loss_by_node AS", aggregateStarted, aggregateRelease)
 	aggregateDone := make(chan error, 1)
 	go func() {
 		_, _, _, err := store.summaryAggregates(context.Background())
@@ -313,8 +361,8 @@ func TestSummaryAggregateDirtyMarkRetainsBoundedSnapshot(t *testing.T) {
 	if _, _, _, err := store.summaryAggregates(context.Background()); err != nil {
 		t.Fatalf("dirty aggregate after rebuild window: %v", err)
 	}
-	if queries := counter.count(); queries != 4 {
-		t.Fatalf("expired dirty aggregate queries = %d, want one four-statement rebuild", queries)
+	if queries := counter.count(); queries != 5 {
+		t.Fatalf("expired dirty aggregate queries = %d, want one five-statement rebuild", queries)
 	}
 }
 
@@ -345,8 +393,8 @@ func TestSummaryAggregatesSingleflightConcurrentExpiredCache(t *testing.T) {
 			t.Fatalf("concurrent aggregate: %v", err)
 		}
 	}
-	if queries := counter.count(); queries != 4 {
-		t.Fatalf("concurrent aggregate queries = %d, want one four-statement build", queries)
+	if queries := counter.count(); queries != 5 {
+		t.Fatalf("concurrent aggregate queries = %d, want one five-statement build", queries)
 	}
 }
 
@@ -355,10 +403,22 @@ func legacySummaryForTest(ctx context.Context, store *SQLiteStore) (SummaryRespo
 	if err != nil {
 		return SummaryResponse{}, err
 	}
+	now := time.Now().UTC()
+	historyByNode, err := store.homeLatencyHourlyHistory(ctx, now)
+	if err != nil {
+		return SummaryResponse{}, err
+	}
 	for index := range nodes {
 		summary, err := store.latestLatencySummary(ctx, nodes[index].ID)
 		if err != nil {
 			return SummaryResponse{}, err
+		}
+		if summary != nil {
+			if history, ok := historyByNode[nodes[index].ID]; ok {
+				summary.HourlyHistory = history
+			} else {
+				summary.HourlyHistory = emptyHourlyLatencyHistory(now)
+			}
 		}
 		nodes[index].LatencySummary = summary
 		latencySummaries, err := store.latestLatencySummaries(ctx, nodes[index].ID)

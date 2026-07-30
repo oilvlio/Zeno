@@ -253,7 +253,8 @@ func (s *SQLiteStore) latestLatencySummaries(ctx context.Context, nodeID string)
 }
 
 func (s *SQLiteStore) latestHomeLatencySummaries(ctx context.Context) (map[string]*LatencySummary, error) {
-	since := time.Now().UTC().Add(-24 * time.Hour).Unix()
+	now := time.Now().UTC()
+	since := now.Add(-24 * time.Hour).Unix()
 	rows, err := s.db.QueryContext(ctx, `
 		WITH eligible_nodes AS (
 			SELECT n.id AS node_id, TRIM(n.home_probe_target_id) AS target_id
@@ -316,7 +317,101 @@ func (s *SQLiteStore) latestHomeLatencySummaries(ctx context.Context) (map[strin
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	historyByNode, err := s.homeLatencyHourlyHistory(ctx, now)
+	if err != nil {
+		return nil, err
+	}
+	for nodeID, summary := range summaries {
+		if history, ok := historyByNode[nodeID]; ok {
+			summary.HourlyHistory = history
+		} else {
+			summary.HourlyHistory = emptyHourlyLatencyHistory(now)
+		}
+	}
 	return summaries, nil
+}
+
+const homeLatencyHistoryBucketCount = 12
+
+func homeLatencyHistoryBounds(now time.Time) (time.Time, time.Time) {
+	end := now.UTC().Truncate(time.Hour)
+	return end.Add(-time.Duration(homeLatencyHistoryBucketCount-1) * time.Hour), end
+}
+
+func emptyHourlyLatencyHistory(now time.Time) []HourlyLatencyPoint {
+	start, _ := homeLatencyHistoryBounds(now)
+	history := make([]HourlyLatencyPoint, homeLatencyHistoryBucketCount)
+	for index := range history {
+		history[index].StartedAt = start.Add(time.Duration(index) * time.Hour).Format(time.RFC3339)
+	}
+	return history
+}
+
+func (s *SQLiteStore) homeLatencyHourlyHistory(ctx context.Context, now time.Time) (map[string][]HourlyLatencyPoint, error) {
+	start, end := homeLatencyHistoryBounds(now)
+	const stepSeconds int64 = int64(time.Hour / time.Second)
+	rows, err := s.db.QueryContext(ctx, `
+		WITH eligible_nodes AS (
+			SELECT n.id AS node_id, TRIM(n.home_probe_target_id) AS target_id
+			FROM nodes n
+			JOIN probe_targets pt ON pt.id = TRIM(n.home_probe_target_id)
+			JOIN node_probe_targets npt ON npt.node_id = n.id AND npt.target_id = pt.id
+			WHERE n.disabled = 0
+			  AND TRIM(COALESCE(n.home_probe_target_id, '')) <> ''
+			  AND npt.enabled = 1
+		)
+		SELECT eligible.node_id, (pr.ts / ?) * ? AS bucket_ts,
+		       AVG(COALESCE(pr.avg_ms, pr.median_ms)), AVG(pr.loss_percent)
+		FROM eligible_nodes eligible
+		JOIN probe_rounds pr ON pr.node_id = eligible.node_id AND pr.target_id = eligible.target_id
+		WHERE pr.ts >= ? AND pr.ts < ?
+		GROUP BY eligible.node_id, bucket_ts
+		ORDER BY eligible.node_id ASC, bucket_ts ASC
+	`, stepSeconds, stepSeconds, start.Unix(), end.Add(time.Hour).Unix())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	raw := map[string]map[int64]HourlyLatencyPoint{}
+	for rows.Next() {
+		var nodeID string
+		var bucketTS int64
+		var latency, loss sql.NullFloat64
+		if err := rows.Scan(&nodeID, &bucketTS, &latency, &loss); err != nil {
+			return nil, err
+		}
+		if bucketTS < start.Unix() || bucketTS > end.Unix() {
+			continue
+		}
+		if raw[nodeID] == nil {
+			raw[nodeID] = map[int64]HourlyLatencyPoint{}
+		}
+		raw[nodeID][bucketTS] = HourlyLatencyPoint{
+			StartedAt:   time.Unix(bucketTS, 0).UTC().Format(time.RFC3339),
+			LatencyMS:   floatPtr(latency),
+			LossPercent: floatPtr(loss),
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	historyByNode := make(map[string][]HourlyLatencyPoint, len(raw))
+	for nodeID, buckets := range raw {
+		history := emptyHourlyLatencyHistory(now)
+		for index := range history {
+			bucketTS := start.Add(time.Duration(index) * time.Hour).Unix()
+			if point, ok := buckets[bucketTS]; ok {
+				history[index] = point
+			}
+		}
+		historyByNode[nodeID] = history
+	}
+	return historyByNode, nil
 }
 
 func (s *SQLiteStore) latestLatencySummariesByNode(ctx context.Context) (map[string][]LatencySummary, error) {

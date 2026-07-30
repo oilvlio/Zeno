@@ -114,6 +114,11 @@ export function normalizeLatencySummary(summary: ApiLatencySummary) {
     avgMs: summary.avg_ms ?? null,
     lossPercent: summary.loss_percent,
     updatedAt: summary.updated_at,
+    hourlyHistory: (summary.hourly_history ?? []).map((point) => ({
+      startedAt: point.started_at,
+      latencyMs: point.latency_ms,
+      lossPercent: point.loss_percent,
+    })),
   }
 }
 
