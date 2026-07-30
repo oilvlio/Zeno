@@ -73,7 +73,7 @@ describe('ServerCard', () => {
     expect(html).not.toContain('>离线</span>')
   })
 
-  it('lays out four resource bars as CPU-memory then disk-traffic with details below each bar', () => {
+  it('renders four resource bars as full-width rows with the original detail labels', () => {
     const html = renderToStaticMarkup(
       <ServerCard node={{ ...baseNode, monthlyPeriodStart: '2026-07-01', monthlyPeriodEnd: '2026-07-31', monthlyResetDay: 1 }} onOpen={vi.fn()} />,
     )
@@ -87,14 +87,14 @@ describe('ServerCard', () => {
     expect(html).toContain('usage-row--traffic')
     expect(html.match(/class="usage-row__icon"/g)).toHaveLength(4)
     expect(html).toMatch(/>CPU<\/span>[\s\S]*<strong>12.50%<\/strong>[\s\S]*>内存<\/span>[\s\S]*<strong>25.00%<\/strong>[\s\S]*>存储<\/span>[\s\S]*<strong>25.00%<\/strong>[\s\S]*>流量<\/span>[\s\S]*<strong>25.00%<\/strong>/)
-    expect(html).not.toContain('>负载<')
-    expect(html).not.toContain('>占用<')
-    expect(html).toContain('class="usage-row__detail">0.42 / 0.35 / 0.28</small>')
+    expect(html).toContain('>负载</span>')
+    expect(html).toContain('>0.42 / 0.35 / 0.28</span>')
+    expect(html.match(/>占用<\/span>/g)).toHaveLength(3)
     expect(html).toContain('1.00 KB / 4.00 KB')
     expect(html).toContain('2.00 KB / 8.00 KB')
   })
 
-  it('uses compact individual frames for upload, download, expiry and billing', () => {
+  it('uses original-size individual frames for upload, download, expiry and billing', () => {
     const html = renderToStaticMarkup(
       <ServerCard node={{ ...baseNode, renewalAmount: 20, renewalCurrency: 'USD', billingCycle: '年' }} displayCurrency="CNY" exchangeRates={{ CNY: 1, USD: 8 }} onOpen={vi.fn()} />,
     )
@@ -108,7 +108,7 @@ describe('ServerCard', () => {
     expect(html).toMatch(/metric-down[\s\S]*>下载<\/span>[\s\S]*>128 B\/s<\/strong>/)
   })
 
-  it('renders latency and packet loss in separate compact frames with twelve hourly cells each', () => {
+  it('renders latency and packet loss in separate original-size frames with twelve hourly cells each', () => {
     const html = renderToStaticMarkup(<ServerCard node={baseNode} onOpen={vi.fn()} />)
 
     expect(html).toMatch(/class="node-health-history"[\s\S]*health-latency[\s\S]*health-loss/)

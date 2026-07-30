@@ -211,10 +211,10 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
 
       <section className="node-usage" aria-label={`${node.displayName} usage`}>
         <div className="node-usage-grid">
-          <UsageBar tone="cpu" icon={<CpuIcon />} label="CPU" valueText={`${formatUsage(node.cpuPercent)}%`} detailValue={formatLoad(node.load1, node.load5, node.load15)} percent={node.cpuPercent} />
-          <UsageBar tone="memory" icon={<MemoryIcon />} label="内存" valueText={`${formatUsage(memoryPercent)}%`} detailValue={formatCapacity(node.memoryUsedBytes, node.memoryTotalBytes)} percent={memoryPercent} />
-          <UsageBar tone="disk" icon={<DiskIcon />} label="存储" valueText={`${formatUsage(diskPercent)}%`} detailValue={formatCapacity(node.diskUsedBytes, node.diskTotalBytes)} percent={diskPercent} />
-          <UsageBar tone="traffic" icon={<TrafficIcon />} label={formatTrafficLabel()} valueText={`${formatUsage(trafficPercent)}%`} detailValue={formatCapacity(node.monthlyBillableBytes, node.monthlyQuotaBytes)} percent={trafficPercent} />
+          <UsageBar tone="cpu" icon={<CpuIcon />} label="CPU" valueText={`${formatUsage(node.cpuPercent)}%`} detailLabel="负载" detailValue={formatLoad(node.load1, node.load5, node.load15)} percent={node.cpuPercent} />
+          <UsageBar tone="memory" icon={<MemoryIcon />} label="内存" valueText={`${formatUsage(memoryPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.memoryUsedBytes, node.memoryTotalBytes)} percent={memoryPercent} />
+          <UsageBar tone="disk" icon={<DiskIcon />} label="存储" valueText={`${formatUsage(diskPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.diskUsedBytes, node.diskTotalBytes)} percent={diskPercent} />
+          <UsageBar tone="traffic" icon={<TrafficIcon />} label={formatTrafficLabel()} valueText={`${formatUsage(trafficPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.monthlyBillableBytes, node.monthlyQuotaBytes)} percent={trafficPercent} />
         </div>
         <section className="node-footer-grid" aria-label={`${node.displayName} network and billing`}>
           <Metric tone="up" icon={<UploadIcon />} label="上传" value={formatRate(node.netOutSpeedBps)} />
@@ -233,7 +233,7 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
 
 type ResourceTone = 'cpu' | 'memory' | 'disk' | 'traffic'
 
-function UsageBar({ tone, icon, label, valueText, detailValue, percent }: { tone: ResourceTone; icon: ReactNode; label: string; valueText: string; detailValue: string; percent: number | null | undefined }) {
+function UsageBar({ tone, icon, label, valueText, detailLabel, detailValue, percent }: { tone: ResourceTone; icon: ReactNode; label: string; valueText: string; detailLabel: string; detailValue: string; percent: number | null | undefined }) {
   const value = clampPercent(percent)
   return (
     <div className={`usage-row usage-row--${tone}`}>
@@ -247,7 +247,10 @@ function UsageBar({ tone, icon, label, valueText, detailValue, percent }: { tone
       <div className="usage-track" role="progressbar" aria-label={`${label} usage`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}>
         <div className={`usage-fill is-${barTone(percent)}`} style={{ transform: `translateX(-${100 - value}%)` }} />
       </div>
-      <small className="usage-row__detail">{detailValue}</small>
+      <small className="usage-row__detail">
+        <span>{detailLabel}</span>
+        <span>{detailValue}</span>
+      </small>
     </div>
   )
 }
