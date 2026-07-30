@@ -56,7 +56,7 @@ describe('ServerCard', () => {
     expect(html).toContain('class="kulin-node-card"')
     expect(html).toContain('node-head')
     expect(html).toContain('node-usage-grid')
-    expect(html).not.toContain('node-specs')
+    expect(html).toContain('node-specs')
     expect(html).toContain('<p>Example Node A</p>')
     expect(html).toContain('class="node-uptime">在线 3 天</span>')
     expect(html).not.toContain('is-offline')
@@ -73,25 +73,25 @@ describe('ServerCard', () => {
     expect(html).not.toContain('>离线</span>')
   })
 
-  it('renders four resource bars as full-width rows with the original detail labels', () => {
+  it('renders GitHub-style specs below the name and four full-width bars without details underneath', () => {
     const html = renderToStaticMarkup(
       <ServerCard node={{ ...baseNode, monthlyPeriodStart: '2026-07-01', monthlyPeriodEnd: '2026-07-31', monthlyResetDay: 1 }} onOpen={vi.fn()} />,
     )
 
-    expect(html).toContain('node-usage-grid')
-    expect(html).not.toContain('node-specs')
+    expect(html).toMatch(/class="node-head"[\s\S]*class="node-specs"[\s\S]*class="node-usage"/)
+    expect(html).toMatch(/class="node-spec spec-cpu"[\s\S]*>2 Cores<\/span>/)
+    expect(html).toMatch(/class="node-spec spec-memory"[\s\S]*>4.00 KB<\/span>/)
+    expect(html).toMatch(/class="node-spec spec-disk"[\s\S]*>8.00 KB<\/span>/)
     expect(html.match(/class="usage-row usage-row--/g)).toHaveLength(4)
     expect(html).toContain('usage-row--cpu')
     expect(html).toContain('usage-row--memory')
     expect(html).toContain('usage-row--disk')
     expect(html).toContain('usage-row--traffic')
     expect(html.match(/class="usage-row__icon"/g)).toHaveLength(4)
-    expect(html).toMatch(/>CPU<\/span>[\s\S]*<strong>12.50%<\/strong>[\s\S]*>内存<\/span>[\s\S]*<strong>25.00%<\/strong>[\s\S]*>存储<\/span>[\s\S]*<strong>25.00%<\/strong>[\s\S]*>流量<\/span>[\s\S]*<strong>25.00%<\/strong>/)
-    expect(html).toContain('>负载</span>')
-    expect(html).toContain('>0.42 / 0.35 / 0.28</span>')
-    expect(html.match(/>占用<\/span>/g)).toHaveLength(3)
-    expect(html).toContain('1.00 KB / 4.00 KB')
-    expect(html).toContain('2.00 KB / 8.00 KB')
+    expect(html).toMatch(/>CPU<\/span>[\s\S]*<strong>12.50%<\/strong>[\s\S]*>内存<\/span>[\s\S]*<strong>25.00%<\/strong>[\s\S]*>存储<\/span>[\s\S]*<strong>25.00%<\/strong>[\s\S]*>流量<\/span>[\s\S]*<strong>1.00KB \/ 4.00KB<\/strong>/)
+    expect(html).not.toContain('usage-row__detail')
+    expect(html).not.toContain('>负载<')
+    expect(html).not.toContain('>占用<')
   })
 
   it('uses original-size individual frames for upload, download, expiry and billing', () => {

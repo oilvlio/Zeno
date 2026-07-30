@@ -694,8 +694,27 @@ svg { display: block; }
 .node-flag { margin-top: -1px; flex: none; color: var(--muted); font-size: 14px; }
 .node-uptime { grid-column: 3; justify-self: end; color: var(--green); font-size: 11px; font-weight: 500; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
+.node-specs {
+  margin-top: 12px;
+  padding: 0 4px;
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+  text-align: center;
+  font-size: 11px;
+}
+.node-spec { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; color: var(--foreground); }
+.node-spec svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.node-spec span { white-space: nowrap; }
+.spec-cpu svg { color: #0ea5e9; }
+.spec-memory svg { color: #10b981; }
+.spec-disk svg { color: #8b5cf6; }
+
 .node-usage {
-  margin-top: 16px;
+  margin-top: 20px;
   display: grid;
   flex: none;
   grid-template-rows: auto auto auto;
@@ -724,25 +743,6 @@ svg { display: block; }
 .usage-fill.is-warning { background: #f59e0b; }
 .usage-fill.is-danger { background: #ef4444; }
 .usage-fill.is-empty { background: color-mix(in srgb, var(--blue) 36%, transparent); }
-.usage-row__detail {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.usage-row__detail span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.usage-row__detail span:first-child { flex: none; }
-.usage-row__detail span:last-child { min-width: 0; max-width: none; flex: 1 1 auto; text-align: right; }
-
 .node-footer-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

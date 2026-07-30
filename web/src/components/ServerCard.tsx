@@ -49,7 +49,7 @@ function barTone(value: number | null | undefined): 'good' | 'warning' | 'danger
   return 'good'
 }
 
-function formatKulinBytes(value: number | null | undefined): string {
+function formatKulinBytes(value: number | null | undefined, options: { compact?: boolean } = {}): string {
   if (value === null || value === undefined) return '--'
   if (value === 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
@@ -61,7 +61,8 @@ function formatKulinBytes(value: number | null | undefined): string {
   }
   const signed = value < 0 ? -size : size
   const digits = unit === 0 ? 0 : 2
-  return `${signed.toFixed(digits)} ${units[unit]}`
+  const joiner = options.compact ? '' : ' '
+  return `${signed.toFixed(digits)}${joiner}${units[unit]}`
 }
 
 function formatRate(value: number | null | undefined): string {
@@ -69,18 +70,14 @@ function formatRate(value: number | null | undefined): string {
   return `${formatKulinBytes(value)}/s`
 }
 
+function formatCores(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '-- Cores'
+  return `${value.toFixed(value % 1 === 0 ? 0 : 1)} ${value === 1 ? 'Core' : 'Cores'}`
+}
+
 function formatUsage(value: number | null | undefined): string {
   if (value === null || value === undefined) return '--'
   return value.toFixed(2)
-}
-
-function formatLoad(...values: Array<number | null | undefined>): string {
-  const formatted = values.map((value) => value === null || value === undefined ? '--' : value.toFixed(2))
-  return formatted.join(' / ')
-}
-
-function formatCapacity(used: number | null | undefined, total: number | null | undefined): string {
-  return `${formatKulinBytes(used)} / ${formatKulinBytes(total)}`
 }
 
 function formatOnlineDays(uptimeSeconds: number | null | undefined): string {
@@ -209,12 +206,18 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
         <span className="node-uptime">{formatOnlineDays(node.uptimeSeconds)}</span>
       </section>
 
+      <section className="node-specs" aria-label={`${node.displayName} specs`}>
+        <SpecIcon kind="cpu" label={formatCores(node.cpuCores)} />
+        <SpecIcon kind="memory" label={formatKulinBytes(node.memoryTotalBytes)} />
+        <SpecIcon kind="disk" label={formatKulinBytes(node.diskTotalBytes)} />
+      </section>
+
       <section className="node-usage" aria-label={`${node.displayName} usage`}>
         <div className="node-usage-grid">
-          <UsageBar tone="cpu" icon={<CpuIcon />} label="CPU" valueText={`${formatUsage(node.cpuPercent)}%`} detailLabel="负载" detailValue={formatLoad(node.load1, node.load5, node.load15)} percent={node.cpuPercent} />
-          <UsageBar tone="memory" icon={<MemoryIcon />} label="内存" valueText={`${formatUsage(memoryPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.memoryUsedBytes, node.memoryTotalBytes)} percent={memoryPercent} />
-          <UsageBar tone="disk" icon={<DiskIcon />} label="存储" valueText={`${formatUsage(diskPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.diskUsedBytes, node.diskTotalBytes)} percent={diskPercent} />
-          <UsageBar tone="traffic" icon={<TrafficIcon />} label={formatTrafficLabel()} valueText={`${formatUsage(trafficPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.monthlyBillableBytes, node.monthlyQuotaBytes)} percent={trafficPercent} />
+          <UsageBar tone="cpu" icon={<CpuIcon />} label="CPU" valueText={`${formatUsage(node.cpuPercent)}%`} percent={node.cpuPercent} />
+          <UsageBar tone="memory" icon={<MemoryIcon />} label="内存" valueText={`${formatUsage(memoryPercent)}%`} percent={memoryPercent} />
+          <UsageBar tone="disk" icon={<DiskIcon />} label="存储" valueText={`${formatUsage(diskPercent)}%`} percent={diskPercent} />
+          <UsageBar tone="traffic" icon={<TrafficIcon />} label={formatTrafficLabel()} valueText={`${formatKulinBytes(node.monthlyBillableBytes, { compact: true })} / ${formatKulinBytes(node.monthlyQuotaBytes, { compact: true })}`} percent={trafficPercent} />
         </div>
         <section className="node-footer-grid" aria-label={`${node.displayName} network and billing`}>
           <Metric tone="up" icon={<UploadIcon />} label="上传" value={formatRate(node.netOutSpeedBps)} />
@@ -233,7 +236,7 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
 
 type ResourceTone = 'cpu' | 'memory' | 'disk' | 'traffic'
 
-function UsageBar({ tone, icon, label, valueText, detailLabel, detailValue, percent }: { tone: ResourceTone; icon: ReactNode; label: string; valueText: string; detailLabel: string; detailValue: string; percent: number | null | undefined }) {
+function UsageBar({ tone, icon, label, valueText, percent }: { tone: ResourceTone; icon: ReactNode; label: string; valueText: string; percent: number | null | undefined }) {
   const value = clampPercent(percent)
   return (
     <div className={`usage-row usage-row--${tone}`}>
@@ -247,10 +250,6 @@ function UsageBar({ tone, icon, label, valueText, detailLabel, detailValue, perc
       <div className="usage-track" role="progressbar" aria-label={`${label} usage`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}>
         <div className={`usage-fill is-${barTone(percent)}`} style={{ transform: `translateX(-${100 - value}%)` }} />
       </div>
-      <small className="usage-row__detail">
-        <span>{detailLabel}</span>
-        <span>{detailValue}</span>
-      </small>
     </div>
   )
 }
@@ -293,6 +292,19 @@ function Metric({ tone, stateTone, icon, label, value }: { tone: MetricTone; sta
         <span className="metric-label">{label}</span>
       </span>
       <strong>{value}</strong>
+    </div>
+  )
+}
+
+function SpecIcon({ kind, label }: { kind: 'cpu' | 'memory' | 'disk'; label: string }) {
+  return (
+    <div className={`node-spec spec-${kind}`}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        {kind === 'cpu' && <><rect x="5" y="5" width="14" height="14" rx="2" /><rect x="9" y="9" width="6" height="6" rx="1" /><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3" /></>}
+        {kind === 'memory' && <><rect x="3" y="7" width="18" height="10" rx="2" /><path d="M7 11v2M11 11v2M15 11v2M19 11v2M5 17v3M9 17v3M15 17v3M19 17v3" /></>}
+        {kind === 'disk' && <><path d="M5 5h14l3 7v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5l3-7Z" /><path d="M3 12h18" /><circle cx="7" cy="16" r="1" /><circle cx="11" cy="16" r="1" /></>}
+      </svg>
+      <span>{label}</span>
     </div>
   )
 }
