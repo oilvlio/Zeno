@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { DashboardRouteState, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, documentBrandingForSettings, filterHomeNodesByRegion, homeMonthlyCostForNodes, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, shellStyleForSettings, shouldRefreshHomeRealtimeSnapshot } from './App'
+import { DashboardRouteState, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, documentBrandingForSettings, filterHomeNodesByRegion, homeMonthlyCostForNodes, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, preloadAdminRoute, shellStyleForSettings, shouldRefreshHomeRealtimeSnapshot } from './App'
 import type { HomeCardNode } from './types'
 import { settings } from './components/admin/adminTestFixtures'
 
@@ -66,6 +66,10 @@ describe('HomeTopPanel', () => {
     expect(adminTokenMaxAgeMs).toBe(24 * 60 * 60 * 1000)
   })
 
+  it('preloads the complete admin surface before navigation', async () => {
+    await expect(preloadAdminRoute()).resolves.toBeUndefined()
+  })
+
   it('keeps route loading content inside the same top-card shell used by destination pages', () => {
     const html = renderToStaticMarkup(
       <DashboardRouteState
@@ -84,6 +88,23 @@ describe('HomeTopPanel', () => {
     expect(html).toContain('class="route-state-card">加载中…</div>')
     expect(html).toContain('>前台</button>')
     expect(html).not.toContain('class="state-panel"')
+  })
+
+  it('keeps a direct backend load on the stable shell without exposing loading copy', () => {
+    const html = renderToStaticMarkup(
+      <DashboardRouteState
+        settings={settings}
+        message=""
+        isAdmin
+        onHome={() => {}}
+        onAdmin={() => {}}
+        onThemeChange={() => {}}
+        backgroundEnabled
+      />,
+    )
+    expect(html).toContain('home-top-card route-state-panel is-admin')
+    expect(html).not.toContain('route-state-card')
+    expect(html).not.toContain('>加载中…<')
   })
 
   it('recognizes expired admin session API responses', () => {

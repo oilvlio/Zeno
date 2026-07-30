@@ -51,7 +51,7 @@ export function ServerFlag({ countryCode, className = '' }: ServerFlagProps) {
   return (
     <span className={`server-flag ${className}`.trim()} aria-label={`${flagCode} flag`}>
       {shouldForceSvg || !supportsEmojiFlags ? (
-        <span className={`fi fi-${flagCode.toLowerCase()}`} />
+        <img className="server-flag__image" src={`/assets/flags/${flagCode.toLowerCase()}.svg`} alt="" loading="lazy" decoding="async" />
       ) : (
         unicodeFlagIcon(flagCode)
       )}

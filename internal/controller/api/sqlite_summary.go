@@ -75,8 +75,8 @@ func (s *SQLiteStore) summaryAggregates(ctx context.Context) (map[string]*Latenc
 		s.summaryAggregateMu.Unlock()
 
 		// These are the expensive rolling queries. They intentionally run outside
-		// summaryAggregateMu so an Agent probe write can mark the cache dirty and
-		// return 202 without waiting for a 24-hour scan.
+		// summaryAggregateMu so Agent probe writes can return 202 without waiting
+		// for a 24-hour scan.
 		homeSummaries, err := s.latestHomeLatencySummaries(ctx)
 		var services []ServiceTarget
 		if err == nil {
@@ -118,14 +118,6 @@ func (s *SQLiteStore) summaryAggregates(ctx context.Context) (map[string]*Latenc
 		}
 		return homeSummaries, services, latencySummaries, err
 	}
-}
-
-func (s *SQLiteStore) markSummaryAggregatesDirty() {
-	s.summaryAggregateMu.Lock()
-	s.summaryAggregateGeneration++
-	// Keep a recently built snapshot until the bounded rebuild window expires.
-	// This converts high-frequency probe invalidation into O(1) metadata work.
-	s.summaryAggregateMu.Unlock()
 }
 
 func (s *SQLiteStore) invalidateSummaryAggregates() {

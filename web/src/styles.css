@@ -710,7 +710,7 @@ svg { display: block; }
 }
 .node-os { position: static; grid-column: 1; justify-self: start; width: 20px; height: 20px; object-fit: contain; transform: none; }
 .server-flag { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
-.server-flag .fi { width: 1.333em; line-height: 1em; border-radius: 2px; overflow: hidden; clip-path: inset(0 round 2px); }
+.server-flag__image { display: block; width: 1.333em; height: 1em; border-radius: 2px; object-fit: cover; }
 .node-title-line { grid-column: 2; min-width: 0; max-width: 100%; display: flex; align-items: center; justify-content: center; gap: 4px; }
 .node-title-line p { max-width: calc(100% - 23px); min-width: 0; flex: none; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--foreground); font-size: 13px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; }
 .node-flag { margin-top: -1px; flex: none; color: var(--muted); font-size: 14px; }
@@ -756,8 +756,6 @@ svg { display: block; }
 .usage-row__meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; line-height: 1; }
 .usage-row__meta span { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
 .usage-row__label { min-width: 0; display: inline-flex; align-items: center; gap: 4px; }
-.usage-row__meta .usage-row__icon { width: 13px; height: 13px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--resource-accent); }
-.usage-row__icon svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; }
 .usage-row__meta strong { color: var(--foreground); font-weight: 500; font-variant-numeric: tabular-nums; }
 .usage-track { position: relative; width: 100%; height: 10px; overflow: hidden; border: 0; border-radius: var(--radius-pill); background: var(--usage-track-bg); }
 .usage-fill { height: 100%; width: 100%; transform-origin: left center; transition: transform 180ms ease; }

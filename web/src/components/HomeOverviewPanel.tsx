@@ -39,12 +39,13 @@ interface HomeOverviewPanelProps {
 interface HomeTopPanelProps extends HomeOverviewPanelProps {
   onHome: () => void
   onAdmin: () => void
+  onAdminIntent?: () => void
   onThemeChange?: (theme: AdminTheme) => void
   onBackgroundToggle?: () => void
   backgroundEnabled?: boolean
 }
 
-export function HomeTopPanel({ settings = defaultSettings, onHome, onAdmin, onThemeChange, onBackgroundToggle, backgroundEnabled = false, ...overview }: HomeTopPanelProps) {
+export function HomeTopPanel({ settings = defaultSettings, onHome, onAdmin, onAdminIntent, onThemeChange, onBackgroundToggle, backgroundEnabled = false, ...overview }: HomeTopPanelProps) {
   const headerCurrency = normalizeCurrencyCode(overview.displayCurrency ?? 'CNY')
   const headerExchangeRates = normalizeCurrencyRates(overview.exchangeRates ?? { CNY: 1 })
   const headerCurrencyOptions = overview.currencyOptions ?? availableCurrencyOptions(headerExchangeRates)
@@ -54,6 +55,7 @@ export function HomeTopPanel({ settings = defaultSettings, onHome, onAdmin, onTh
         settings={settings}
         onHome={onHome}
         onAdmin={onAdmin}
+        onAdminIntent={onAdminIntent}
         leadingAction={<HomeCurrencyMenu value={headerCurrency} options={headerCurrencyOptions} onChange={overview.onCurrencyChange} />}
         onThemeChange={onThemeChange}
         onBackgroundToggle={onBackgroundToggle}
@@ -255,10 +257,9 @@ function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
   )
 }
 
-export function HomeOverviewPanel({ totalCount, onlineCount, monthlyCost, displayCurrency = 'CNY', exchangeRates: inputExchangeRates = { CNY: 1 }, totalUp, totalDown, upSpeed, downSpeed }: HomeOverviewPanelProps) {
+export function HomeOverviewPanel({ totalCount, onlineCount, monthlyCost, displayCurrency = 'CNY', totalUp, totalDown, upSpeed, downSpeed }: HomeOverviewPanelProps) {
   const uploadRate = compactRateParts(upSpeed)
   const downloadRate = compactRateParts(downSpeed)
-  const exchangeRates = normalizeCurrencyRates(inputExchangeRates)
   const activeCurrency = normalizeCurrencyCode(displayCurrency)
   return (
     <section className="home-summary" aria-label="server overview">

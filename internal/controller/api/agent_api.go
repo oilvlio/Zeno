@@ -263,11 +263,10 @@ func (h *handler) handleAgentProbeResults(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if insertResult.inserted > 0 {
-		// Probe writes arrive on the Agent cadence. Mark aggregate data dirty in
-		// O(1), retaining the bounded aggregate snapshot, before invalidating the
-		// full JSON cache. A fully idempotent retry has no publish/cache side effects.
-		h.markSummaryAggregatesDirty()
-		h.invalidateSummaryCache()
+		// Rolling aggregates intentionally use their short fixed TTL; only the
+		// lightweight JSON snapshot is marked dirty on the Agent cadence. A fully
+		// idempotent retry has no publish/cache side effects.
+		h.markSummaryCacheDirty()
 		h.publishSummary(r.Context())
 		h.scheduleNodeLatencyPublish(nodeID)
 		for _, targetID := range insertResult.insertedTargetIDs {
@@ -355,7 +354,7 @@ func (h *handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.dispatchAgentStatusNotification(store, transition, time.Now().UTC())
-	h.invalidateSummaryCache()
+	h.markSummaryCacheDirty()
 	h.publishSummary(r.Context())
 	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true})
 }
@@ -394,7 +393,7 @@ func (h *handler) handleAgentHost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	h.invalidateSummaryCache()
+	h.markSummaryCacheDirty()
 	h.publishSummary(r.Context())
 	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true})
 }

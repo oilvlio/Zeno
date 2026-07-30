@@ -8,13 +8,14 @@ describe('ServerFlag', () => {
 
     expect(html).toContain('class="server-flag node-flag"')
     expect(html).toContain('aria-label="HK flag"')
-    expect(html).toContain('class="fi fi-hk"')
+    expect(html).toContain('class="server-flag__image"')
+    expect(html).toContain('src="/assets/flags/hk.svg"')
   })
 
   it('normalizes TW to CN like Kulin', () => {
     const html = renderToStaticMarkup(<ServerFlag countryCode="TW" />)
 
     expect(html).toContain('aria-label="CN flag"')
-    expect(html).toContain('class="fi fi-cn"')
+    expect(html).toContain('src="/assets/flags/cn.svg"')
   })
 })

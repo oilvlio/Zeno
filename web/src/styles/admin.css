@@ -1619,7 +1619,6 @@
   .admin-container { gap: 14px; }
   .admin-panel { min-height: calc(100dvh - 92px); }
   .admin-state-card { min-height: 84px; margin-top: 18px; padding: 16px; }
-  .admin-panel--loading .admin-state-card { margin-top: 14px; }
   .admin-panel--login { min-height: calc(100dvh - 28px); }
   .admin-toolbar { flex-direction: column; align-items: stretch; }
   .admin-section-nav {

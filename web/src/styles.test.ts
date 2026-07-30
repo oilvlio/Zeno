@@ -68,9 +68,7 @@ describe('homepage and admin shell layout', () => {
     expect(adminShellStyles).toMatch(/\.admin-state-card\s*\{[^}]*min-height: 96px;[^}]*margin-top: 18px;[^}]*display: flex;[^}]*gap: 10px;[^}]*padding: 18px 20px;[^}]*border: 1px solid var\(--border\);[^}]*background: var\(--control-bg\);[^}]*\}/)
     expect(adminStyles).toMatch(/\.admin-state-card\s*\{[^}]*min-height: 96px;[^}]*margin-top: 18px;[^}]*display: flex;[^}]*gap: 10px;[^}]*padding: 18px 20px;[^}]*border: 1px solid var\(--border\);[^}]*background: var\(--control-bg\);[^}]*\}/)
     expect(adminShellStyles).toContain('.admin-state-card { min-height: 84px; margin-top: 18px; padding: 16px; }')
-    expect(adminShellStyles).toContain('.admin-panel--loading .admin-state-card { margin-top: 14px; }')
     expect(adminStyles).toContain('.admin-state-card { min-height: 84px; margin-top: 18px; padding: 16px; }')
-    expect(adminStyles).toContain('.admin-panel--loading .admin-state-card { margin-top: 14px; }')
   })
 
   it('keeps the theme menu above later homepage sections', () => {
@@ -176,7 +174,7 @@ describe('homepage and admin shell layout', () => {
     expect(styles).toMatch(/\.usage-row\s*\{[^}]*display: flex;[^}]*gap: 6px;[^}]*padding: 0;[^}]*\}/)
     expect(styles).toMatch(/\.usage-track\s*\{[^}]*height: 10px;[^}]*\}/)
     expect(styles).not.toContain('.usage-row__detail')
-    expect(styles).toMatch(/\.usage-row__meta \.usage-row__icon\s*\{[^}]*width: 13px;[^}]*height: 13px;[^}]*color: var\(--resource-accent\);[^}]*\}/)
+    expect(styles).not.toContain('.usage-row__icon')
     expect(styles).toContain('.usage-row--cpu { --resource-accent: var(--blue); }')
     expect(styles).toContain('.usage-row--memory { --resource-accent: var(--green); }')
     expect(styles).toContain('.usage-row--disk { --resource-accent: var(--purple); }')
@@ -457,7 +455,7 @@ describe('Kulin-inspired color polish', () => {
     expect(styles).toContain('background: var(--blue)')
     expect(styles).toContain('.resource-card.tone-green')
     expect(styles).toContain('.resource-chart-tooltip')
-    expect(styles).toContain('.server-flag .fi')
+    expect(styles).toContain('.server-flag__image')
     expect(styles).toMatch(/\.region-filter-buttons \.server-flag \{[^}]*font-size: 16px;[^}]*\}/)
     expect(styles).not.toMatch(/\.region-filter-buttons \.server-flag \{[^}]*(?:border|box-shadow|overflow)[^}]*\}/)
     expect(styles).toContain('.latency-chart-tooltip foreignObject')

@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { createAdminNode, createAdminNotificationChannel, createAdminProbeTarget, deleteAdminNode, deleteAdminNotificationChannel, deleteAdminProbeTarget, fetchAdminAlertRules, fetchAdminNodes, fetchAdminNotificationChannels, fetchAdminProbeTargets, fetchAdminSettings, requestAdminNodeInstallCommand, testAdminNotificationChannel, updateAdminAlertRule, updateAdminNode, updateAdminNotificationChannel, updateAdminProbeTarget, updateAdminSettings, type AdminAlertRuleUpdateInput, type AdminNodeCreateInput, type AdminNodeUpdateInput, type AdminNotificationChannelCreateInput, type AdminNotificationChannelUpdateInput, type AdminProbeTargetInput, type AdminProbeTargetUpdateInput, type AdminSettingsUpdateInput } from '../api/adminClient'
-import { fetchAdminAccount, loginAdmin, logoutAdmin, updateAdminAccount } from '../api/adminSession'
+import { fetchAdminAccount, loginAdmin, logoutAdmin, probeAdminCookieSession, rememberAdminCookieSessionProbe, updateAdminAccount } from '../api/adminSession'
 import { defaultSettings } from '../lib/appearance'
 import { createAdminMutationCoordinator, runAdminMutationLease } from '../lib/adminMutationCoordinator'
 import { adminStateReducer } from '../lib/adminStateReducer'
@@ -26,7 +26,6 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
   const adminTokenRef = useRef(adminToken)
   const [adminAuthState, setAdminAuthState] = useState<AdminAuthState>({ kind: 'idle' })
   const [adminState, dispatchAdminState] = useReducer(adminStateReducer, { kind: 'idle' })
-  const [showAdminLoading, setShowAdminLoading] = useState(false)
   const [settings, setSettings] = useState<AdminSettings>(initialSettings)
 
   const commitAdminToken = (token: string) => {
@@ -35,14 +34,18 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
   }
 
   useEffect(() => {
+    if (adminTokenRef.current !== '') {
+      setAdminSessionReady(true)
+      return undefined
+    }
     let cancelled = false
     const probe = ++adminSessionProbeRef.current
     // HttpOnly cookies cannot be inspected by JavaScript. Probe the account
     // endpoint once so a secure cookie session survives a page refresh without
     // ever copying its replayable token into JS state or browser storage.
-    fetchAdminAccount(adminCookieSessionMarker)
-      .then(() => {
-        if (cancelled || probe !== adminSessionProbeRef.current) return
+    probeAdminCookieSession()
+      .then((authenticated) => {
+        if (cancelled || probe !== adminSessionProbeRef.current || !authenticated) return
         rememberAdminToken()
         commitAdminToken(adminCookieSessionMarker)
       })
@@ -63,6 +66,7 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
     } else {
       clearStoredAdminToken()
     }
+    rememberAdminCookieSessionProbe(false)
     commitAdminToken('')
     dispatchAdminState({ type: 'state.idle' })
     adminMutationCoordinatorRef.current.endSessionTransition()
@@ -82,15 +86,6 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
   }, [adminToken, initialSettings])
 
   useEffect(() => {
-    if (adminState.kind !== 'loading') {
-      setShowAdminLoading(false)
-      return
-    }
-    const timer = window.setTimeout(() => setShowAdminLoading(true), 450)
-    return () => window.clearTimeout(timer)
-  }, [adminState.kind])
-
-  useEffect(() => {
     if (!isAdminRoute) return
     if (adminToken === '') {
       dispatchAdminState({ type: 'state.idle' })
@@ -106,18 +101,19 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
       const requestTokenIdentity = captureAdminTokenIdentity(requestToken)
       if (!loadedOnce) dispatchAdminState({ type: 'state.loading' })
       try {
-        const nodesData = await fetchAdminNodes(requestToken, signal)
+        const [nodesData, results] = await Promise.all([
+          fetchAdminNodes(requestToken, signal),
+          Promise.allSettled([
+            fetchAdminSettings(requestToken, signal),
+            fetchAdminAccount(requestToken, signal),
+            fetchAdminProbeTargets(requestToken, signal),
+            fetchAdminNotificationChannels(requestToken, signal),
+            fetchAdminAlertRules(requestToken, signal),
+          ]),
+        ])
         loadedOnce = true
         if (cancelled || signal?.aborted || !adminMutationEpochRef.current.isCurrent(mutationSnapshot)) return
         dispatchAdminState({ type: 'nodes.loaded', nodes: nodesData.nodes })
-        const results = await Promise.allSettled([
-          fetchAdminSettings(requestToken, signal),
-          fetchAdminAccount(requestToken, signal),
-          fetchAdminProbeTargets(requestToken, signal),
-          fetchAdminNotificationChannels(requestToken, signal),
-          fetchAdminAlertRules(requestToken, signal),
-        ])
-        if (cancelled || signal?.aborted || !adminMutationEpochRef.current.isCurrent(mutationSnapshot)) return
         const [settingsResult, accountResult, targetsResult, channelsResult, alertRulesResult] = results
         const unauthorizedResult = results.find((result) => result.status === 'rejected' && isAdminUnauthorizedError(result.reason))
         if (unauthorizedResult) {
@@ -159,6 +155,7 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
     loginAdmin(trimmedUsername, trimmedPassword)
       .then((session) => {
         if (probe !== adminSessionProbeRef.current) return
+        rememberAdminCookieSessionProbe(true)
         rememberAdminToken(session.token)
         commitAdminToken(session.token)
         setAdminAuthState({ kind: 'idle' })
@@ -340,7 +337,6 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
     adminSessionReady,
     adminAuthState,
     adminState,
-    showAdminLoading,
     settings,
     expireAdminSession,
     submitAdminLogin,

@@ -255,7 +255,7 @@ func (h *handler) dispatchStaleAgentOfflineChecks(ctx context.Context) {
 	if !changed {
 		return
 	}
-	h.invalidateSummaryCache()
+	h.markSummaryCacheDirty()
 	h.publishSummary(ctx)
 }
 
@@ -310,12 +310,12 @@ func (h *handler) handleAgentPresenceWebSocket(w http.ResponseWriter, r *http.Re
 	})
 
 	session := h.presence.connect(nodeID)
-	h.invalidateSummaryCache()
+	h.markSummaryCacheDirty()
 	h.publishSummary(r.Context())
 	defer func() {
 		if h.presence.disconnect(session) {
 			h.scheduleAgentPresenceOfflineCheck(store, nodeID)
-			h.invalidateSummaryCache()
+			h.markSummaryCacheDirty()
 			h.publishSummary(r.Context())
 		}
 	}()
@@ -423,7 +423,7 @@ func (h *handler) scheduleAgentPresenceOfflineCheckAfter(store agentStore, nodeI
 		if !h.dispatchStaleAgentOfflineNode(check.ctx, offlineStore, nodeID, time.Now().UTC()) {
 			return
 		}
-		h.invalidateSummaryCache()
+		h.markSummaryCacheDirty()
 		h.publishSummary(check.ctx)
 	}()
 }

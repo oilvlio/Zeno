@@ -1,9 +1,8 @@
-import { lazy, Suspense, type ComponentType } from 'react'
+import type { ComponentType } from 'react'
+import AdminNodeWorkspace from './AdminNodeWorkspace'
+import AdminNotificationsWorkspace from './AdminNotificationsWorkspace'
+import AdminTargetWorkspace from './AdminTargetWorkspace'
 import type { AdminNodeWorkspaceProps, AdminNotificationsWorkspaceProps, AdminOperationalWorkspaceProps, AdminTargetWorkspaceProps } from './adminOperationalTypes'
-
-const LazyAdminNodeWorkspace = lazy(() => import('./AdminNodeWorkspace'))
-const LazyAdminTargetWorkspace = lazy(() => import('./AdminTargetWorkspace'))
-const LazyAdminNotificationsWorkspace = lazy(() => import('./AdminNotificationsWorkspace'))
 
 export type AdminOperationalSectionComponents = {
   nodes: ComponentType<AdminNodeWorkspaceProps>
@@ -13,10 +12,6 @@ export type AdminOperationalSectionComponents = {
 
 export interface AdminOperationalWorkspaceRouterProps extends AdminOperationalWorkspaceProps {
   sectionComponents?: Partial<AdminOperationalSectionComponents>
-}
-
-function AdminWorkspaceLoading() {
-  return <div className="admin-state-card">加载中…</div>
 }
 
 export function AdminOperationalWorkspace({
@@ -40,15 +35,15 @@ export function AdminOperationalWorkspace({
   sectionComponents,
 }: AdminOperationalWorkspaceRouterProps) {
   if (activeSection === 'nodes') {
-    const NodeWorkspace = sectionComponents?.nodes ?? LazyAdminNodeWorkspace
-    return <Suspense fallback={<AdminWorkspaceLoading />}><NodeWorkspace nodes={nodes} targets={targets} onCreate={onNodeCreate} onUpdate={onNodeUpdate} onDelete={onNodeDelete} onInstallCommand={onInstallCommand} /></Suspense>
+    const NodeWorkspace = sectionComponents?.nodes ?? AdminNodeWorkspace
+    return <NodeWorkspace nodes={nodes} targets={targets} onCreate={onNodeCreate} onUpdate={onNodeUpdate} onDelete={onNodeDelete} onInstallCommand={onInstallCommand} />
   }
   if (activeSection === 'targets') {
-    const TargetWorkspace = sectionComponents?.targets ?? LazyAdminTargetWorkspace
-    return <Suspense fallback={<AdminWorkspaceLoading />}><TargetWorkspace targets={targets} nodes={nodes} onCreate={onProbeTargetCreate} onUpdate={onProbeTargetUpdate} onDelete={onProbeTargetDelete} /></Suspense>
+    const TargetWorkspace = sectionComponents?.targets ?? AdminTargetWorkspace
+    return <TargetWorkspace targets={targets} nodes={nodes} onCreate={onProbeTargetCreate} onUpdate={onProbeTargetUpdate} onDelete={onProbeTargetDelete} />
   }
-  const NotificationsWorkspace = sectionComponents?.notifications ?? LazyAdminNotificationsWorkspace
-  return <Suspense fallback={<AdminWorkspaceLoading />}><NotificationsWorkspace channels={notificationChannels} rules={alertRules} nodes={nodes} onChannelCreate={onNotificationChannelCreate} onChannelUpdate={onNotificationChannelUpdate} onChannelDelete={onNotificationChannelDelete} onChannelTest={onNotificationChannelTest} onRuleUpdate={onAlertRuleUpdate} /></Suspense>
+  const NotificationsWorkspace = sectionComponents?.notifications ?? AdminNotificationsWorkspace
+  return <NotificationsWorkspace channels={notificationChannels} rules={alertRules} nodes={nodes} onChannelCreate={onNotificationChannelCreate} onChannelUpdate={onNotificationChannelUpdate} onChannelDelete={onNotificationChannelDelete} onChannelTest={onNotificationChannelTest} onRuleUpdate={onAlertRuleUpdate} />
 }
 
 export type { AdminOperationalSection, AdminOperationalWorkspaceProps } from './adminOperationalTypes'

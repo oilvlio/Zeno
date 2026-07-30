@@ -1,10 +1,8 @@
-import { lazy, Suspense, useEffect, useRef, useState, useTransition } from 'react'
-import { LatencyDetail } from './components/LatencyDetail'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ComponentType } from 'react'
 import { ServerCard } from './components/ServerCard'
-import { ServiceDetail } from './components/ServiceDetail'
 import { applyCustomCode } from './lib/customCode'
 import { availableCurrencyOptions, billingCycleMonths, convertCurrencyAmount, normalizeCurrencyRates, rememberHomeCurrency, storedHomeCurrency, type CurrencyCode, type CurrencyRates } from './lib/currency'
-import type { AdminSettings, AdminTheme, HomeCardNode, LatencyPoint } from './types'
+import type { AdminSettings, AdminTheme, HomeCardNode } from './types'
 import { DashboardHeader } from './components/DashboardHeader'
 import { AdminDashboardLoadError, AdminModuleErrorBoundary } from './components/admin/AdminDashboardBoundary'
 import { applyDocumentBranding, settingsForChrome, shellStyleForSettings, storedBackgroundEnabled, storedThemeOverride, useDocumentTheme } from './lib/appearance'
@@ -12,9 +10,8 @@ import { useAdminAccess } from './hooks/useAdminAccess'
 import { usePublicSettings } from './hooks/usePublicSettings'
 import { useDashboardRouter } from './hooks/useDashboardRouter'
 import { homeRealtimeSnapshotForNodes, useSummaryController } from './hooks/useSummaryController'
-import { useNodeDetailController } from './hooks/useNodeDetailController'
-import { useServiceDetailController } from './hooks/useServiceDetailController'
 import { HomeRegionFilter, HomeTopPanel } from './components/HomeOverviewPanel'
+import type { AdminDashboardContainerProps } from './components/admin/AdminDashboard'
 
 export { applyCustomCode, extractSafeCustomCSS } from './lib/customCode'
 export { availableHistoryRanges, coerceHistoryRange, rangeRequiresAdmin } from './lib/historyRange'
@@ -25,8 +22,25 @@ export { isAdminUnauthorizedError } from './lib/adminSettings'
 export { shouldRefreshHomeRealtimeSnapshot } from './hooks/useSummaryController'
 export { HomeOverviewPanel, HomeRegionFilter, HomeTopPanel } from './components/HomeOverviewPanel'
 
-const loadAdminDashboard = () => import('./components/admin/AdminDashboard').then((module) => ({ default: module.AdminDashboardContainer }))
+const loadAdminDashboardModule = () => import('./components/admin/AdminDashboard')
+const loadAdminDashboard = () => loadAdminDashboardModule().then((module) => ({ default: module.AdminDashboardContainer }))
 const LazyAdminDashboard = lazy(loadAdminDashboard)
+const LazyNodeDetailRoute = lazy(() => import('./components/NodeDetailRoute').then((module) => ({ default: module.NodeDetailRoute })))
+const LazyServiceDetailRoute = lazy(() => import('./components/ServiceDetailRoute').then((module) => ({ default: module.ServiceDetailRoute })))
+let preloadedAdminDashboard: ComponentType<AdminDashboardContainerProps> | null = null
+let adminRoutePreload: Promise<void> | null = null
+
+export async function preloadAdminRoute(): Promise<void> {
+  if (adminRoutePreload === null) {
+    adminRoutePreload = loadAdminDashboardModule()
+      .then((adminModule) => { preloadedAdminDashboard = adminModule.AdminDashboardContainer })
+      .catch((error: unknown) => {
+        adminRoutePreload = null
+        throw error
+      })
+  }
+  return adminRoutePreload
+}
 
 export function DashboardRouteState({
   settings,
@@ -61,7 +75,7 @@ export function DashboardRouteState({
           onBackgroundToggle={onBackgroundToggle}
           backgroundEnabled={backgroundEnabled}
         />
-        <div className={`route-state-card${isError ? ' is-error' : ''}`}>{message}</div>
+        {message !== '' && <div className={`route-state-card${isError ? ' is-error' : ''}`}>{message}</div>}
       </section>
     </div>
   )
@@ -89,19 +103,6 @@ export function homeMonthlyCostForNodes(nodes: HomeCardNode[], displayCurrency: 
     if (convertedRenewal !== null) return convertedRenewal / cycleMonths
     return convertCurrencyAmount(node.monthlyCostCny, 'CNY', displayCurrency, exchangeRates) ?? 0
   }))
-}
-
-function summaryLatencyPoints(node: HomeCardNode | undefined): LatencyPoint[] {
-  return (node?.latencySummaries ?? [])
-    .filter((summary) => summary.updatedAt)
-    .map((summary) => ({
-      ts: summary.updatedAt,
-      targetId: summary.targetId,
-      targetName: summary.targetName,
-      medianMs: summary.medianMs,
-      avgMs: summary.avgMs,
-      lossPercent: summary.lossPercent ?? 0,
-    }))
 }
 
 export function orderHomeNodes(nodes: HomeCardNode[]): HomeCardNode[] {
@@ -141,25 +142,16 @@ export function App() {
   const { state, summaryRef, homeRealtimeSnapshot } = useSummaryController()
   const [homeRegion, setHomeRegion] = useState('ALL')
   const [homeCurrency, setHomeCurrency] = useState<CurrencyCode>(storedHomeCurrency)
-  const { route, navigateHome, navigateAdmin, navigateNode: navigateNodeRoute } = useDashboardRouter()
-  const [, startRouteTransition] = useTransition()
+  const { route, navigateHome, navigateAdmin, navigateNode } = useDashboardRouter()
   const { settings, settingsReady, setSettings } = usePublicSettings()
   const { adminToken, setAdminToken, expireAdminSession } = useAdminAccess()
-  const { nodeLatencyRange, stateRange, latencyState, stateHistoryState, setNodeLatencyRange, setStateRange, resetNodeRanges } = useNodeDetailController({
-    nodeId: route.kind === 'node' ? route.nodeId : null,
-    summary: summaryRef.current,
-    adminToken,
-    expireAdminSession,
-  })
-  const { serviceLatencyRange, serviceLatencyState, setServiceLatencyRange } = useServiceDetailController({
-    targetId: route.kind === 'service' ? route.targetId : null,
-    adminToken,
-    expireAdminSession,
-  })
-  const navigateNode = (nodeId: string) => {
-    resetNodeRanges()
-    navigateNodeRoute(nodeId)
-  }
+  const [AdminDashboardRoute, setAdminDashboardRoute] = useState<ComponentType<AdminDashboardContainerProps>>(() => preloadedAdminDashboard ?? LazyAdminDashboard)
+  const [adminSurfaceMounted, setAdminSurfaceMounted] = useState(route.kind === 'admin')
+  const [adminSurfaceReady, setAdminSurfaceReady] = useState(false)
+  const adminSurfaceReadyRef = useRef(false)
+  const adminNavigationPendingRef = useRef(false)
+  const navigateAdminRef = useRef(navigateAdmin)
+  navigateAdminRef.current = navigateAdmin
   const [backgroundAssetsReady, setBackgroundAssetsReady] = useState(false)
   const [themeOverride, setThemeOverride] = useState<AdminTheme | null>(() => storedThemeOverride())
   const [backgroundEnabled, setBackgroundEnabled] = useState(() => storedBackgroundEnabled())
@@ -174,6 +166,19 @@ export function App() {
   useEffect(() => {
     applyCustomCode(settings)
   }, [settings.customCode])
+
+  useEffect(() => {
+    if (route.kind !== 'home' || state.kind !== 'ready') return undefined
+    let active = true
+    void preloadAdminRoute()
+      .then(() => {
+        if (!active || !preloadedAdminDashboard) return
+        setAdminDashboardRoute(() => preloadedAdminDashboard as ComponentType<AdminDashboardContainerProps>)
+        setAdminSurfaceMounted(true)
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [route.kind, state.kind])
 
   useEffect(() => {
     if (!settingsReady || typeof Image === 'undefined') return undefined
@@ -240,7 +245,6 @@ export function App() {
   const homeCurrencyOptions = availableCurrencyOptions(exchangeRates)
   const activeHomeCurrency = homeCurrencyOptions.some((option) => option.value === homeCurrency) ? homeCurrency : 'CNY'
   const selectedNode = route.kind === 'node' ? nodes.find((node) => node.id === route.nodeId) : undefined
-  const selectedNodeLatencyPoints = latencyState.kind === 'ready' ? latencyState.data.points : summaryLatencyPoints(selectedNode)
   const selectedService = route.kind === 'service' ? services.find((service) => service.id === route.targetId) : undefined
   const totalCount = homeRealtimeNodes.length
   const onlineCount = homeRealtimeNodes.filter((node) => node.status === 'online').length
@@ -251,15 +255,41 @@ export function App() {
   const upSpeed = currentRealtimeSnapshot.upSpeed
   const downSpeed = currentRealtimeSnapshot.downSpeed
   const hasBackgroundImage = (effectiveSettings.desktopBackgroundUrl || effectiveSettings.backgroundUrl || effectiveSettings.mobileBackgroundUrl).trim() !== ''
-  const hasAdminToken = adminToken !== ''
   const changeHomeCurrency = (currency: CurrencyCode) => {
     rememberHomeCurrency(currency)
     setHomeCurrency(currency)
   }
-  const navigateAdminSmoothly = () => {
-    void loadAdminDashboard()
-    startRouteTransition(() => navigateAdmin())
+  const preloadAdmin = () => {
+    return preloadAdminRoute()
+      .then(() => {
+        if (!preloadedAdminDashboard) return
+        setAdminDashboardRoute(() => preloadedAdminDashboard as ComponentType<AdminDashboardContainerProps>)
+        setAdminSurfaceMounted(true)
+      })
   }
+  const navigateAdminSmoothly = () => {
+    adminNavigationPendingRef.current = true
+    void preloadAdmin()
+      .then(() => {
+        if (!adminSurfaceReadyRef.current) return
+        adminNavigationPendingRef.current = false
+        navigateAdminRef.current()
+      })
+      .catch(() => {
+        adminNavigationPendingRef.current = false
+        setAdminSurfaceMounted(true)
+        navigateAdminRef.current()
+      })
+  }
+  const preloadAdminIntent = () => { void preloadAdmin().catch(() => {}) }
+  const handleAdminReadyStateChange = useCallback((ready: boolean) => {
+    adminSurfaceReadyRef.current = ready
+    setAdminSurfaceReady(ready)
+    if (ready) setAdminSurfaceMounted(true)
+    if (!ready || !adminNavigationPendingRef.current) return
+    adminNavigationPendingRef.current = false
+    navigateAdminRef.current()
+  }, [])
   const routeStateProps = {
     settings: effectiveSettings,
     onHome: navigateHome,
@@ -271,65 +301,59 @@ export function App() {
 
   return (
     <main className="kulin-shell" data-theme={effectiveSettings.theme} data-background={hasBackgroundImage ? 'on' : 'off'} style={shellStyleForSettings(effectiveSettings)}>
-      {route.kind === 'admin' && (
-        <AdminModuleErrorBoundary fallback={<AdminDashboardLoadError />}>
-          <Suspense fallback={<DashboardRouteState {...routeStateProps} isAdmin message="加载中…" />}>
-            <LazyAdminDashboard
-              onHome={navigateHome}
-              settings={settings}
-              chromeSettings={effectiveSettings}
-              onAdminTokenChange={setAdminToken}
-              onSettingsChange={setSettings}
-              onThemeChange={setThemeMode}
-              onBackgroundToggle={backgroundToggle}
-              backgroundEnabled={hasBackgroundImage}
-            />
-          </Suspense>
-        </AdminModuleErrorBoundary>
+      {(adminSurfaceMounted || route.kind === 'admin') && (
+        <div hidden={route.kind !== 'admin'} aria-hidden={route.kind !== 'admin'} data-admin-ready={adminSurfaceReady}>
+          <AdminModuleErrorBoundary fallback={<AdminDashboardLoadError />}>
+            <Suspense fallback={route.kind === 'admin' ? <DashboardRouteState {...routeStateProps} isAdmin message="" /> : null}>
+              <AdminDashboardRoute
+                onHome={navigateHome}
+                settings={settings}
+                chromeSettings={effectiveSettings}
+                onAdminTokenChange={setAdminToken}
+                onSettingsChange={setSettings}
+                onReadyStateChange={handleAdminReadyStateChange}
+                onThemeChange={setThemeMode}
+                onBackgroundToggle={backgroundToggle}
+                backgroundEnabled={hasBackgroundImage}
+              />
+            </Suspense>
+          </AdminModuleErrorBoundary>
+        </div>
       )}
 
       {route.kind !== 'admin' && state.kind === 'loading' && <DashboardRouteState {...routeStateProps} message="正在读取 Controller API…" />}
       {route.kind !== 'admin' && state.kind === 'error' && <DashboardRouteState {...routeStateProps} isError message={`API 读取失败：${state.message}`} />}
 
       {state.kind === 'ready' && route.kind === 'node' && selectedNode && (
-        <LatencyDetail
-          node={selectedNode}
-          points={selectedNodeLatencyPoints}
-          statePoints={stateHistoryState.kind === 'ready' ? stateHistoryState.data.points : []}
-          range={nodeLatencyRange}
-          stateRange={stateRange}
-          loading={latencyState.kind === 'loading'}
-          error={latencyState.kind === 'error' ? latencyState.message : undefined}
-          stateLoading={stateHistoryState.kind === 'loading'}
-          stateError={stateHistoryState.kind === 'error' ? stateHistoryState.message : undefined}
-          canUseExtendedRanges={hasAdminToken}
-          onBack={navigateHome}
-          onRangeChange={setNodeLatencyRange}
-          onStateRangeChange={setStateRange}
-          topHeader={<DashboardHeader settings={effectiveSettings} onHome={navigateHome} onAdmin={navigateAdminSmoothly} onThemeChange={setThemeMode} onBackgroundToggle={backgroundToggle} backgroundEnabled={hasBackgroundImage} />}
-        />
+        <Suspense fallback={<DashboardRouteState {...routeStateProps} message="加载中…" />}>
+          <LazyNodeDetailRoute
+            node={selectedNode}
+            summary={summaryRef.current}
+            adminToken={adminToken}
+            expireAdminSession={expireAdminSession}
+            onBack={navigateHome}
+            topHeader={<DashboardHeader settings={effectiveSettings} onHome={navigateHome} onAdmin={navigateAdminSmoothly} onAdminIntent={preloadAdminIntent} onThemeChange={setThemeMode} onBackgroundToggle={backgroundToggle} backgroundEnabled={hasBackgroundImage} />}
+          />
+        </Suspense>
       )}
 
       {state.kind === 'ready' && route.kind === 'node' && !selectedNode && (
         <DashboardRouteState {...routeStateProps} isError message={`没有找到这台服务器：${route.nodeId}`} />
       )}
 
-      {state.kind === 'ready' && route.kind === 'service' && (selectedService || serviceLatencyState.kind === 'ready') && (
-        <ServiceDetail
-          target={serviceLatencyState.kind === 'ready' ? serviceLatencyState.data.target : selectedService!}
-          points={serviceLatencyState.kind === 'ready' ? serviceLatencyState.data.points : []}
-          range={serviceLatencyRange}
-          loading={serviceLatencyState.kind === 'loading'}
-          error={serviceLatencyState.kind === 'error' ? serviceLatencyState.message : undefined}
-          canUseExtendedRanges={hasAdminToken}
-          onBack={navigateHome}
-          onRangeChange={setServiceLatencyRange}
-          topHeader={<DashboardHeader settings={effectiveSettings} onHome={navigateHome} onAdmin={navigateAdminSmoothly} onThemeChange={setThemeMode} onBackgroundToggle={backgroundToggle} backgroundEnabled={hasBackgroundImage} />}
-        />
-      )}
-
-      {state.kind === 'ready' && route.kind === 'service' && !selectedService && serviceLatencyState.kind === 'error' && (
-        <DashboardRouteState {...routeStateProps} isError message={`没有找到这个监控服务：${route.targetId}`} />
+      {state.kind === 'ready' && route.kind === 'service' && (
+        <Suspense fallback={<DashboardRouteState {...routeStateProps} message="加载中…" />}>
+          <LazyServiceDetailRoute
+            targetId={route.targetId}
+            target={selectedService}
+            adminToken={adminToken}
+            expireAdminSession={expireAdminSession}
+            onBack={navigateHome}
+            topHeader={<DashboardHeader settings={effectiveSettings} onHome={navigateHome} onAdmin={navigateAdminSmoothly} onAdminIntent={preloadAdminIntent} onThemeChange={setThemeMode} onBackgroundToggle={backgroundToggle} backgroundEnabled={hasBackgroundImage} />}
+            loadingFallback={<DashboardRouteState {...routeStateProps} message="加载中…" />}
+            notFoundFallback={<DashboardRouteState {...routeStateProps} isError message={`没有找到这个监控服务：${route.targetId}`} />}
+          />
+        </Suspense>
       )}
 
       {state.kind === 'ready' && route.kind === 'home' && (
@@ -350,6 +374,7 @@ export function App() {
             downSpeed={downSpeed}
             onHome={navigateHome}
             onAdmin={navigateAdminSmoothly}
+            onAdminIntent={preloadAdminIntent}
             onThemeChange={setThemeMode}
             onBackgroundToggle={backgroundToggle}
             backgroundEnabled={hasBackgroundImage}

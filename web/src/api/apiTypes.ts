@@ -1,4 +1,4 @@
-import type { AdminAlertRule, AdminNode, AdminNotificationChannel, AdminProbeTarget, AdminSettings, AdminTheme, AppearancePreset, HomeCardNode, LatencyPoint, ProbeType, ServiceTarget, StatePoint } from '../types'
+import type { AdminAlertRule, AdminNode, AdminNotificationChannel, AdminProbeTarget, AdminTheme, AppearancePreset, HomeCardNode, LatencyPoint, ProbeType, ServiceTarget, StatePoint } from '../types'
 import type { CurrencyRates } from '../lib/currency'
 
 export interface ApiSettings {

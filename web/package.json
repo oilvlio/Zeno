@@ -4,8 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-flag-assets.mjs",
     "dev": "vite --host 0.0.0.0",
+    "prebuild": "node scripts/copy-flag-assets.mjs",
     "build": "tsc -b && vite build",
+    "check:performance": "node scripts/check-performance-budgets.mjs",
     "test": "vitest run"
   },
   "dependencies": {

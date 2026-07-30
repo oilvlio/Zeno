@@ -6,6 +6,7 @@ export interface DashboardHeaderProps {
   settings?: AdminSettings
   onHome: () => void
   onAdmin: () => void
+  onAdminIntent?: () => void
   adminLabel?: string
   leadingAction?: ReactNode
   trailingAction?: ReactNode
@@ -44,7 +45,7 @@ function BrandLogo({ logoUrl, siteTitle }: { logoUrl?: string; siteTitle?: strin
   )
 }
 
-export function DashboardHeader({ settings = defaultSettings, onHome, onAdmin, adminLabel = '后台', leadingAction, trailingAction, onThemeChange, onBackgroundToggle, backgroundEnabled = false }: DashboardHeaderProps) {
+export function DashboardHeader({ settings = defaultSettings, onHome, onAdmin, onAdminIntent, adminLabel = '后台', leadingAction, trailingAction, onThemeChange, onBackgroundToggle, backgroundEnabled = false }: DashboardHeaderProps) {
   const [themeMenuOpen, setThemeMenuOpen] = useState(false)
   const themeMenuRef = useRef<HTMLDivElement>(null)
   const themeMode = settings.theme
@@ -84,7 +85,7 @@ export function DashboardHeader({ settings = defaultSettings, onHome, onAdmin, a
       </button>
       <nav className="nav-actions" aria-label="dashboard actions">
         {leadingAction}
-        <button className="login-link" type="button" onClick={onAdmin}>{adminLabel}</button>
+        <button className="login-link" type="button" onPointerEnter={onAdminIntent} onPointerDown={onAdminIntent} onFocus={onAdminIntent} onClick={onAdmin}>{adminLabel}</button>
         <div className="theme-menu" ref={themeMenuRef}>
           <button className="nav-icon-button" type="button" aria-label={`主题：${currentThemeLabel}`} aria-haspopup="menu" aria-expanded={themeMenuOpen} onClick={() => setThemeMenuOpen((open) => !open)}>{themeMode === 'system' ? <MonitorIcon /> : currentTheme === 'dark' ? <MoonIcon /> : <SunIcon />}<span className="sr-only">切换深浅色</span></button>
           {themeMenuOpen && (

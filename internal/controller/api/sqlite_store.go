@@ -46,10 +46,8 @@ type SQLiteStore struct {
 const (
 	nodeHeartbeatOfflineAfter = 30 * time.Second
 	// Node state remains live at the Agent cadence, while the expensive rolling
-	// 24-hour loss/reporting aggregates are reused briefly. Probe writes mark the
-	// aggregate generation dirty in O(1), but a cached aggregate is retained for
-	// this minimum rebuild window. With a live summary client, aggregate fields
-	// are therefore at most this interval plus one 3s publish cadence stale.
+	// 24-hour loss/reporting aggregates are reused for this bounded interval.
+	// Management writes still hard-invalidate incompatible aggregate snapshots.
 	summaryAggregateFreshFor = 30 * time.Second
 	// Keep SQLite's one-writer authority behind a fair, bounded scheduler shared
 	// by Agent writes and recurring maintenance. Short busy waits still cover

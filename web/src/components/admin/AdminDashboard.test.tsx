@@ -2,8 +2,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { applyCustomCode } from '../../lib/customCode'
 import { remoteInsecureAgentControllerURL, validateAdminSettingsInput } from '../../lib/adminSettings'
-import { AdminDashboard } from './AdminDashboard'
+import { AdminDashboard, adminSurfaceIsReady } from './AdminDashboard'
+import AdminAccountSection from './AdminAccountSection'
 import { AdminDashboardLoadError, AdminModuleErrorBoundary, AdminOperationalWorkspaceLoadError } from './AdminDashboardBoundary'
+import AdminSettingsSection from './AdminSettingsSection'
 import { AdminOperationalWorkspace, formatTargetAssignmentSummary, renewalCurrencyOptions, type AdminOperationalWorkspaceProps } from './AdminOperationalWorkspace'
 import { AdminNodeWorkspace } from './AdminNodeWorkspace'
 import { AdminNotificationsWorkspace } from './AdminNotificationsWorkspace'
@@ -193,8 +195,8 @@ describe('AdminDashboard', () => {
   it('keeps the login form hidden until the HttpOnly cookie session probe finishes', () => {
     const html = renderToStaticMarkup(<AdminDashboard onHome={() => {}} adminSessionReady={false} />)
 
-    expect(html).toContain('admin-panel admin-panel--loading')
-    expect(html).toContain('class="admin-state-card">加载中…</div>')
+    expect(html).toContain('admin-panel')
+    expect(html).not.toContain('加载中…')
     expect(html).not.toContain('admin-login-card')
     expect(html).not.toContain('后台登录')
   })
@@ -236,9 +238,13 @@ describe('AdminDashboard', () => {
   })
 
   it('renders account settings as a dedicated account page', () => {
-    const html = renderAdmin('account')
+    const dashboard = renderAdmin('account')
+    const html = renderToStaticMarkup(<AdminAccountSection account={{ username: 'admin' }} onUpdate={() => Promise.resolve()} />)
 
-    expect(html).toContain('账户')
+    expect(dashboard).toContain('账户')
+    expect(dashboard).toContain('修改账号和密码')
+    expect(dashboard).not.toContain('加载中…')
+    expect(dashboard).not.toContain('服务器列表')
     expect(html).toContain('修改账号和密码')
     expect(html).toContain('登录信息')
     expect(html).toContain('修改密码')
@@ -247,12 +253,16 @@ describe('AdminDashboard', () => {
     expect(html).toContain('name="current-password"')
     expect(html).toContain('name="new-password"')
     expect(html).toContain('保存账户')
-    expect(html).not.toContain('服务器列表')
   })
 
   it('renders settings as a lightweight appearance configuration page', () => {
-    const html = renderAdmin('settings')
+    const dashboard = renderAdmin('settings')
+    const html = renderToStaticMarkup(<AdminSettingsSection settings={settings} onUpdate={() => {}} />)
 
+    expect(dashboard).toContain('设置')
+    expect(dashboard).toContain('站点设置')
+    expect(dashboard).not.toContain('加载中…')
+    expect(dashboard).not.toContain('服务器列表')
     expect(html).toContain('站点设置')
     expect(html).toContain('外观配置')
     expect(html).toContain('站点信息')
@@ -350,6 +360,14 @@ describe('AdminDashboard', () => {
     expect(validateAdminSettingsInput({ ...baseInput, backgroundOverlay: 0.9 })).toContain('背景遮罩')
     expect(validateAdminSettingsInput({ ...baseInput, themeColor: 'blue' })).toContain('主题色')
     expect(validateAdminSettingsInput({ ...baseInput, customCode: 'a'.repeat(60001) })).toContain('自定义代码')
+  })
+
+  it('reveals a warmed backend only after login or protected data is ready', () => {
+    expect(adminSurfaceIsReady(false, false, { kind: 'idle' })).toBe(false)
+    expect(adminSurfaceIsReady(false, true, { kind: 'idle' })).toBe(true)
+    expect(adminSurfaceIsReady(true, true, { kind: 'loading' })).toBe(false)
+    expect(adminSurfaceIsReady(true, true, { kind: 'ready', account: { username: 'admin' }, nodes: [], targets: [], notificationChannels: [], alertRules: [] })).toBe(true)
+    expect(adminSurfaceIsReady(true, true, { kind: 'error', message: 'failed' })).toBe(true)
   })
 
   it('applies custom code through managed document nodes', () => {

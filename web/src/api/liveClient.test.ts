@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAdminNode, createAdminNotificationChannel, createAdminProbeTarget, deleteAdminNode, deleteAdminNotificationChannel, deleteAdminProbeTarget, fetchAdminAccount, fetchAdminAlertRules, fetchAdminNodes, fetchAdminNotificationChannels, fetchAdminProbeTargets, fetchAdminSettings, fetchPublicSettings, fetchServiceLatency, loginAdmin, logoutAdmin, normalizeAdminAlertRules, normalizeAdminNodes, normalizeAdminNotificationChannels, normalizeAdminProbeTargets, normalizeSettings, normalizeNodeLatency, normalizeNodeState, normalizeServiceLatency, normalizeSummary, requestAdminNodeInstallCommand, subscribeNodeLatency, subscribeNodeState, subscribeServiceLatency, subscribeSummary, testAdminNotificationChannel, updateAdminAccount, updateAdminAlertRule, updateAdminNode, updateAdminNotificationChannel, updateAdminProbeTarget, updateAdminSettings } from './client'
-import { adminCookieSessionMarker } from '../lib/adminToken'
+import { subscribeNodeLatency, subscribeNodeState, subscribeServiceLatency, subscribeSummary } from './client'
 
 describe('subscribeSummary', () => {
   const originalWebSocket = globalThis.WebSocket

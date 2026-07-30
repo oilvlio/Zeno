@@ -192,7 +192,7 @@ func (h *handler) runExchangeRateRefresher(ctx context.Context, interval time.Du
 			}
 			return
 		}
-		h.invalidateSummaryCache()
+		h.markSummaryCacheDirty()
 		h.publishSummary(ctx)
 	}
 	refresh()

@@ -30,6 +30,16 @@ type continuouslyInvalidatingSummaryJSONStore struct {
 	calls   atomic.Int32
 }
 
+type failingSummaryJSONStore struct {
+	mockStore
+	calls atomic.Int32
+}
+
+func (store *failingSummaryJSONStore) Summary(context.Context) (SummaryResponse, error) {
+	store.calls.Add(1)
+	return SummaryResponse{}, fmt.Errorf("summary refresh failed")
+}
+
 func (store *continuouslyInvalidatingSummaryJSONStore) Summary(context.Context) (SummaryResponse, error) {
 	call := store.calls.Add(1)
 	store.handler.invalidateSummaryCache()
@@ -75,9 +85,9 @@ func TestPublishSummaryWithoutClientsDoesNotReadStore(t *testing.T) {
 	if got := store.calls.Load(); got != 0 {
 		t.Fatalf("summary store calls without clients = %d, want 0", got)
 	}
-	h.summaryPublishMu.Lock()
+	h.summaryScheduleMu.Lock()
 	timer := h.summaryPublishTimer
-	h.summaryPublishMu.Unlock()
+	h.summaryScheduleMu.Unlock()
 	if timer != nil {
 		t.Fatal("summary publish scheduled without websocket clients")
 	}
@@ -153,6 +163,56 @@ func TestSummaryJSONInvalidationPreventsOldFlightCommit(t *testing.T) {
 	}
 }
 
+func TestSummaryJSONSoftDirtyDuringBuildCommitsSnapshotWithoutRetry(t *testing.T) {
+	store := &blockingSummaryJSONStore{started: make(chan struct{}), release: make(chan struct{})}
+	h := &handler{store: store}
+	done := make(chan struct{})
+	var payload []byte
+	var loadErr error
+	go func() {
+		defer close(done)
+		payload, loadErr = h.summaryJSONForHTTP(context.Background())
+	}()
+	<-store.started
+	h.markSummaryCacheDirty()
+	close(store.release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("soft-dirty summary build did not finish")
+	}
+	if loadErr != nil {
+		t.Fatalf("soft-dirty summary build: %v", loadErr)
+	}
+	if got := store.calls.Load(); got != 1 {
+		t.Fatalf("soft invalidation retried Summary %d times, want 1", got)
+	}
+	if !strings.Contains(string(payload), `"id":"old"`) {
+		t.Fatalf("point-in-time payload = %s, want completed old snapshot", payload)
+	}
+	cached, ok := h.cachedSummaryJSON(0)
+	if !ok || string(cached) != string(payload) {
+		t.Fatalf("point-in-time cache = %s ok=%v", cached, ok)
+	}
+	if _, fresh := h.cachedSummaryJSON(summaryCacheHTTPFreshFor); fresh {
+		t.Fatal("newer soft invalidation was lost when point-in-time snapshot committed")
+	}
+
+	refreshed, err := h.summaryJSONForHTTP(context.Background())
+	if err != nil {
+		t.Fatalf("follow-up summary refresh: %v", err)
+	}
+	if got := store.calls.Load(); got != 2 {
+		t.Fatalf("follow-up Summary calls = %d, want 2", got)
+	}
+	if !strings.Contains(string(refreshed), `"id":"new"`) {
+		t.Fatalf("follow-up payload = %s, want new snapshot", refreshed)
+	}
+	if _, fresh := h.cachedSummaryJSON(summaryCacheHTTPFreshFor); !fresh {
+		t.Fatal("follow-up summary did not clear soft-dirty state")
+	}
+}
+
 func TestSummaryJSONContinuousInvalidationReturnsBoundedSnapshot(t *testing.T) {
 	store := &continuouslyInvalidatingSummaryJSONStore{}
 	h := &handler{store: store}
@@ -177,13 +237,14 @@ func TestSummaryJSONContinuousInvalidationReturnsBoundedSnapshot(t *testing.T) {
 	}
 }
 
-func TestHTTPOnlyStaleSummaryHitDoesNotScheduleNoopRefresh(t *testing.T) {
+func TestHTTPOnlyDirtySummaryServesStaleAndRefreshesInBackground(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	store := &summaryCountingStore{}
-	h := &handler{store: store, liveHub: newLiveUpdateHub()}
-	h.rememberSummaryJSON([]byte(`{"nodes":[],"services":[],"latency_points":[]}`))
-	h.summaryCacheMu.Lock()
-	h.summaryCacheUpdated = time.Now().Add(-summaryCacheIdleRefreshFor - time.Second)
-	h.summaryCacheMu.Unlock()
+	h := &handler{store: store, liveHub: newLiveUpdateHub(), backgroundCtx: ctx, backgroundCancel: cancel}
+	stale := []byte(`{"nodes":[{"id":"stale"}],"services":[],"latency_points":[]}`)
+	h.rememberSummaryJSON(stale)
+	h.markSummaryCacheDirty()
 
 	request := httptest.NewRequest("GET", "/api/public/v1/summary", nil)
 	response := httptest.NewRecorder()
@@ -191,14 +252,210 @@ func TestHTTPOnlyStaleSummaryHitDoesNotScheduleNoopRefresh(t *testing.T) {
 	if response.Code != 200 {
 		t.Fatalf("summary status = %d, want 200", response.Code)
 	}
-	if got := store.calls.Load(); got != 0 {
-		t.Fatalf("HTTP stale cache hit read store %d times, want 0", got)
+	if response.Body.String() != string(stale) {
+		t.Fatalf("stale response = %s, want %s", response.Body.String(), stale)
 	}
-	h.summaryPublishMu.Lock()
-	timer := h.summaryPublishTimer
-	h.summaryPublishMu.Unlock()
-	if timer != nil {
-		t.Fatal("HTTP-only stale cache hit created a no-op publish timer")
+	if got := store.calls.Load(); got != 0 {
+		t.Fatalf("stale response synchronously read store %d times, want 0", got)
+	}
+	waitForFreshSummaryCache(t, h)
+	if got := store.calls.Load(); got != 1 {
+		t.Fatalf("background refresh store calls = %d, want 1", got)
+	}
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), time.Second)
+	defer cleanupCancel()
+	if err := h.Cleanup(cleanupCtx); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+}
+
+func TestConcurrentDirtySummaryRequestsScheduleOneBackgroundRefresh(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store := &summaryCountingStore{}
+	h := &handler{store: store, liveHub: newLiveUpdateHub(), backgroundCtx: ctx, backgroundCancel: cancel}
+	stale := []byte(`{"nodes":[{"id":"stale"}],"services":[],"latency_points":[]}`)
+	h.rememberSummaryJSON(stale)
+	h.markSummaryCacheDirty()
+
+	const callers = 24
+	var wait sync.WaitGroup
+	wait.Add(callers)
+	for range callers {
+		go func() {
+			defer wait.Done()
+			response := httptest.NewRecorder()
+			h.handleSummary(response, httptest.NewRequest(http.MethodGet, "/api/public/v1/summary", nil))
+			if response.Code != http.StatusOK || response.Body.String() != string(stale) {
+				t.Errorf("stale response status=%d body=%s", response.Code, response.Body.String())
+			}
+		}()
+	}
+	wait.Wait()
+	if got := store.calls.Load(); got != 0 {
+		t.Fatalf("concurrent stale responses synchronously read store %d times, want 0", got)
+	}
+	waitForSummaryCalls(t, &store.calls, 1)
+	time.Sleep(2 * summaryCacheBackgroundDelay)
+	if got := store.calls.Load(); got != 1 {
+		t.Fatalf("background refresh store calls = %d, want 1", got)
+	}
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), time.Second)
+	defer cleanupCancel()
+	if err := h.Cleanup(cleanupCtx); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+}
+
+func TestSummaryHTTPRefreshAndWebSocketPublishUseIndependentTimers(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store := &summaryCountingStore{}
+	h := &handler{store: store, liveHub: newLiveUpdateHub(), backgroundCtx: ctx, backgroundCancel: cancel}
+	_, unsubscribe := h.liveHub.subscribe(summaryLiveTopic)
+	defer unsubscribe()
+
+	lastPublished := time.Now()
+	h.summaryScheduleMu.Lock()
+	h.summaryLastPublished = lastPublished
+	h.summaryScheduleMu.Unlock()
+	h.scheduleSummaryPublish()
+
+	stale := []byte(`{"nodes":[{"id":"stale"}],"services":[],"latency_points":[]}`)
+	h.rememberSummaryJSON(stale)
+	h.markSummaryCacheDirty()
+	response := httptest.NewRecorder()
+	h.handleSummary(response, httptest.NewRequest(http.MethodGet, "/api/public/v1/summary", nil))
+	if response.Code != http.StatusOK || response.Body.String() != string(stale) {
+		t.Fatalf("stale response status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	h.summaryScheduleMu.Lock()
+	publishTimer := h.summaryPublishTimer
+	refreshTimer := h.summaryRefreshTimer
+	h.summaryScheduleMu.Unlock()
+	if publishTimer == nil || refreshTimer == nil || publishTimer == refreshTimer {
+		t.Fatalf("publish timer=%p refresh timer=%p, want independent timers", publishTimer, refreshTimer)
+	}
+
+	waitForFreshSummaryCache(t, h)
+	if got := store.calls.Load(); got != 1 {
+		t.Fatalf("HTTP refresh store calls = %d, want 1", got)
+	}
+	h.summaryScheduleMu.Lock()
+	publishStillScheduled := h.summaryPublishTimer != nil
+	lastAfterRefresh := h.summaryLastPublished
+	h.summaryScheduleMu.Unlock()
+	if !publishStillScheduled {
+		t.Fatal("short HTTP refresh consumed the WebSocket publication timer")
+	}
+	if !lastAfterRefresh.Equal(lastPublished) {
+		t.Fatalf("HTTP refresh changed websocket cadence timestamp: got %s want %s", lastAfterRefresh, lastPublished)
+	}
+
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), time.Second)
+	defer cleanupCancel()
+	if err := h.Cleanup(cleanupCtx); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	h.summaryScheduleMu.Lock()
+	publishTimer = h.summaryPublishTimer
+	refreshTimer = h.summaryRefreshTimer
+	h.summaryScheduleMu.Unlock()
+	if publishTimer != nil || refreshTimer != nil {
+		t.Fatalf("cleanup retained timers: publish=%p refresh=%p", publishTimer, refreshTimer)
+	}
+}
+
+func TestFailedBackgroundSummaryRefreshKeepsStaleSnapshot(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store := &failingSummaryJSONStore{}
+	h := &handler{store: store, liveHub: newLiveUpdateHub(), backgroundCtx: ctx, backgroundCancel: cancel}
+	stale := []byte(`{"nodes":[{"id":"stale"}],"services":[],"latency_points":[]}`)
+	h.rememberSummaryJSON(stale)
+	h.markSummaryCacheDirty()
+
+	response := httptest.NewRecorder()
+	h.handleSummary(response, httptest.NewRequest(http.MethodGet, "/api/public/v1/summary", nil))
+	if response.Code != http.StatusOK || response.Body.String() != string(stale) {
+		t.Fatalf("stale response status=%d body=%s", response.Code, response.Body.String())
+	}
+	waitForSummaryCalls(t, &store.calls, 1)
+	cached, ok := h.cachedSummaryJSON(0)
+	if !ok || string(cached) != string(stale) {
+		t.Fatalf("stale cache after refresh failure = %s ok=%v", cached, ok)
+	}
+	if _, fresh := h.cachedSummaryJSON(summaryCacheHTTPFreshFor); fresh {
+		t.Fatal("failed refresh incorrectly marked stale snapshot fresh")
+	}
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), time.Second)
+	defer cleanupCancel()
+	if err := h.Cleanup(cleanupCtx); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+}
+
+func TestClosedHandlerServesStaleSummaryWithoutSchedulingRefresh(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	store := &summaryCountingStore{}
+	h := &handler{store: store, liveHub: newLiveUpdateHub(), backgroundCtx: ctx, backgroundCancel: cancel}
+	stale := []byte(`{"nodes":[{"id":"stale"}],"services":[],"latency_points":[]}`)
+	h.rememberSummaryJSON(stale)
+	h.markSummaryCacheDirty()
+	cancel()
+
+	response := httptest.NewRecorder()
+	h.handleSummary(response, httptest.NewRequest(http.MethodGet, "/api/public/v1/summary", nil))
+	if response.Code != http.StatusOK || response.Body.String() != string(stale) {
+		t.Fatalf("stale response status=%d body=%s", response.Code, response.Body.String())
+	}
+	time.Sleep(summaryCacheBackgroundDelay + 50*time.Millisecond)
+	if got := store.calls.Load(); got != 0 {
+		t.Fatalf("closed handler refresh calls = %d, want 0", got)
+	}
+}
+
+func waitForFreshSummaryCache(t *testing.T, h *handler) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, ok := h.cachedSummaryJSON(summaryCacheHTTPFreshFor); ok {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("background refresh did not commit a fresh cache")
+}
+
+func waitForSummaryCalls(t *testing.T, calls *atomic.Int32, want int32) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for calls.Load() < want && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := calls.Load(); got != want {
+		t.Fatalf("summary calls = %d, want %d", got, want)
+	}
+}
+
+func BenchmarkHandleSummaryStaleCache(b *testing.B) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	store := &summaryCountingStore{}
+	h := &handler{store: store, liveHub: newLiveUpdateHub(), backgroundCtx: ctx, backgroundCancel: cancel}
+	h.rememberSummaryJSON([]byte(`{"nodes":[{"id":"stale"}],"services":[],"latency_points":[]}`))
+	h.markSummaryCacheDirty()
+	request := httptest.NewRequest(http.MethodGet, "/api/public/v1/summary", nil)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		h.handleSummary(httptest.NewRecorder(), request)
+	}
+	b.StopTimer()
+	if got := store.calls.Load(); got != 0 {
+		b.Fatalf("stale benchmark read store %d times, want 0", got)
 	}
 }
 

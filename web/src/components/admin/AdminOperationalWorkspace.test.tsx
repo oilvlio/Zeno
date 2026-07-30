@@ -31,7 +31,7 @@ const synchronousSections = {
 }
 
 describe('AdminOperationalWorkspace', () => {
-  it('keeps operational admin sections behind one independently loadable boundary', () => {
+  it('keeps operational admin sections behind one cohesive router', () => {
     const html = renderToStaticMarkup(
       <AdminOperationalWorkspace {...commonProps} activeSection="nodes" sectionComponents={synchronousSections} />,
     )
@@ -53,8 +53,9 @@ describe('AdminOperationalWorkspace', () => {
     expect(notificationsHTML).not.toContain('服务器列表')
   })
 
-  it('shows a stable fallback while the active feature chunk loads', () => {
+  it('renders the default server workspace without an intermediate loading state', () => {
     const html = renderToStaticMarkup(<AdminOperationalWorkspace {...commonProps} activeSection="nodes" />)
-    expect(html).toContain('加载中…')
+    expect(html).toContain('服务器列表')
+    expect(html).not.toContain('加载中…')
   })
 })

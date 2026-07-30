@@ -116,5 +116,4 @@
   .admin-section-nav button { min-width: 0; min-height: 38px; padding: 0 5px; border-radius: var(--radius-field); }
   .admin-section-nav span { font-size: 12px; }
   .admin-state-card { min-height: 84px; margin-top: 18px; padding: 16px; }
-  .admin-panel--loading .admin-state-card { margin-top: 14px; }
 }

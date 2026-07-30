@@ -1,6 +1,6 @@
 import type { AdminSettings, HomeCardNode, LatencyPoint, ServiceTarget, StatePoint } from '../types'
 import { normalizeCurrencyRates } from '../lib/currency'
-import type { ApiLatencyPoint, ApiLatencyResponse, ApiLatencySeries, ApiLatencySummary, ApiNode, ApiServiceLatencyPoint, ApiServiceLatencyResponse, ApiServiceLatencySeries, ApiServiceTarget, ApiSettings, ApiStatePoint, ApiStateResponse, ApiStateSeries, NodeLatencyData, NodeStateData, ServiceLatencyData, SummaryData, ApiSummaryResponse } from './apiTypes'
+import type { ApiLatencyPoint, ApiLatencyResponse, ApiLatencySummary, ApiNode, ApiServiceLatencyPoint, ApiServiceLatencyResponse, ApiServiceTarget, ApiSettings, ApiStatePoint, ApiStateResponse, NodeLatencyData, NodeStateData, ServiceLatencyData, SummaryData, ApiSummaryResponse } from './apiTypes'
 
 export function normalizeSettings(input: ApiSettings): AdminSettings {
   const logoUrl = input.logo_url

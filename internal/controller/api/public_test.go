@@ -237,7 +237,7 @@ func TestSummaryWebSocketPublishesAgentStateUpdates(t *testing.T) {
 	}
 }
 
-func TestAgentHeartbeatInvalidatesCachedSummary(t *testing.T) {
+func TestAgentHeartbeatServesStaleSummaryThenRefreshesInBackground(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {
 		t.Fatalf("open sqlite store: %v", err)
@@ -284,9 +284,10 @@ func TestAgentHeartbeatInvalidatesCachedSummary(t *testing.T) {
 	}
 	updated := readAllString(t, updatedResponse.Body)
 	updatedResponse.Body.Close()
-	if !strings.Contains(updated, `"status":"online"`) {
-		t.Fatalf("updated summary = %s, want heartbeat to refresh cached node status", updated)
+	if !strings.Contains(updated, `"status":"no_data"`) {
+		t.Fatalf("immediate summary = %s, want last complete snapshot", updated)
 	}
+	assertSummaryStatusEventually(t, server.URL, "online")
 }
 
 func TestAgentPresenceWebSocketDoesNotOverrideSummaryLiveness(t *testing.T) {

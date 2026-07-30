@@ -36,4 +36,17 @@ describe('API module boundaries', () => {
     expect(controller).toContain("from '../api/adminClient'")
     expect(controller).not.toContain("from '../api/client'")
   })
+
+  it('loads every backend section with the admin route while keeping it out of the public entry', () => {
+    const dashboard = readSource('components/admin/AdminDashboard.tsx')
+    const operational = readSource('components/admin/AdminOperationalWorkspace.tsx')
+    expect(dashboard).toContain("import AdminAccountSection from './AdminAccountSection'")
+    expect(dashboard).toContain("import AdminSettingsSection from './AdminSettingsSection'")
+    expect(operational).toContain("import AdminNodeWorkspace from './AdminNodeWorkspace'")
+    expect(operational).toContain("import AdminTargetWorkspace from './AdminTargetWorkspace'")
+    expect(operational).toContain("import AdminNotificationsWorkspace from './AdminNotificationsWorkspace'")
+    expect(readSource('App.tsx')).toContain("import('./components/admin/AdminDashboard')")
+    expect(readSource('components/admin/AdminAccountSection.tsx')).toContain('账号只能使用 3-64 位')
+    expect(readSource('components/admin/AdminSettingsSection.tsx')).toContain('卡片透明度')
+  })
 })

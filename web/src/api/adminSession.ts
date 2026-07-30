@@ -18,6 +18,8 @@ export interface AdminAccountData {
   username: string
 }
 
+let adminCookieSessionProbe: Promise<boolean> | null = null
+
 export function adminHeaders(adminToken: string, headers: Record<string, string> = {}): HeadersInit {
   if (adminToken !== '' && adminToken !== adminCookieSessionMarker) {
     return { ...headers, 'X-Admin-Token': adminToken }
@@ -51,6 +53,21 @@ export async function fetchAdminAccount(adminToken: string, signal?: AbortSignal
   if (!response.ok) throw new Error(`admin account failed: ${response.status}`)
   const data = await response.json() as ApiAdminAccountResponse
   return { username: data.account.username }
+}
+
+export function probeAdminCookieSession(): Promise<boolean> {
+  if (adminCookieSessionProbe === null) {
+    adminCookieSessionProbe = fetchAdminAccount(adminCookieSessionMarker).then(() => true, () => false)
+  }
+  return adminCookieSessionProbe
+}
+
+export function rememberAdminCookieSessionProbe(authenticated: boolean) {
+  adminCookieSessionProbe = Promise.resolve(authenticated)
+}
+
+export function resetAdminCookieSessionProbe() {
+  adminCookieSessionProbe = null
 }
 
 export async function logoutAdmin(adminToken: string): Promise<void> {

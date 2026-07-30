@@ -128,7 +128,6 @@ var summaryWebSocketUpgrader = websocket.Upgrader{
 
 const (
 	summaryCacheHTTPFreshFor    = 30 * time.Second
-	summaryCacheIdleRefreshFor  = 15 * time.Second
 	summaryCacheBackgroundDelay = 350 * time.Millisecond
 	summaryHTTPQueryTimeout     = 5 * time.Second
 	summaryGenerationMaxRetries = 1
@@ -160,7 +159,7 @@ func (h *handler) handleSummaryWebSocket(w http.ResponseWriter, r *http.Request)
 	}
 	updates, unsubscribe := h.liveHub.subscribe(summaryLiveTopic)
 	if cached {
-		h.scheduleSummaryPublishAfter(summaryCacheBackgroundDelay)
+		h.scheduleSummaryPublish()
 	}
 	h.handleLiveJSONWebSocket(w, r, initial, updates, unsubscribe)
 }
@@ -332,12 +331,13 @@ func (h *handler) loadSummaryJSON(ctx context.Context, maxAge time.Duration, all
 	for {
 		now := time.Now()
 		h.summaryCacheMu.Lock()
-		if allowCached && len(h.summaryCache) > 0 && (maxAge <= 0 || now.Sub(h.summaryCacheUpdated) <= maxAge) {
+		if allowCached && len(h.summaryCache) > 0 && !h.summaryCacheDirty && (maxAge <= 0 || now.Sub(h.summaryCacheUpdated) <= maxAge) {
 			payload := append([]byte(nil), h.summaryCache...)
 			h.summaryCacheMu.Unlock()
 			return payload, nil
 		}
 		generation := h.summaryCacheGeneration
+		dirtyRevision := h.summaryCacheDirtyRevision
 		if flight := h.summaryCacheFlight; flight != nil {
 			h.summaryCacheMu.Unlock()
 			select {
@@ -373,6 +373,10 @@ func (h *handler) loadSummaryJSON(ctx context.Context, maxAge time.Duration, all
 		if err == nil && currentGeneration == generation {
 			h.summaryCache = append(h.summaryCache[:0], payload...)
 			h.summaryCacheUpdated = time.Now()
+			// Commit this complete point-in-time snapshot even if another soft
+			// invalidation raced the build, but preserve that newer dirty revision
+			// so a later refresh cannot be lost.
+			h.summaryCacheDirty = h.summaryCacheDirtyRevision != dirtyRevision
 		}
 		flight.payload = append([]byte(nil), payload...)
 		flight.err = err
@@ -430,90 +434,6 @@ func (h *handler) serviceLatencyJSON(ctx context.Context, targetID string, windo
 		}
 		return json.Marshal(latency)
 	})
-}
-
-func (h *handler) publishSummary(_ context.Context) {
-	if h.liveHub == nil {
-		return
-	}
-	if !h.liveHub.hasClients(summaryLiveTopic) {
-		return
-	}
-	h.scheduleSummaryPublish()
-}
-
-func (h *handler) scheduleSummaryPublish() {
-	if h == nil || h.backgroundContext().Err() != nil {
-		return
-	}
-	now := time.Now()
-	h.summaryPublishMu.Lock()
-	if h.summaryPublishTimer != nil {
-		h.summaryPublishMu.Unlock()
-		return
-	}
-	wait := summaryPublishCoalesceDelay
-	if !h.summaryLastPublished.IsZero() {
-		minWait := h.summaryLastPublished.Add(summaryPublishMinInterval).Sub(now)
-		if minWait > wait {
-			wait = minWait
-		}
-	}
-	timer := time.NewTimer(wait)
-	h.summaryPublishTimer = timer
-	backgroundCtx, ok := h.beginBackground()
-	if !ok {
-		timer.Stop()
-		h.summaryPublishTimer = nil
-		h.summaryPublishMu.Unlock()
-		return
-	}
-	go func() {
-		defer h.backgroundWG.Done()
-		select {
-		case <-backgroundCtx.Done():
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			return
-		case <-timer.C:
-		}
-		h.summaryPublishMu.Lock()
-		if h.summaryPublishTimer != timer {
-			h.summaryPublishMu.Unlock()
-			return
-		}
-		h.summaryPublishTimer = nil
-		h.summaryLastPublished = time.Now()
-		h.summaryPublishMu.Unlock()
-
-		ctx, cancel := context.WithTimeout(backgroundCtx, 5*time.Second)
-		defer cancel()
-		h.publishSummaryNow(ctx)
-	}()
-	h.summaryPublishMu.Unlock()
-}
-
-func (h *handler) publishSummaryNow(ctx context.Context) {
-	if h.liveHub == nil || !h.liveHub.hasClients(summaryLiveTopic) {
-		return
-	}
-	payload, err := h.summaryJSON(ctx)
-	if err != nil {
-		return
-	}
-	h.liveHub.publish(summaryLiveTopic, payload)
-}
-
-func (h *handler) publishSummaryNowFresh(ctx context.Context) {
-	h.invalidateSummaryAggregates()
-	h.invalidateSummaryCache()
-	// Cache invalidation must be synchronous so the next HTTP read is fresh, but
-	// rebuilding and broadcasting the summary should not hold up an admin save.
-	h.publishSummary(ctx)
 }
 
 func (h *handler) scheduleNodeStatePublish(nodeID string) {
@@ -641,7 +561,7 @@ func (h *handler) cachedSummaryJSON(maxAge time.Duration) ([]byte, bool) {
 	if len(h.summaryCache) == 0 {
 		return nil, false
 	}
-	if maxAge > 0 && time.Since(h.summaryCacheUpdated) > maxAge {
+	if maxAge > 0 && (h.summaryCacheDirty || time.Since(h.summaryCacheUpdated) > maxAge) {
 		return nil, false
 	}
 	return append([]byte(nil), h.summaryCache...), true
@@ -652,6 +572,14 @@ func (h *handler) rememberSummaryJSON(payload []byte) {
 	h.summaryCacheGeneration++
 	h.summaryCache = append(h.summaryCache[:0], payload...)
 	h.summaryCacheUpdated = time.Now()
+	h.summaryCacheDirty = false
+	h.summaryCacheMu.Unlock()
+}
+
+func (h *handler) markSummaryCacheDirty() {
+	h.summaryCacheMu.Lock()
+	h.summaryCacheDirtyRevision++
+	h.summaryCacheDirty = true
 	h.summaryCacheMu.Unlock()
 }
 
@@ -660,6 +588,7 @@ func (h *handler) invalidateSummaryCache() {
 	h.summaryCacheGeneration++
 	h.summaryCache = nil
 	h.summaryCacheUpdated = time.Time{}
+	h.summaryCacheDirty = false
 	h.summaryCacheMu.Unlock()
 }
 
@@ -667,69 +596,6 @@ func (h *handler) invalidateSummaryAggregates() {
 	if store, ok := h.store.(interface{ invalidateSummaryAggregates() }); ok {
 		store.invalidateSummaryAggregates()
 	}
-}
-
-func (h *handler) markSummaryAggregatesDirty() {
-	if store, ok := h.store.(interface{ markSummaryAggregatesDirty() }); ok {
-		store.markSummaryAggregatesDirty()
-		return
-	}
-	// Non-SQLite stores may only expose hard invalidation. Keep compatibility
-	// without making the common SQLite Agent path wait for aggregate SQL.
-	h.invalidateSummaryAggregates()
-}
-
-func (h *handler) summaryCacheStale(maxAge time.Duration) bool {
-	h.summaryCacheMu.RLock()
-	defer h.summaryCacheMu.RUnlock()
-	return len(h.summaryCache) == 0 || time.Since(h.summaryCacheUpdated) > maxAge
-}
-
-func (h *handler) scheduleSummaryPublishAfter(delay time.Duration) {
-	if h == nil || h.backgroundContext().Err() != nil || h.liveHub == nil || !h.liveHub.hasClients(summaryLiveTopic) {
-		return
-	}
-	h.summaryPublishMu.Lock()
-	if h.summaryPublishTimer != nil {
-		h.summaryPublishMu.Unlock()
-		return
-	}
-	timer := time.NewTimer(delay)
-	h.summaryPublishTimer = timer
-	backgroundCtx, ok := h.beginBackground()
-	if !ok {
-		timer.Stop()
-		h.summaryPublishTimer = nil
-		h.summaryPublishMu.Unlock()
-		return
-	}
-	go func() {
-		defer h.backgroundWG.Done()
-		select {
-		case <-backgroundCtx.Done():
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			return
-		case <-timer.C:
-		}
-		h.summaryPublishMu.Lock()
-		if h.summaryPublishTimer != timer {
-			h.summaryPublishMu.Unlock()
-			return
-		}
-		h.summaryPublishTimer = nil
-		h.summaryLastPublished = time.Now()
-		h.summaryPublishMu.Unlock()
-
-		ctx, cancel := context.WithTimeout(backgroundCtx, 5*time.Second)
-		defer cancel()
-		h.publishSummaryNow(ctx)
-	}()
-	h.summaryPublishMu.Unlock()
 }
 
 func (h *handler) publishNodeState(ctx context.Context, nodeID string) {

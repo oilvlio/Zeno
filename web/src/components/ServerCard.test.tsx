@@ -87,7 +87,7 @@ describe('ServerCard', () => {
     expect(html).toContain('usage-row--memory')
     expect(html).toContain('usage-row--disk')
     expect(html).toContain('usage-row--traffic')
-    expect(html.match(/class="usage-row__icon"/g)).toHaveLength(4)
+    expect(html).not.toContain('usage-row__icon')
     expect(html).toMatch(/>CPU<\/span>[\s\S]*<strong>12.50%<\/strong>[\s\S]*>内存<\/span>[\s\S]*<strong>25.00%<\/strong>[\s\S]*>存储<\/span>[\s\S]*<strong>25.00%<\/strong>[\s\S]*>流量<\/span>[\s\S]*<strong>1.00KB \/ 4.00KB<\/strong>/)
     expect(html).not.toContain('usage-row__detail')
     expect(html).not.toContain('>负载<')
