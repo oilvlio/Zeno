@@ -102,8 +102,9 @@ function normalizeHourlyHistory(history: HourlyLatencyPoint[] | null | undefined
 function historyTone(kind: HistoryKind, value: number | null | undefined): HistoryTone {
   if (value === null || value === undefined || !Number.isFinite(value)) return 'empty'
   if (kind === 'latency') {
-    if (value >= 150) return 'danger'
-    if (value >= 80) return 'warning'
+    if (value < 0) return 'empty'
+    if (value >= 200) return 'danger'
+    if (value >= 100) return 'warning'
     return 'good'
   }
   if (value >= 5) return 'danger'
@@ -210,10 +211,10 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
 
       <section className="node-usage" aria-label={`${node.displayName} usage`}>
         <div className="node-usage-grid">
-          <UsageBar icon={<CpuIcon />} label="CPU" valueText={`${formatUsage(node.cpuPercent)}%`} detailLabel="负载" detailValue={formatLoad(node.load1, node.load5, node.load15)} percent={node.cpuPercent} />
-          <UsageBar label="内存" valueText={`${formatUsage(memoryPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.memoryUsedBytes, node.memoryTotalBytes)} percent={memoryPercent} />
-          <UsageBar label="存储" valueText={`${formatUsage(diskPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.diskUsedBytes, node.diskTotalBytes)} percent={diskPercent} />
-          <UsageBar label={formatTrafficLabel()} valueText={`${formatUsage(trafficPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.monthlyBillableBytes, node.monthlyQuotaBytes)} percent={trafficPercent} />
+          <UsageBar tone="cpu" icon={<CpuIcon />} label="CPU" valueText={`${formatUsage(node.cpuPercent)}%`} detailLabel="负载" detailValue={formatLoad(node.load1, node.load5, node.load15)} percent={node.cpuPercent} />
+          <UsageBar tone="memory" icon={<MemoryIcon />} label="内存" valueText={`${formatUsage(memoryPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.memoryUsedBytes, node.memoryTotalBytes)} percent={memoryPercent} />
+          <UsageBar tone="disk" icon={<DiskIcon />} label="存储" valueText={`${formatUsage(diskPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.diskUsedBytes, node.diskTotalBytes)} percent={diskPercent} />
+          <UsageBar tone="traffic" icon={<TrafficIcon />} label={formatTrafficLabel()} valueText={`${formatUsage(trafficPercent)}%`} detailLabel="占用" detailValue={formatCapacity(node.monthlyBillableBytes, node.monthlyQuotaBytes)} percent={trafficPercent} />
         </div>
         <section className="node-footer-grid" aria-label={`${node.displayName} network and billing`}>
           <Metric tone="up" icon={<UploadIcon />} label="上传" value={formatRate(node.netOutSpeedBps)} />
@@ -230,10 +231,12 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
   )
 }
 
-function UsageBar({ icon, label, valueText, detailLabel, detailValue, percent }: { icon?: ReactNode; label: string; valueText: string; detailLabel: string; detailValue: string; percent: number | null | undefined }) {
+type ResourceTone = 'cpu' | 'memory' | 'disk' | 'traffic'
+
+function UsageBar({ tone, icon, label, valueText, detailLabel, detailValue, percent }: { tone: ResourceTone; icon: ReactNode; label: string; valueText: string; detailLabel: string; detailValue: string; percent: number | null | undefined }) {
   const value = clampPercent(percent)
   return (
-    <div className="usage-row">
+    <div className={`usage-row usage-row--${tone}`}>
       <div className="usage-row__meta">
         <span className="usage-row__label">
           {icon && <span className="usage-row__icon">{icon}</span>}
@@ -300,6 +303,35 @@ function CpuIcon() {
       <rect x="6" y="6" width="12" height="12" rx="2" />
       <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
       <rect x="9" y="9" width="6" height="6" rx="1" />
+    </svg>
+  )
+}
+
+function MemoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="7" width="18" height="10" rx="2" />
+      <path d="M7 11v2M11 11v2M15 11v2M19 11v2M5 17v3M9 17v3M15 17v3M19 17v3" />
+    </svg>
+  )
+}
+
+function DiskIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 5h14l3 7v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5l3-7Z" />
+      <path d="M3 12h18" />
+      <circle cx="7" cy="16" r="1" />
+      <circle cx="11" cy="16" r="1" />
+    </svg>
+  )
+}
+
+function TrafficIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 17V5M7 5 3 9M7 5l4 4" />
+      <path d="M17 7v12M17 19l-4-4M17 19l4-4" />
     </svg>
   )
 }

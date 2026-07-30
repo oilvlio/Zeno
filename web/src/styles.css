@@ -722,13 +722,24 @@ svg { display: block; }
 .node-usage-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px 14px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-field);
+  background: var(--control-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
 }
-.usage-row { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.usage-row { --resource-accent: var(--blue); min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+.usage-row:nth-child(2n) { border-left: 1px solid var(--border); }
+.usage-row:nth-child(n + 3) { border-top: 1px solid var(--border); }
+.usage-row--cpu { --resource-accent: var(--blue); }
+.usage-row--memory { --resource-accent: var(--green); }
+.usage-row--disk { --resource-accent: var(--purple); }
+.usage-row--traffic { --resource-accent: var(--orange); }
 .usage-row__meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; line-height: 1; }
 .usage-row__meta span { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
 .usage-row__label { min-width: 0; display: inline-flex; align-items: center; gap: 4px; }
-.usage-row__icon { width: 13px; height: 13px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--blue); }
+.usage-row__meta .usage-row__icon { width: 13px; height: 13px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--resource-accent); }
 .usage-row__icon svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; }
 .usage-row__meta strong { color: var(--foreground); font-weight: 500; font-variant-numeric: tabular-nums; }
 .usage-track { position: relative; width: 100%; height: 7px; overflow: hidden; border: 0; border-radius: var(--radius-pill); background: var(--usage-track-bg); }
@@ -759,7 +770,12 @@ svg { display: block; }
 .node-footer-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-field);
+  background: var(--control-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
 }
 .node-metric {
   --metric-accent: var(--blue);
@@ -770,14 +786,16 @@ svg { display: block; }
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-field);
-  background: var(--control-bg);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--metric-accent);
   font-size: 11px;
 }
+.node-metric:nth-child(2n) { border-left: 1px solid var(--border); }
+.node-metric:nth-child(n + 3) { border-top: 1px solid var(--border); }
 .metric-heading { min-width: 0; max-width: 100%; display: inline-flex; align-items: center; justify-content: flex-start; gap: 4px; }
 .metric-icon { width: 14px; height: 14px; flex: none; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
 .metric-icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
@@ -794,7 +812,12 @@ svg { display: block; }
 
 .node-health-history {
   display: grid;
-  gap: 8px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-field);
+  background: var(--control-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
 }
 .node-health-metric {
   --metric-accent: var(--green);
@@ -803,13 +826,14 @@ svg { display: block; }
   grid-template-columns: minmax(108px, auto) minmax(0, 1fr);
   align-items: center;
   gap: 10px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-field);
-  background: var(--control-bg);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+  padding: 9px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   font-size: 11px;
 }
+.node-health-metric + .node-health-metric { border-top: 1px solid var(--border); }
 .node-health-metric.health-loss { --metric-accent: var(--orange); }
 .node-health-metric .metric-icon,
 .node-health-metric .metric-icon svg { width: 12px; height: 12px; }

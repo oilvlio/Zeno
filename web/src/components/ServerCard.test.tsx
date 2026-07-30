@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { HomeCardNode, HourlyLatencyPoint } from '../types'
 import { ServerCard } from './ServerCard'
 
-const hourlyHistory: HourlyLatencyPoint[] = [20, 40, 60, 79, 80, 100, 149, 150, 180, 220, null, 50].map((latencyMs, index) => ({
+const hourlyHistory: HourlyLatencyPoint[] = [0, 50, 99.99, 100, 150, 199.99, 200, 250, -1, null, 75, 175].map((latencyMs, index) => ({
   startedAt: new Date(Date.UTC(2026, 6, 29, index)).toISOString(),
   latencyMs,
   lossPercent: [0, 0.1, 0.5, 0.9, 1, 2, 4.9, 5, 10, 25, null, 0][index],
@@ -78,8 +78,12 @@ describe('ServerCard', () => {
 
     expect(html).toContain('node-usage-grid')
     expect(html).not.toContain('node-specs')
-    expect(html.match(/class="usage-row"/g)).toHaveLength(4)
-    expect(html).toContain('usage-row__icon')
+    expect(html.match(/class="usage-row usage-row--/g)).toHaveLength(4)
+    expect(html).toContain('usage-row--cpu')
+    expect(html).toContain('usage-row--memory')
+    expect(html).toContain('usage-row--disk')
+    expect(html).toContain('usage-row--traffic')
+    expect(html.match(/class="usage-row__icon"/g)).toHaveLength(4)
     expect(html).toMatch(/>CPU<\/span>[\s\S]*<strong>12.50%<\/strong>[\s\S]*>内存<\/span>[\s\S]*<strong>25.00%<\/strong>[\s\S]*>存储<\/span>[\s\S]*<strong>25.00%<\/strong>[\s\S]*>流量<\/span>[\s\S]*<strong>25.00%<\/strong>/)
     expect(html).toContain('>负载</span>')
     expect(html).toContain('>0.42 / 0.35 / 0.28</span>')
@@ -102,7 +106,7 @@ describe('ServerCard', () => {
     expect(html).toMatch(/metric-down[\s\S]*>下载<\/span>[\s\S]*>128 B\/s<\/strong>/)
   })
 
-  it('renders latency and packet loss as separate bottom rows with twelve hourly cells each', () => {
+  it('renders latency and packet loss in one grouped frame with twelve hourly cells each', () => {
     const html = renderToStaticMarkup(<ServerCard node={baseNode} onOpen={vi.fn()} />)
 
     expect(html).toMatch(/class="node-health-history"[\s\S]*health-latency[\s\S]*health-loss/)
@@ -118,8 +122,15 @@ describe('ServerCard', () => {
     expect(html).toContain('history-loss is-empty')
     expect(html).toContain('>72.0 ms</strong>')
     expect(html).toContain('>1.25%</strong>')
-    expect(html).toContain('2026-07-29 00:00 · 延迟 20.00 ms')
-    expect(html).toContain('2026-07-29 00:00 · 丢包 0.00%')
+    expect(html).toMatch(/history-latency is-good[^>]*title="2026-07-29 00:00 · 延迟 0.00 ms"/)
+    expect(html).toMatch(/history-latency is-good[^>]*title="2026-07-29 02:00 · 延迟 99.99 ms"/)
+    expect(html).toMatch(/history-latency is-warning[^>]*title="2026-07-29 03:00 · 延迟 100.00 ms"/)
+    expect(html).toMatch(/history-latency is-warning[^>]*title="2026-07-29 05:00 · 延迟 199.99 ms"/)
+    expect(html).toMatch(/history-latency is-danger[^>]*title="2026-07-29 06:00 · 延迟 200.00 ms"/)
+    expect(html).toMatch(/history-latency is-empty[^>]*title="2026-07-29 08:00 · 延迟 -1.00 ms"/)
+    expect(html).toMatch(/history-loss is-good[^>]*title="2026-07-29 03:00 · 丢包 0.90%"/)
+    expect(html).toMatch(/history-loss is-warning[^>]*title="2026-07-29 04:00 · 丢包 1.00%"/)
+    expect(html).toMatch(/history-loss is-danger[^>]*title="2026-07-29 07:00 · 丢包 5.00%"/)
   })
 
   it('keeps twelve neutral hourly cells when history is unavailable', () => {
