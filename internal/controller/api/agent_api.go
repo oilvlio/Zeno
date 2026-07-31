@@ -342,7 +342,7 @@ func (h *handler) handleAgentState(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid state id")
 		return
 	}
-	if invalidFloat(request.CPUPercent) || request.CPUPercent < 0 || request.CPUPercent > 100 || optionalFloatInvalidOrNegative(request.Load1) || optionalFloatInvalidOrNegative(request.Load5) || optionalFloatInvalidOrNegative(request.Load15) || request.MemoryUsedBytes < 0 || request.MemoryTotalBytes < 0 || optionalIntNegative(request.SwapUsedBytes) || optionalIntNegative(request.SwapTotalBytes) || request.DiskUsedBytes < 0 || request.DiskTotalBytes < 0 || request.NetInTotalBytes < 0 || request.NetOutTotalBytes < 0 || !validNetworkCounterSource(request.NetCounterSource) || invalidFloat(request.NetInSpeedBps) || request.NetInSpeedBps < 0 || invalidFloat(request.NetOutSpeedBps) || request.NetOutSpeedBps < 0 || optionalIntNegative(request.ProcessCount) || optionalIntNegative(request.TCPConnectionCount) || optionalIntNegative(request.UDPConnectionCount) || request.UptimeSeconds < 0 {
+	if !validAgentStateValues(request) {
 		writeError(w, http.StatusBadRequest, "invalid state values")
 		return
 	}

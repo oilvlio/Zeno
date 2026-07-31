@@ -16,7 +16,6 @@ cd "$(dirname "$0")/.."
 # Known offenders predating the guard. Each entry must be removed, never added
 # to, as these functions are split up.
 ALLOWED_OVER_THRESHOLD=(
-  "(*handler).handleAgentState"
   "(*SQLiteStore).insertAgentProbeResultsOnce"
   "(*handler).handleAgentPresenceWebSocket"
 )
