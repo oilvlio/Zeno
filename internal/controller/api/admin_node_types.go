@@ -264,34 +264,26 @@ type adminOptionalFloat struct {
 }
 
 func (value *adminOptionalFloat) UnmarshalJSON(data []byte) error {
-	value.Set = true
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		value.Valid = false
-		value.Value = 0
-		return nil
-	}
-	var parsed float64
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return err
-	}
-	value.Valid = true
-	value.Value = parsed
-	return nil
+	return unmarshalAdminOptionalNumber(data, &value.Set, &value.Valid, &value.Value)
 }
 
 func (value *adminOptionalInt64) UnmarshalJSON(data []byte) error {
-	value.Set = true
+	return unmarshalAdminOptionalNumber(data, &value.Set, &value.Valid, &value.Value)
+}
+
+func unmarshalAdminOptionalNumber[T int64 | float64](data []byte, set, valid *bool, value *T) error {
+	*set = true
 	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		value.Valid = false
-		value.Value = 0
+		*valid = false
+		*value = 0
 		return nil
 	}
-	var parsed int64
+	var parsed T
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return err
 	}
-	value.Valid = true
-	value.Value = parsed
+	*valid = true
+	*value = parsed
 	return nil
 }
 
