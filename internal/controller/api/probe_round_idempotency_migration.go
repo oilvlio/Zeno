@@ -42,40 +42,11 @@ func (s *SQLiteStore) probeRoundIdempotencyMigrationCurrent(ctx context.Context)
 }
 
 func (s *SQLiteStore) migrateProbeRoundIdempotency(ctx context.Context) error {
-	indexColumns, err := sqliteIndexColumns(ctx, s.db, "idx_probe_rounds_idempotency")
+	state, err := s.inspectProbeRoundIndexState(ctx)
 	if err != nil {
 		return err
 	}
-	indexUnique, err := sqliteIndexUnique(ctx, s.db, "idx_probe_rounds_idempotency")
-	if err != nil {
-		return err
-	}
-	agentIndexColumns, err := sqliteIndexColumns(ctx, s.db, "idx_probe_rounds_agent_id")
-	if err != nil {
-		return err
-	}
-	agentIndexUnique, err := sqliteIndexUnique(ctx, s.db, "idx_probe_rounds_agent_id")
-	if err != nil {
-		return err
-	}
-	var rowsNeedBackfill int
-	if err := s.db.QueryRowContext(ctx, `
-		SELECT EXISTS (
-			SELECT 1 FROM probe_rounds
-			WHERE idempotency_key = '' OR payload_hash = ''
-			   OR (COALESCE(agent_round_id, '') = '' AND idempotency_key GLOB 'agent:*')
-			LIMIT 1
-		)
-	`).Scan(&rowsNeedBackfill); err != nil {
-		return err
-	}
-	duplicateAgentIDs, err := s.probeRoundDuplicateAgentIDsExist(ctx)
-	if err != nil {
-		return err
-	}
-	wantColumns := []string{"node_id", "target_id", "ts", "type", "idempotency_key"}
-	wantAgentColumns := []string{"node_id", "agent_round_id"}
-	if rowsNeedBackfill == 0 && !duplicateAgentIDs && stringSlicesEqual(indexColumns, wantColumns) && indexUnique && stringSlicesEqual(agentIndexColumns, wantAgentColumns) && agentIndexUnique {
+	if state.upToDate() {
 		return nil
 	}
 
@@ -85,64 +56,83 @@ func (s *SQLiteStore) migrateProbeRoundIdempotency(ctx context.Context) error {
 	// two conflicting legacy keys can be repaired deterministically instead of
 	// making startup fail halfway through. Startup has not exposed the store to
 	// request handlers yet, and a restart safely resumes before recreating it.
-	if rowsNeedBackfill != 0 && len(agentIndexColumns) != 0 {
+	if state.rowsNeedBackfill && len(state.agentColumns) != 0 {
 		if _, err := s.db.ExecContext(ctx, `DROP INDEX IF EXISTS idx_probe_rounds_agent_id`); err != nil {
 			return err
 		}
-		agentIndexColumns = nil
-		agentIndexUnique = false
+		state.agentColumns = nil
+		state.agentUnique = false
 	}
 
-	// Backfill in bounded batches. Each batch streams one JOIN over its rounds
-	// and samples, computes hashes without retaining every sample, then applies a
-	// single set-based UPDATE in a short transaction. This avoids the legacy
-	// all-rows allocation, one giant write transaction, and per-round N+1 query.
-	for rowsNeedBackfill != 0 {
+	if err := s.backfillProbeRoundIdempotency(ctx, state.rowsNeedBackfill); err != nil {
+		return err
+	}
+	if err := s.repairProbeRoundDuplicateAgentIDs(ctx); err != nil {
+		return err
+	}
+	return s.rebuildProbeRoundIndexes(ctx, state)
+}
+
+// backfillProbeRoundIdempotency fills missing idempotency keys, payload hashes
+// and agent_round_id values in bounded batches.
+//
+// Each batch streams one JOIN over its rounds and samples, computes hashes
+// without retaining every sample, then applies a single set-based UPDATE in a
+// short transaction. This avoids the legacy all-rows allocation, one giant write
+// transaction, and per-round N+1 query.
+func (s *SQLiteStore) backfillProbeRoundIdempotency(ctx context.Context, pending bool) error {
+	for pending {
 		backfills, err := s.loadProbeRoundIdempotencyBackfillBatch(ctx, probeRoundIdempotencyMigrationBatchSize)
 		if err != nil {
 			return err
 		}
 		if len(backfills) == 0 {
-			break
+			// No batch could be formed even though rows still look pending;
+			// stop rather than spin.
+			return nil
 		}
 		if err := s.applyProbeRoundIdempotencyBackfillBatch(ctx, backfills); err != nil {
 			return err
 		}
-		if err := s.db.QueryRowContext(ctx, `
-			SELECT EXISTS (
-				SELECT 1 FROM probe_rounds
-				WHERE idempotency_key = '' OR payload_hash = ''
-				   OR (COALESCE(agent_round_id, '') = '' AND idempotency_key GLOB 'agent:*')
-				LIMIT 1
-			)
-		`).Scan(&rowsNeedBackfill); err != nil {
+		if pending, err = s.probeRoundRowsNeedBackfill(ctx); err != nil {
 			return err
 		}
 	}
+	return nil
+}
 
-	// Older schemas scoped idempotency to target/timestamp and could therefore
-	// contain the same Agent round id more than once for a node. Preserve every
-	// historical measurement, but keep the oldest row as the canonical Agent-id
-	// binding and demote later rows to stable legacy keys. This makes the new
-	// node-wide uniqueness rule recoverable and idempotent without deleting data.
+// repairProbeRoundDuplicateAgentIDs resolves nodes that report the same Agent
+// round id more than once.
+//
+// Older schemas scoped idempotency to target/timestamp and could therefore
+// contain the same Agent round id more than once for a node. Preserve every
+// historical measurement, but keep the oldest row as the canonical Agent-id
+// binding and demote later rows to stable legacy keys. This makes the new
+// node-wide uniqueness rule recoverable and idempotent without deleting data.
+func (s *SQLiteStore) repairProbeRoundDuplicateAgentIDs(ctx context.Context) error {
 	for {
 		repaired, err := s.repairProbeRoundDuplicateAgentIDBatch(ctx, probeRoundIdempotencyMigrationBatchSize)
 		if err != nil {
 			return err
 		}
 		if repaired == 0 {
-			break
+			return nil
 		}
 	}
+}
 
-	// Index replacement is a separate, short schema transaction after all data
-	// batches are durable. A restart can resume the idempotent backfill safely.
+// rebuildProbeRoundIndexes recreates whichever index is not already final.
+//
+// Index replacement is a separate, short schema transaction after all data
+// batches are durable. A restart can resume the idempotent backfill safely.
+func (s *SQLiteStore) rebuildProbeRoundIndexes(ctx context.Context, state probeRoundIndexState) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { rollbackUnlessCommitted(tx) }()
-	if !stringSlicesEqual(indexColumns, wantColumns) || !indexUnique {
+
+	if !state.idempotencyIndexCorrect() {
 		if _, err := tx.ExecContext(ctx, `DROP INDEX IF EXISTS idx_probe_rounds_idempotency`); err != nil {
 			return err
 		}
@@ -153,7 +143,7 @@ func (s *SQLiteStore) migrateProbeRoundIdempotency(ctx context.Context) error {
 			return err
 		}
 	}
-	if !stringSlicesEqual(agentIndexColumns, wantAgentColumns) || !agentIndexUnique {
+	if !state.agentIndexCorrect() {
 		if _, err := tx.ExecContext(ctx, `DROP INDEX IF EXISTS idx_probe_rounds_agent_id`); err != nil {
 			return err
 		}

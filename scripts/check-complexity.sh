@@ -18,7 +18,6 @@ cd "$(dirname "$0")/.."
 ALLOWED_OVER_THRESHOLD=(
   "(*handler).handleAgentState"
   "(*handler).handleAgentProbeResults"
-  "(*SQLiteStore).migrateProbeRoundIdempotency"
   "insertAgentStateSampleTx"
   "(*SQLiteStore).insertAgentProbeResultsOnce"
   "(*handler).handleAgentPresenceWebSocket"
