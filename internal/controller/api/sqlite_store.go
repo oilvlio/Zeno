@@ -16,19 +16,35 @@ import (
 
 type SQLiteStore struct {
 	db *sql.DB
-	*sqliteAgentAccess
+	*sqliteAdminDomain
+	*sqliteAgentDomain
+	*sqliteMonitoringDomain
+	*sqliteNotificationDomain
+	writes sqliteWriteState
+}
+
+type sqliteAdminDomain struct {
 	*sqliteAdminAlertRules
 	*sqliteAdminAuth
 	*sqliteAdminDeletion
-	*sqliteLatencyQueries
-	*sqliteNotificationAuthority
-	*sqliteReadQueries
-	*sqliteRenewalNotifications
 	*sqliteSettings
-	telemetryStorage        *telemetryStorageGuard
+}
+
+type sqliteAgentDomain struct {
+	*sqliteAgentAccess
+	telemetryStorage *telemetryStorageGuard
+}
+
+type sqliteMonitoringDomain struct {
+	*sqliteLatencyQueries
+	*sqliteReadQueries
+	summaryCache sqliteSummaryCache
+}
+
+type sqliteNotificationDomain struct {
+	*sqliteNotificationAuthority
+	*sqliteRenewalNotifications
 	notificationCredentials notificationCredentialState
-	summaryCache            sqliteSummaryCache
-	writes                  sqliteWriteState
 }
 
 type sqliteWriteState struct {
@@ -171,17 +187,25 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 func newSQLiteStore(db *sql.DB, telemetryStorage *telemetryStorageGuard) *SQLiteStore {
 	latencyQueries := &sqliteLatencyQueries{db: db}
 	return &SQLiteStore{
-		db:                          db,
-		sqliteAgentAccess:           &sqliteAgentAccess{db: db},
-		sqliteAdminAlertRules:       &sqliteAdminAlertRules{db: db},
-		sqliteAdminAuth:             &sqliteAdminAuth{db: db},
-		sqliteAdminDeletion:         &sqliteAdminDeletion{db: db},
-		sqliteLatencyQueries:        latencyQueries,
-		sqliteNotificationAuthority: &sqliteNotificationAuthority{db: db},
-		sqliteReadQueries:           &sqliteReadQueries{db: db, latency: latencyQueries},
-		sqliteRenewalNotifications:  &sqliteRenewalNotifications{db: db},
-		sqliteSettings:              &sqliteSettings{db: db},
-		telemetryStorage:            telemetryStorage,
+		db: db,
+		sqliteAdminDomain: &sqliteAdminDomain{
+			sqliteAdminAlertRules: &sqliteAdminAlertRules{db: db},
+			sqliteAdminAuth:       &sqliteAdminAuth{db: db},
+			sqliteAdminDeletion:   &sqliteAdminDeletion{db: db},
+			sqliteSettings:        &sqliteSettings{db: db},
+		},
+		sqliteAgentDomain: &sqliteAgentDomain{
+			sqliteAgentAccess: &sqliteAgentAccess{db: db},
+			telemetryStorage:  telemetryStorage,
+		},
+		sqliteMonitoringDomain: &sqliteMonitoringDomain{
+			sqliteLatencyQueries: latencyQueries,
+			sqliteReadQueries:    &sqliteReadQueries{db: db, latency: latencyQueries},
+		},
+		sqliteNotificationDomain: &sqliteNotificationDomain{
+			sqliteNotificationAuthority: &sqliteNotificationAuthority{db: db},
+			sqliteRenewalNotifications:  &sqliteRenewalNotifications{db: db},
+		},
 	}
 }
 
