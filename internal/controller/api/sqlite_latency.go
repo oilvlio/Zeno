@@ -6,7 +6,11 @@ import (
 	"time"
 )
 
-func (s *SQLiteStore) latencyPoints(ctx context.Context, nodeID string, window latencyWindow) ([]LatencyPoint, error) {
+type sqliteLatencyQueries struct {
+	db *sql.DB
+}
+
+func (s *sqliteLatencyQueries) latencyPoints(ctx context.Context, nodeID string, window latencyWindow) ([]LatencyPoint, error) {
 	if useLatencyGrid(window) {
 		return s.latencyGridPoints(ctx, nodeID, window)
 	}
@@ -190,7 +194,7 @@ func latencyGridQuery(dimension latencyGridDimension) string {
 // and emits a dense point per (bucket, series) pair via newPoint.
 func latencyGridPointsFor[T any](
 	ctx context.Context,
-	s *SQLiteStore,
+	s *sqliteLatencyQueries,
 	id string,
 	window latencyWindow,
 	dimension latencyGridDimension,
@@ -258,21 +262,21 @@ func latencyGridPointsFor[T any](
 	return points, nil
 }
 
-func (s *SQLiteStore) latencyGridPoints(ctx context.Context, nodeID string, window latencyWindow) ([]LatencyPoint, error) {
+func (s *sqliteLatencyQueries) latencyGridPoints(ctx context.Context, nodeID string, window latencyWindow) ([]LatencyPoint, error) {
 	return latencyGridPointsFor(ctx, s, nodeID, window, latencyGridByNode,
 		func(ts string, target latencyGridTarget, median, avg *float64, loss float64) LatencyPoint {
 			return LatencyPoint{TS: ts, TargetID: target.ID, TargetName: target.Name, MedianMS: median, AvgMS: avg, LossPercent: loss}
 		})
 }
 
-func (s *SQLiteStore) serviceLatencyGridPoints(ctx context.Context, targetID string, window latencyWindow) ([]ServiceLatencyPoint, error) {
+func (s *sqliteLatencyQueries) serviceLatencyGridPoints(ctx context.Context, targetID string, window latencyWindow) ([]ServiceLatencyPoint, error) {
 	return latencyGridPointsFor(ctx, s, targetID, window, latencyGridByTarget,
 		func(ts string, node latencyGridTarget, median, avg *float64, loss float64) ServiceLatencyPoint {
 			return ServiceLatencyPoint{TS: ts, NodeID: node.ID, NodeName: node.Name, MedianMS: median, AvgMS: avg, LossPercent: loss}
 		})
 }
 
-func (s *SQLiteStore) latencyGridSeries(ctx context.Context, query, id string) ([]latencyGridTarget, error) {
+func (s *sqliteLatencyQueries) latencyGridSeries(ctx context.Context, query, id string) ([]latencyGridTarget, error) {
 	rows, err := s.db.QueryContext(ctx, query, id)
 	if err != nil {
 		return nil, err
@@ -304,7 +308,7 @@ func latencyGridBounds(window latencyWindow) (time.Time, time.Time, int64) {
 	return start, end, stepSeconds
 }
 
-func (s *SQLiteStore) statePoints(ctx context.Context, nodeID string, window latencyWindow) ([]StatePoint, error) {
+func (s *sqliteLatencyQueries) statePoints(ctx context.Context, nodeID string, window latencyWindow) ([]StatePoint, error) {
 	since := time.Now().UTC().Add(-time.Duration(window.Samples) * window.Step).Unix()
 	stepSeconds := int64(window.Step.Seconds())
 	if stepSeconds <= 0 {

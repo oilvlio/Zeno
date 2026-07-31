@@ -20,6 +20,7 @@ type SQLiteStore struct {
 	*sqliteAdminAlertRules
 	*sqliteAdminAuth
 	*sqliteAdminDeletion
+	*sqliteLatencyQueries
 	*sqliteNotificationAuthority
 	*sqliteRenewalNotifications
 	*sqliteSettings
@@ -158,6 +159,7 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 		sqliteAdminAlertRules:       &sqliteAdminAlertRules{db: db},
 		sqliteAdminAuth:             &sqliteAdminAuth{db: db},
 		sqliteAdminDeletion:         &sqliteAdminDeletion{db: db},
+		sqliteLatencyQueries:        &sqliteLatencyQueries{db: db},
 		sqliteNotificationAuthority: &sqliteNotificationAuthority{db: db},
 		sqliteRenewalNotifications:  &sqliteRenewalNotifications{db: db},
 		sqliteSettings:              &sqliteSettings{db: db},
