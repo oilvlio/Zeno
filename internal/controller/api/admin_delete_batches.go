@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -62,7 +63,13 @@ type adminDeletionJob struct {
 	id   string
 }
 
-func (s *SQLiteStore) enqueueAdminNodeDeletion(ctx context.Context, nodeID string) error {
+type sqliteAdminDeletion struct {
+	db     *sql.DB
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+}
+
+func (s *sqliteAdminDeletion) enqueueAdminNodeDeletion(ctx context.Context, nodeID string) error {
 	return retrySQLiteBusy(ctx, func() error {
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
@@ -145,7 +152,7 @@ func (s *SQLiteStore) enqueueAdminNodeDeletion(ctx context.Context, nodeID strin
 	})
 }
 
-func (s *SQLiteStore) enqueueAdminProbeTargetDeletion(ctx context.Context, targetID string) error {
+func (s *sqliteAdminDeletion) enqueueAdminProbeTargetDeletion(ctx context.Context, targetID string) error {
 	return retrySQLiteBusy(ctx, func() error {
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
@@ -211,26 +218,26 @@ func (s *SQLiteStore) enqueueAdminProbeTargetDeletion(ctx context.Context, targe
 	})
 }
 
-func (s *SQLiteStore) startAdminDeletionWorker() {
+func (s *sqliteAdminDeletion) startAdminDeletionWorker() {
 	ctx, cancel := context.WithCancel(context.Background())
-	s.adminDeletionCancel = cancel
-	s.adminDeletionWG.Add(1)
+	s.cancel = cancel
+	s.wg.Add(1)
 	go func() {
-		defer s.adminDeletionWG.Done()
+		defer s.wg.Done()
 		s.runAdminDeletionWorker(ctx)
 	}()
 }
 
-func (s *SQLiteStore) stopAdminDeletionWorker() {
-	if s.adminDeletionCancel == nil {
+func (s *sqliteAdminDeletion) stopAdminDeletionWorker() {
+	if s.cancel == nil {
 		return
 	}
-	s.adminDeletionCancel()
-	s.adminDeletionWG.Wait()
-	s.adminDeletionCancel = nil
+	s.cancel()
+	s.wg.Wait()
+	s.cancel = nil
 }
 
-func (s *SQLiteStore) runAdminDeletionWorker(ctx context.Context) {
+func (s *sqliteAdminDeletion) runAdminDeletionWorker(ctx context.Context) {
 	for {
 		processed, err := s.processNextAdminDeletionBatch(ctx)
 		if err != nil && ctx.Err() == nil {
@@ -263,7 +270,7 @@ func (s *SQLiteStore) runAdminDeletionWorker(ctx context.Context) {
 // processNextAdminDeletionBatch performs at most one non-empty history batch,
 // or one bounded final metadata transaction. A running job is eligible so a
 // process crash never requires an in-memory repair step.
-func (s *SQLiteStore) processNextAdminDeletionBatch(ctx context.Context) (bool, error) {
+func (s *sqliteAdminDeletion) processNextAdminDeletionBatch(ctx context.Context) (bool, error) {
 	job, found, err := s.nextAdminDeletionJob(ctx)
 	if err != nil || !found {
 		return false, err
@@ -288,7 +295,7 @@ func (s *SQLiteStore) processNextAdminDeletionBatch(ctx context.Context) (bool, 
 	return processed, err
 }
 
-func (s *SQLiteStore) nextAdminDeletionJob(ctx context.Context) (adminDeletionJob, bool, error) {
+func (s *sqliteAdminDeletion) nextAdminDeletionJob(ctx context.Context) (adminDeletionJob, bool, error) {
 	var job adminDeletionJob
 	err := s.db.QueryRowContext(ctx, `
 		SELECT entity_kind, entity_id
@@ -303,7 +310,7 @@ func (s *SQLiteStore) nextAdminDeletionJob(ctx context.Context) (adminDeletionJo
 	return job, err == nil, err
 }
 
-func (s *SQLiteStore) markAdminDeletionJobRunning(ctx context.Context, job adminDeletionJob) error {
+func (s *sqliteAdminDeletion) markAdminDeletionJobRunning(ctx context.Context, job adminDeletionJob) error {
 	return retrySQLiteBusy(ctx, func() error {
 		_, err := s.db.ExecContext(ctx, `
 			UPDATE admin_deletion_jobs
@@ -317,7 +324,7 @@ func (s *SQLiteStore) markAdminDeletionJobRunning(ctx context.Context, job admin
 	})
 }
 
-func (s *SQLiteStore) recordAdminDeletionError(job adminDeletionJob, processErr error) {
+func (s *sqliteAdminDeletion) recordAdminDeletionError(job adminDeletionJob, processErr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = retrySQLiteBusy(ctx, func() error {
@@ -341,7 +348,7 @@ func boundedAdminDeletionError(err error) string {
 	return value
 }
 
-func (s *SQLiteStore) processAdminNodeDeletionBatch(ctx context.Context, nodeID string) (bool, error) {
+func (s *sqliteAdminDeletion) processAdminNodeDeletionBatch(ctx context.Context, nodeID string) (bool, error) {
 	for _, query := range []string{deleteNodeProbeSamplesBatchSQL, deleteNodeProbeRoundsBatchSQL, deleteNodeStateSamplesBatchSQL} {
 		removed, err := s.deleteAdminRowsBatch(ctx, query, nodeID)
 		if err != nil {
@@ -354,7 +361,7 @@ func (s *SQLiteStore) processAdminNodeDeletionBatch(ctx context.Context, nodeID 
 	return true, s.finalizeAdminNodeDeletion(ctx, nodeID)
 }
 
-func (s *SQLiteStore) processAdminProbeTargetDeletionBatch(ctx context.Context, targetID string) (bool, error) {
+func (s *sqliteAdminDeletion) processAdminProbeTargetDeletionBatch(ctx context.Context, targetID string) (bool, error) {
 	for _, query := range []string{deleteTargetProbeSamplesBatchSQL, deleteTargetProbeRoundsBatchSQL} {
 		removed, err := s.deleteAdminRowsBatch(ctx, query, targetID)
 		if err != nil {
@@ -367,7 +374,7 @@ func (s *SQLiteStore) processAdminProbeTargetDeletionBatch(ctx context.Context, 
 	return true, s.finalizeAdminProbeTargetDeletion(ctx, targetID)
 }
 
-func (s *SQLiteStore) finalizeAdminNodeDeletion(ctx context.Context, nodeID string) error {
+func (s *sqliteAdminDeletion) finalizeAdminNodeDeletion(ctx context.Context, nodeID string) error {
 	return retrySQLiteBusy(ctx, func() error {
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
@@ -430,7 +437,7 @@ func (s *SQLiteStore) finalizeAdminNodeDeletion(ctx context.Context, nodeID stri
 	})
 }
 
-func (s *SQLiteStore) finalizeAdminProbeTargetDeletion(ctx context.Context, targetID string) error {
+func (s *sqliteAdminDeletion) finalizeAdminProbeTargetDeletion(ctx context.Context, targetID string) error {
 	return retrySQLiteBusy(ctx, func() error {
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
@@ -472,7 +479,7 @@ func (s *SQLiteStore) finalizeAdminProbeTargetDeletion(ctx context.Context, targ
 	})
 }
 
-func (s *SQLiteStore) deleteAdminRowsBatch(ctx context.Context, query string, value any) (int64, error) {
+func (s *sqliteAdminDeletion) deleteAdminRowsBatch(ctx context.Context, query string, value any) (int64, error) {
 	var removed int64
 	err := retrySQLiteBusy(ctx, func() error {
 		result, err := s.db.ExecContext(ctx, query, value, adminDeleteBatchSize)
