@@ -22,11 +22,11 @@ type schemaStageSnapshot struct {
 	databaseBytes int64
 }
 
-func (s *SQLiteStore) runSchemaMigration(ctx context.Context, name string, migrate func(context.Context) error) error {
+func (s *sqliteSchemaStore) runSchemaMigration(ctx context.Context, name string, migrate func(context.Context) error) error {
 	return s.runValidatedSchemaMigration(ctx, name, nil, migrate)
 }
 
-func (s *SQLiteStore) runValidatedSchemaMigration(ctx context.Context, name string, current func(context.Context) (bool, error), migrate func(context.Context) error) error {
+func (s *sqliteSchemaStore) runValidatedSchemaMigration(ctx context.Context, name string, current func(context.Context) (bool, error), migrate func(context.Context) error) error {
 	name = strings.TrimSpace(name)
 	if s == nil || s.db == nil {
 		return fmt.Errorf("sqlite store is closed")
@@ -68,7 +68,7 @@ func (s *SQLiteStore) runValidatedSchemaMigration(ctx context.Context, name stri
 	return nil
 }
 
-func (s *SQLiteStore) recordSchemaMigration(ctx context.Context, name string, duration time.Duration) error {
+func (s *sqliteSchemaStore) recordSchemaMigration(ctx context.Context, name string, duration time.Duration) error {
 	if _, err := s.db.ExecContext(ctx, `
 		INSERT INTO schema_migrations (name, applied_at, duration_ms)
 		VALUES (?, ?, ?)
@@ -81,7 +81,7 @@ func (s *SQLiteStore) recordSchemaMigration(ctx context.Context, name string, du
 	return nil
 }
 
-func (s *SQLiteStore) schemaStageSnapshot(ctx context.Context) (schemaStageSnapshot, error) {
+func (s *sqliteSchemaStore) schemaStageSnapshot(ctx context.Context) (schemaStageSnapshot, error) {
 	var snapshot schemaStageSnapshot
 	var pageCount, pageSize int64
 	if err := s.db.QueryRowContext(ctx, `SELECT total_changes()`).Scan(&snapshot.totalChanges); err != nil {
@@ -100,7 +100,7 @@ func (s *SQLiteStore) schemaStageSnapshot(ctx context.Context) (schemaStageSnaps
 	return snapshot, nil
 }
 
-func (s *SQLiteStore) measureSchemaStage(ctx context.Context, name string, operation func() error) (schemaStageMetrics, error) {
+func (s *sqliteSchemaStore) measureSchemaStage(ctx context.Context, name string, operation func() error) (schemaStageMetrics, error) {
 	metrics := schemaStageMetrics{RowsAffected: -1, DatabaseBytesBefore: -1, DatabaseBytesAfter: -1}
 	before, beforeErr := s.schemaStageSnapshot(ctx)
 	if beforeErr == nil {

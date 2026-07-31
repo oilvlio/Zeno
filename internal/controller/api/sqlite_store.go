@@ -20,7 +20,12 @@ type SQLiteStore struct {
 	*sqliteAgentDomain
 	*sqliteMonitoringDomain
 	*sqliteNotificationDomain
+	*sqliteSchemaStore
 	*sqliteWriteState
+}
+
+type sqliteSchemaStore struct {
+	db *sql.DB
 }
 
 type sqliteAdminDomain struct {
@@ -198,8 +203,9 @@ func newSQLiteStore(db *sql.DB, telemetryStorage *telemetryStorageGuard) *SQLite
 	latencyQueries := &sqliteLatencyQueries{db: db}
 	writes := &sqliteWriteState{}
 	return &SQLiteStore{
-		db:               db,
-		sqliteWriteState: writes,
+		db:                db,
+		sqliteSchemaStore: &sqliteSchemaStore{db: db},
+		sqliteWriteState:  writes,
 		sqliteAdminDomain: &sqliteAdminDomain{
 			sqliteAdminAlertRules: &sqliteAdminAlertRules{db: db},
 			sqliteAdminAuth:       &sqliteAdminAuth{db: db},

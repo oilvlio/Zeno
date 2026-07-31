@@ -25,7 +25,7 @@ type probeRoundIndexState struct {
 }
 
 // inspectProbeRoundIndexState reads current index shape and outstanding data work.
-func (s *SQLiteStore) inspectProbeRoundIndexState(ctx context.Context) (probeRoundIndexState, error) {
+func (s *sqliteSchemaStore) inspectProbeRoundIndexState(ctx context.Context) (probeRoundIndexState, error) {
 	var state probeRoundIndexState
 	var err error
 
@@ -72,7 +72,7 @@ func (state probeRoundIndexState) agentIndexCorrect() bool {
 //
 // EXISTS with LIMIT 1 keeps this bounded on a multi-million row table; it is
 // re-run after every batch, so a full count would make the migration quadratic.
-func (s *SQLiteStore) probeRoundRowsNeedBackfill(ctx context.Context) (bool, error) {
+func (s *sqliteSchemaStore) probeRoundRowsNeedBackfill(ctx context.Context) (bool, error) {
 	var pending int
 	if err := s.db.QueryRowContext(ctx, `
 		SELECT EXISTS (

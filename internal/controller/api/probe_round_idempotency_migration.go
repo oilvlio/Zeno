@@ -20,7 +20,7 @@ type probeRoundIdempotencyBackfill struct {
 	payloadHash    string
 }
 
-func (s *SQLiteStore) probeRoundIdempotencyMigrationCurrent(ctx context.Context) (bool, error) {
+func (s *sqliteSchemaStore) probeRoundIdempotencyMigrationCurrent(ctx context.Context) (bool, error) {
 	indexColumns, err := sqliteIndexColumns(ctx, s.db, "idx_probe_rounds_idempotency")
 	if err != nil {
 		return false, err
@@ -41,7 +41,7 @@ func (s *SQLiteStore) probeRoundIdempotencyMigrationCurrent(ctx context.Context)
 		stringSlicesEqual(agentIndexColumns, []string{"node_id", "agent_round_id"}) && agentIndexUnique, nil
 }
 
-func (s *SQLiteStore) migrateProbeRoundIdempotency(ctx context.Context) error {
+func (s *sqliteSchemaStore) migrateProbeRoundIdempotency(ctx context.Context) error {
 	state, err := s.inspectProbeRoundIndexState(ctx)
 	if err != nil {
 		return err
@@ -80,7 +80,7 @@ func (s *SQLiteStore) migrateProbeRoundIdempotency(ctx context.Context) error {
 // without retaining every sample, then applies a single set-based UPDATE in a
 // short transaction. This avoids the legacy all-rows allocation, one giant write
 // transaction, and per-round N+1 query.
-func (s *SQLiteStore) backfillProbeRoundIdempotency(ctx context.Context, pending bool) error {
+func (s *sqliteSchemaStore) backfillProbeRoundIdempotency(ctx context.Context, pending bool) error {
 	for pending {
 		backfills, err := s.loadProbeRoundIdempotencyBackfillBatch(ctx, probeRoundIdempotencyMigrationBatchSize)
 		if err != nil {
@@ -109,7 +109,7 @@ func (s *SQLiteStore) backfillProbeRoundIdempotency(ctx context.Context, pending
 // historical measurement, but keep the oldest row as the canonical Agent-id
 // binding and demote later rows to stable legacy keys. This makes the new
 // node-wide uniqueness rule recoverable and idempotent without deleting data.
-func (s *SQLiteStore) repairProbeRoundDuplicateAgentIDs(ctx context.Context) error {
+func (s *sqliteSchemaStore) repairProbeRoundDuplicateAgentIDs(ctx context.Context) error {
 	for {
 		repaired, err := s.repairProbeRoundDuplicateAgentIDBatch(ctx, probeRoundIdempotencyMigrationBatchSize)
 		if err != nil {
@@ -125,7 +125,7 @@ func (s *SQLiteStore) repairProbeRoundDuplicateAgentIDs(ctx context.Context) err
 //
 // Index replacement is a separate, short schema transaction after all data
 // batches are durable. A restart can resume the idempotent backfill safely.
-func (s *SQLiteStore) rebuildProbeRoundIndexes(ctx context.Context, state probeRoundIndexState) error {
+func (s *sqliteSchemaStore) rebuildProbeRoundIndexes(ctx context.Context, state probeRoundIndexState) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -162,7 +162,7 @@ func (s *SQLiteStore) rebuildProbeRoundIndexes(ctx context.Context, state probeR
 	return nil
 }
 
-func (s *SQLiteStore) probeRoundDuplicateAgentIDsExist(ctx context.Context) (bool, error) {
+func (s *sqliteSchemaStore) probeRoundDuplicateAgentIDsExist(ctx context.Context) (bool, error) {
 	var exists int
 	err := s.db.QueryRowContext(ctx, `
 		SELECT EXISTS (
@@ -177,7 +177,7 @@ func (s *SQLiteStore) probeRoundDuplicateAgentIDsExist(ctx context.Context) (boo
 	return exists != 0, err
 }
 
-func (s *SQLiteStore) repairProbeRoundDuplicateAgentIDBatch(ctx context.Context, limit int) (int, error) {
+func (s *sqliteSchemaStore) repairProbeRoundDuplicateAgentIDBatch(ctx context.Context, limit int) (int, error) {
 	if limit <= 0 {
 		return 0, nil
 	}
@@ -259,7 +259,7 @@ func (s *SQLiteStore) repairProbeRoundDuplicateAgentIDBatch(ctx context.Context,
 	return int(affected), nil
 }
 
-func (s *SQLiteStore) loadProbeRoundIdempotencyBackfillBatch(ctx context.Context, limit int) ([]probeRoundIdempotencyBackfill, error) {
+func (s *sqliteSchemaStore) loadProbeRoundIdempotencyBackfillBatch(ctx context.Context, limit int) ([]probeRoundIdempotencyBackfill, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		WITH candidates AS (
 		SELECT id, idempotency_key, COALESCE(agent_round_id, '') AS agent_round_id
@@ -348,7 +348,7 @@ func (s *SQLiteStore) loadProbeRoundIdempotencyBackfillBatch(ctx context.Context
 	return backfills, nil
 }
 
-func (s *SQLiteStore) applyProbeRoundIdempotencyBackfillBatch(ctx context.Context, backfills []probeRoundIdempotencyBackfill) error {
+func (s *sqliteSchemaStore) applyProbeRoundIdempotencyBackfillBatch(ctx context.Context, backfills []probeRoundIdempotencyBackfill) error {
 	if len(backfills) == 0 {
 		return nil
 	}

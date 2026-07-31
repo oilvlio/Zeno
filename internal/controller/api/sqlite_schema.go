@@ -490,7 +490,7 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 	return stage.result()
 }
 
-func (s *SQLiteStore) normalizeTrafficAggregateStorage(ctx context.Context) error {
+func (s *sqliteSchemaStore) normalizeTrafficAggregateStorage(ctx context.Context) error {
 	// SQLite promotes overflowing INTEGER arithmetic to REAL. Older Controller
 	// builds performed monthly accumulation inside SQL and could therefore leave
 	// a REAL value or a negative billable value after int64 overflow. Traffic is
@@ -518,7 +518,7 @@ func (s *SQLiteStore) normalizeTrafficAggregateStorage(ctx context.Context) erro
 	return nil
 }
 
-func (s *SQLiteStore) migrateLegacyAgentCredentials(ctx context.Context) error {
+func (s *sqliteSchemaStore) migrateLegacyAgentCredentials(ctx context.Context) error {
 	// v0.6.1 and earlier retained the Agent runtime token in install_token so it
 	// could be placed back into generated commands. Preserve token_hash (and thus
 	// compatibility with every already-installed v0.3.0 Agent) while removing
@@ -531,7 +531,7 @@ func (s *SQLiteStore) migrateLegacyAgentCredentials(ctx context.Context) error {
 	return err
 }
 
-func (s *SQLiteStore) migrateNotificationChannels(ctx context.Context) error {
+func (s *sqliteSchemaStore) migrateNotificationChannels(ctx context.Context) error {
 	hasType, err := s.columnExists(ctx, "notification_channels", "type")
 	if err != nil {
 		return err
@@ -578,7 +578,7 @@ func (s *SQLiteStore) migrateNotificationChannels(ctx context.Context) error {
 	return nil
 }
 
-func (s *SQLiteStore) ensureColumn(ctx context.Context, table, column, columnType string) error {
+func (s *sqliteSchemaStore) ensureColumn(ctx context.Context, table, column, columnType string) error {
 	if !safeSQLIdentifier(table) || !safeSQLIdentifier(column) || strings.TrimSpace(columnType) == "" {
 		return fmt.Errorf("invalid schema identifier")
 	}
@@ -593,7 +593,7 @@ func (s *SQLiteStore) ensureColumn(ctx context.Context, table, column, columnTyp
 	return err
 }
 
-func (s *SQLiteStore) migrateProbeTargetGlobalEnabled(ctx context.Context) error {
+func (s *sqliteSchemaStore) migrateProbeTargetGlobalEnabled(ctx context.Context) error {
 	exists, err := s.columnExists(ctx, "probe_targets", "enabled")
 	if err != nil || !exists {
 		return err
@@ -602,7 +602,7 @@ func (s *SQLiteStore) migrateProbeTargetGlobalEnabled(ctx context.Context) error
 	return err
 }
 
-func (s *SQLiteStore) ensureStateSampleIdempotency(ctx context.Context) error {
+func (s *sqliteSchemaStore) ensureStateSampleIdempotency(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, `
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_state_samples_node_sample_id
 		ON state_samples(node_id, sample_id)
@@ -619,7 +619,7 @@ func (s *SQLiteStore) ensureStateSampleIdempotency(ctx context.Context) error {
 	return nil
 }
 
-func (s *SQLiteStore) migrateTrafficMonthlySchema(ctx context.Context) error {
+func (s *sqliteSchemaStore) migrateTrafficMonthlySchema(ctx context.Context) error {
 	columns, err := s.tableColumns(ctx, "traffic_monthly")
 	if err != nil {
 		return err
@@ -709,7 +709,7 @@ func (s *SQLiteStore) migrateTrafficMonthlySchema(ctx context.Context) error {
 	return nil
 }
 
-func (s *SQLiteStore) backfillLifetimeTraffic(ctx context.Context) error {
+func (s *sqliteSchemaStore) backfillLifetimeTraffic(ctx context.Context) error {
 	// Existing installations may retain only partial raw history. Seed lifetime
 	// totals from the latest valid interface counters and use that same sample as
 	// the new baseline rather than trying to reconstruct pruned history.
@@ -742,7 +742,7 @@ func (s *SQLiteStore) backfillLifetimeTraffic(ctx context.Context) error {
 	return err
 }
 
-func (s *SQLiteStore) tableColumns(ctx context.Context, table string) (map[string]bool, error) {
+func (s *sqliteSchemaStore) tableColumns(ctx context.Context, table string) (map[string]bool, error) {
 	if !safeSQLIdentifier(table) {
 		return nil, fmt.Errorf("invalid schema identifier")
 	}
@@ -769,7 +769,7 @@ func (s *SQLiteStore) tableColumns(ctx context.Context, table string) (map[strin
 	return columns, nil
 }
 
-func (s *SQLiteStore) primaryKeyIncludes(ctx context.Context, table, column string) (bool, error) {
+func (s *sqliteSchemaStore) primaryKeyIncludes(ctx context.Context, table, column string) (bool, error) {
 	if !safeSQLIdentifier(table) || !safeSQLIdentifier(column) {
 		return false, fmt.Errorf("invalid schema identifier")
 	}
@@ -797,7 +797,7 @@ func (s *SQLiteStore) primaryKeyIncludes(ctx context.Context, table, column stri
 	return false, nil
 }
 
-func (s *SQLiteStore) columnExists(ctx context.Context, table, column string) (bool, error) {
+func (s *sqliteSchemaStore) columnExists(ctx context.Context, table, column string) (bool, error) {
 	if !safeSQLIdentifier(table) || !safeSQLIdentifier(column) {
 		return false, fmt.Errorf("invalid schema identifier")
 	}
