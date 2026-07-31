@@ -107,72 +107,26 @@ func insertAgentStateSampleTx(ctx context.Context, tx *sql.Tx, nodeID string, st
 	if err := lockAgentNodeWriteTx(ctx, tx, nodeID); err != nil {
 		return false, err
 	}
-	if sampleID != "" {
-		var existingHash string
-		err := tx.QueryRowContext(ctx, agentStateSampleLookupSQL, nodeID, sampleID).Scan(&existingHash)
-		if err != nil && err != sql.ErrNoRows {
-			return false, err
-		}
-		if err == nil {
-			if existingHash == payloadHash || existingHash == "" {
-				return false, nil
-			}
-			return false, errInvalidAgentStateReport
-		}
-	} else {
-		var existingID int64
-		err := tx.QueryRowContext(ctx, `
-			SELECT id FROM state_samples
-			WHERE node_id = ? AND ts = ? AND payload_hash = ?
-			LIMIT 1
-		`, nodeID, state.TS, payloadHash).Scan(&existingID)
-		if err != nil && err != sql.ErrNoRows {
-			return false, err
-		}
-		if err == nil {
-			return false, nil
-		}
+
+	duplicate, err := agentStateSampleDuplicate(ctx, tx, nodeID, sampleID, payloadHash, state.TS)
+	if err != nil {
+		return false, err
 	}
+	if duplicate {
+		return false, nil
+	}
+
 	if enforceRateLimit {
-		var lastSampleTS sql.NullInt64
-		if err := tx.QueryRowContext(ctx, `
-			SELECT ts
-			FROM state_samples
-			WHERE node_id = ?
-			ORDER BY ts DESC, id DESC
-			LIMIT 1
-		`, nodeID).Scan(&lastSampleTS); err != nil && err != sql.ErrNoRows {
+		limited, err := agentStateRateLimited(ctx, tx, nodeID, state.TS)
+		if err != nil {
 			return false, err
 		}
-		minIntervalSec := int64(minAgentStateReportInterval / time.Second)
-		if minIntervalSec < 1 {
-			minIntervalSec = 1
-		}
-		if lastSampleTS.Valid && state.TS <= lastSampleTS.Int64 {
-			return false, nil
-		}
-		if lastSampleTS.Valid && state.TS-lastSampleTS.Int64 < minIntervalSec {
+		if limited {
 			return false, nil
 		}
 	}
 
-	// Invalid optional collector groups are unknown, not zero. Persist NULL so
-	// public summaries and history do not present a failed collection as a real
-	// counter value. Traffic accounting independently refuses to advance its
-	// baseline unless net_totals_valid is true (or absent for legacy agents).
-	var netInTotalBytes any = state.NetInTotalBytes
-	var netOutTotalBytes any = state.NetOutTotalBytes
-	if state.NetTotalsValid != nil && !*state.NetTotalsValid {
-		netInTotalBytes = nil
-		netOutTotalBytes = nil
-	}
-	var tcpConnectionCount any = state.TCPConnectionCount
-	var udpConnectionCount any = state.UDPConnectionCount
-	if state.ConnectionCountsValid != nil && !*state.ConnectionCountsValid {
-		tcpConnectionCount = nil
-		udpConnectionCount = nil
-	}
-
+	counters := resolveAgentStateOptionalCounters(state)
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO state_samples (
 			node_id, sample_id, payload_hash, received_at, ts, cpu_percent, load1, load5, load15,
@@ -181,30 +135,12 @@ func insertAgentStateSampleTx(ctx context.Context, tx *sql.Tx, nodeID string, st
 			net_in_speed_bps, net_out_speed_bps, process_count, tcp_connection_count, udp_connection_count, uptime_seconds
 		)
 		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, nodeID, sampleID, payloadHash, receivedUnix, state.TS, state.CPUPercent, state.Load1, state.Load5, state.Load15, state.MemoryUsedBytes, state.MemoryTotalBytes, state.SwapUsedBytes, state.SwapTotalBytes, state.DiskUsedBytes, state.DiskTotalBytes, netInTotalBytes, netOutTotalBytes, state.NetInSpeedBps, state.NetOutSpeedBps, state.ProcessCount, tcpConnectionCount, udpConnectionCount, state.UptimeSeconds); err != nil {
+	`, nodeID, sampleID, payloadHash, receivedUnix, state.TS, state.CPUPercent, state.Load1, state.Load5, state.Load15, state.MemoryUsedBytes, state.MemoryTotalBytes, state.SwapUsedBytes, state.SwapTotalBytes, state.DiskUsedBytes, state.DiskTotalBytes, counters.netInTotalBytes, counters.netOutTotalBytes, state.NetInSpeedBps, state.NetOutSpeedBps, state.ProcessCount, counters.tcpConnectionCount, counters.udpConnectionCount, state.UptimeSeconds); err != nil {
 		return false, err
 	}
 
-	var billingMode string
-	var monthlyResetDay int
-	var billingEpoch int64
-	if err := tx.QueryRowContext(ctx, `SELECT billing_mode, monthly_reset_day, billing_traffic_epoch FROM nodes WHERE id = ? AND disabled = 0`, nodeID).Scan(&billingMode, &monthlyResetDay, &billingEpoch); err != nil {
-		if err == sql.ErrNoRows {
-			return false, errNodeNotFound
-		}
+	if err := applyAgentStateTraffic(ctx, tx, nodeID, state, sampleTS, receivedUnix); err != nil {
 		return false, err
-	}
-	month := billingPeriodKey(sampleTS, monthlyResetDay)
-	// A failed platform counter read is not a real zero sample. Skipping the
-	// billing baseline here is essential for first-sample failures: otherwise a
-	// later recovery would bill the machine's full lifetime counter as new use.
-	if state.NetTotalsValid == nil || *state.NetTotalsValid {
-		if err := upsertLifetimeTraffic(ctx, tx, nodeID, state.NetInTotalBytes, state.NetOutTotalBytes, strings.TrimSpace(state.NetCounterSource), sampleTS.Unix(), receivedUnix); err != nil {
-			return false, err
-		}
-		if err := upsertMonthlyTraffic(ctx, tx, nodeID, month, billingEpoch, monthlyResetDay, billingMode, state.NetInTotalBytes, state.NetOutTotalBytes, strings.TrimSpace(state.NetCounterSource), sampleTS.Unix(), receivedUnix); err != nil {
-			return false, err
-		}
 	}
 	return true, nil
 }
