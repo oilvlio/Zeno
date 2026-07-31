@@ -30,7 +30,7 @@ describe('LatencyChart', () => {
     expect(singleHtml).toContain('Alpha 丢包')
   })
 
-  it('uses Kulin-style multi-tick x axis for day ranges instead of identical endpoint labels', () => {
+  it('anchors every day-range tick to the newest sample minute', () => {
     const dayPoints = Array.from({ length: 49 }, (_, index) => ({
       ts: new Date(Date.UTC(2026, 6, 5, 0, 30) + index * 30 * 60 * 1000).toISOString(),
       targetId: 'alpha',
@@ -45,7 +45,9 @@ describe('LatencyChart', () => {
     const xAxisLabels = labels.filter((label) => label.includes(':'))
 
     expect(xAxisLabels.length).toBeGreaterThan(2)
-    expect(xAxisLabels.slice(1, -1).every((label) => !label.endsWith(':30'))).toBe(true)
+    // The newest sample is at :30, so walking backwards by a fixed step must
+    // preserve :30 on every label instead of snapping the sequence to :00.
+    expect(xAxisLabels.every((label) => label.endsWith(':30'))).toBe(true)
     expect(new Set(xAxisLabels).size).toBeGreaterThan(2)
   })
 

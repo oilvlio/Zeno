@@ -70,6 +70,17 @@ export function LatencyChart({
     if (timeSpan <= 0) return pad.left
     return pad.left + ((createdAt - timeStart) / timeSpan) * (width - pad.left - pad.right)
   }
+  // The nominal first tick can be one sample cadence before the oldest row
+  // (1440 one-minute samples contain 1439 intervals). Give axis labels their own
+  // domain so that nominal tick lands exactly on the left edge and every fixed-
+  // step tick occupies the same number of pixels. The data line keeps its actual
+  // sample domain; the difference is only one cadence at the left boundary.
+  const axisTimeStart = candidateAxisTicks[0] ?? timeStart
+  const axisTimeSpan = Math.max(0, timeEnd - axisTimeStart)
+  const axisX = (createdAt: number) => {
+    if (axisTimeSpan <= 0) return pad.left
+    return pad.left + ((createdAt - axisTimeStart) / axisTimeSpan) * (width - pad.left - pad.right)
+  }
   const yDelay = (value: number) => pad.top + (1 - (value - domain.min) / (domain.max - domain.min)) * plotHeight
   const yLoss = (value: number) => pad.top + (1 - Math.max(0, Math.min(100, value)) / 100) * plotHeight
 
@@ -81,10 +92,10 @@ export function LatencyChart({
   // worse than one missing intermediate mark.
   const axisTicks = pruneCollidingAxisTicks(
     candidateAxisTicks,
-    (tick) => clampAxisTickX(x(tick), width, pad),
+    (tick) => clampAxisTickX(axisX(tick), width, pad),
     (tick) => formatAxisTime(tick, timestamps),
     axisLabelCharWidth,
-    (tick) => axisTickAnchor(x(tick), width, pad),
+    (tick) => axisTickAnchor(axisX(tick), width, pad),
   )
 
   const setActiveHoverColumn = (column: HoverColumn | null) => {
@@ -157,7 +168,7 @@ export function LatencyChart({
           )
         })}
         {axisTicks.map((tick) => {
-          const xx = x(tick)
+          const xx = axisX(tick)
           return (
             <text
               key={tick}
@@ -448,14 +459,14 @@ function avgPacketLoss(rows: KulinChartRow[], packetLossKey: string): number {
 
 const hourMs = 3_600_000
 
-// Candidate spacings, in hours. Every one divides 24 so that a tick falling on
-// midnight keeps falling on midnight as the window scrolls, which is what makes
-// the labels read as a regular sequence (0:00, 3:00, 6:00 ...) instead of
-// drifting.
+// Candidate spacings, in hours. A 24-hour desktop chart gets a two-hour step:
+// 19:31, 17:31, 15:31 ... -- the current time is the reading anchor, not a wall-
+// clock boundary.
 const axisStepHours = [1, 2, 3, 4, 6, 8, 12, 24]
 
-// Ticks are placed on exact multiples of a single step, so every interior gap is
-// identical by construction.
+// Ticks walk backwards from the newest sample by one fixed step, so every gap is
+// identical by construction and the rightmost label is always the actual latest
+// sample.
 //
 // Two earlier attempts got this wrong. Selecting by wall clock (every ":00", or
 // every 2nd hour) made spacing a side effect of where the window happened to
@@ -463,13 +474,8 @@ const axisStepHours = [1, 2, 3, 4, 6, 8, 12, 24]
 // lands on an hour boundary. Spacing positions evenly and then snapping each one
 // to its nearest hour fixed the overlap but reintroduced unequal gaps: two
 // neighbouring marks could round in opposite directions, leaving a 2h gap beside
-// a 3h gap. Choosing the step first and deriving positions from it is what makes
-// the axis genuinely evenly spaced.
-//
-// The endpoints are appended unsnapped: they state the true range, and their
-// distance to the neighbouring mark is necessarily irregular. The caller still
-// prunes by rendered label width, which is what absorbs an endpoint that lands
-// too close to its neighbour.
+// a 3h gap. Aligning the fixed step to midnight still left two irregular endpoint
+// gaps. The newest sample itself must therefore be the anchor.
 export function axisTicksForTimestamps(timestamps: number[], maxTicks: number): number[] {
   if (timestamps.length <= 1) return timestamps
   if (timestamps.length < 6) return [timestamps[0], timestamps.at(-1)!]
@@ -477,17 +483,33 @@ export function axisTicksForTimestamps(timestamps: number[], maxTicks: number): 
   const start = timestamps[0]
   const end = timestamps.at(-1)!
   const span = end - start
-  if (span <= 0) return [start]
+  if (span <= 0) return [end]
 
   const stepHours = chooseAxisStepHours(span, maxTicks)
   const stepMs = stepHours * hourMs
 
-  const ticks: number[] = [start]
-  for (let tick = firstAlignedTickAfter(start, stepHours); tick < end; tick += stepMs) {
-    if (tick > start) ticks.push(tick)
+  const ticks: number[] = []
+  for (let tick = end; tick >= start; tick -= stepMs) {
+    ticks.unshift(tick)
   }
-  ticks.push(end)
+
+  // A regular N-sample grid contains only N-1 intervals: 1440 one-minute
+  // samples start at 19:32 but represent the nominal 24h range ending at 19:31.
+  // Include the next backward tick only when it misses the first sample by no
+  // more than one observed cadence. It will be clamped to the left plot edge.
+  const previousTick = ticks[0] - stepMs
+  if (start - previousTick > 0 && start - previousTick <= axisSampleCadence(timestamps)) {
+    ticks.unshift(previousTick)
+  }
   return ticks
+}
+
+function axisSampleCadence(timestamps: number[]): number {
+  if (timestamps.length < 2) return 0
+  const first = timestamps[1] - timestamps[0]
+  const last = timestamps[timestamps.length - 1] - timestamps[timestamps.length - 2]
+  const positive = [first, last].filter((value) => value > 0)
+  return positive.length > 0 ? Math.min(...positive) : 0
 }
 
 // Picks the smallest step that keeps the tick count within budget. Falling back
@@ -500,19 +522,6 @@ function chooseAxisStepHours(span: number, maxTicks: number): number {
     if (candidate >= idealHours) return candidate
   }
   return Math.ceil(idealHours / 24) * 24
-}
-
-// Walks forward from the window start to the first local-time hour that is a
-// multiple of the step. Local time is used deliberately so the marks line up
-// with the hours a reader sees, including across a DST shift where the interval
-// in real time is not constant.
-function firstAlignedTickAfter(start: number, stepHours: number): number {
-  const aligned = new Date(start)
-  aligned.setMinutes(0, 0, 0)
-  while (aligned.getTime() <= start || aligned.getHours() % stepHours !== 0) {
-    aligned.setTime(aligned.getTime() + hourMs)
-  }
-  return aligned.getTime()
 }
 
 function axisTickAnchor(x: number, width: number, pad: { left: number; right: number }): 'start' | 'middle' | 'end' {

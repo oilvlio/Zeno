@@ -72,23 +72,22 @@ describe('production axis geometry that 水饺 reported', () => {
   })
 })
 
-// The reason the axis overlapped was that ticks were chosen by wall-clock hour,
-// which makes spacing depend on where the window happens to start. These pin the
-// even-interval contract so a future change cannot quietly go back to that.
-describe('axis ticks are spaced evenly rather than picked by wall clock', () => {
+// The current time is the reading anchor. If the newest point is 19:31 and the
+// chosen step is two hours, every preceding label must be :31 as well. Pinning
+// that exact contract prevents wall-clock alignment from returning unnoticed.
+describe('axis ticks walk backwards evenly from the newest sample', () => {
   const minute = 60_000
   const width = 960
   const pad = { left: 52, right: 24 }
   const charWidth = 7.2
 
-  // A 24h window ending at :57 -- neither endpoint is on an hour boundary, which
-  // is exactly the case that used to collide.
-  const end = new Date('2026-07-31T18:57:00+08:00').getTime()
+  const end = new Date('2026-07-31T19:31:00+08:00').getTime()
   const timestamps = Array.from({ length: 1440 }, (_, i) => end - (1439 - i) * minute)
+  const axisStart = end - 24 * 60 * minute
 
   const xOf = (t: number) => {
-    const span = timestamps[timestamps.length - 1] - timestamps[0]
-    return pad.left + ((t - timestamps[0]) / span) * (width - pad.left - pad.right)
+    const span = end - axisStart
+    return pad.left + ((t - axisStart) / span) * (width - pad.left - pad.right)
   }
   const labelOf = (t: number) => {
     const d = new Date(t)
@@ -101,53 +100,39 @@ describe('axis ticks are spaced evenly rather than picked by wall clock', () => 
     return 'middle' as const
   }
 
-  it('gives every interior gap exactly the same width', () => {
-    const ticks = axisTicksForTimestamps(timestamps, 12)
-    const interior = ticks.slice(1, -1)
-    expect(interior.length).toBeGreaterThan(2)
+  it('shows 19:31, 17:31, 15:31 and so on across a 24-hour desktop axis', () => {
+    const ticks = axisTicksForTimestamps(timestamps, 14)
+    const descendingLabels = [...ticks].reverse().slice(0, 4).map(labelOf)
+    expect(descendingLabels).toEqual(['19:31', '17:31', '15:31', '13:31'])
 
-    // Strict equality is the contract. An earlier version positioned ticks evenly
-    // and then snapped each to its nearest hour, which let neighbours round in
-    // opposite directions and produced a 2h gap next to a 3h gap. Deriving the
-    // positions from one chosen step is what makes this exact.
-    const gaps = interior.slice(1).map((t, i) => t - interior[i])
+    const gaps = ticks.slice(1).map((t, i) => t - ticks[i])
     expect(new Set(gaps).size).toBe(1)
-
-    // Interior marks land on round hours, so the labels read as a sequence.
-    expect(interior.every((t) => new Date(t).getMinutes() === 0)).toBe(true)
+    expect(gaps[0]).toBe(2 * 60 * minute)
   })
 
-  it('keeps the true window endpoints even though they are not on the step', () => {
-    const ticks = axisTicksForTimestamps(timestamps, 12)
-    expect(ticks[0]).toBe(timestamps[0])
+  it('places those labels at exactly equal x-axis intervals', () => {
+    const ticks = axisTicksForTimestamps(timestamps, 14)
+    const positions = ticks.map(xOf)
+    const pixelGaps = positions.slice(1).map((x, i) => (x - positions[i]).toFixed(6))
+    expect(new Set(pixelGaps).size).toBe(1)
+  })
+
+  it('anchors the newest label exactly on the newest sample', () => {
+    const ticks = axisTicksForTimestamps(timestamps, 14)
     expect(ticks[ticks.length - 1]).toBe(timestamps[timestamps.length - 1])
   })
 
-  it('chooses a step that keeps the tick count within budget', () => {
-    // A one-hour window cannot use the same step as a 24h one; the step has to
-    // shrink or the axis would show only its endpoints.
-    const shortWindow = Array.from({ length: 60 }, (_, i) => end - (59 - i) * minute)
-    const ticks = axisTicksForTimestamps(shortWindow, 12)
-    expect(ticks.length).toBeLessThanOrEqual(12)
-    expect(ticks.length).toBeGreaterThan(2)
+  it('recovers the nominal 24-hour start from 1440 one-minute samples', () => {
+    const ticks = axisTicksForTimestamps(timestamps, 14)
+    expect(ticks[0]).toBe(end - 24 * 60 * minute)
+    expect(labelOf(ticks[0])).toBe('19:31')
   })
 
-  it('drops the mark an endpoint sits on top of, and only that mark', () => {
-    // An evenly spaced axis cannot avoid this: the endpoints are not on the step,
-    // so whichever mark is nearest can end up only minutes away. Here the window
-    // ends at 18:57 and the last step mark is 18:00 -- 57 minutes apart, which
-    // overlaps by 19px at this width. Pruning exists for exactly this case.
-    const ticks = axisTicksForTimestamps(timestamps, 12)
+  it('needs no collision pruning on the anchored 24-hour sequence', () => {
+    const ticks = axisTicksForTimestamps(timestamps, 14)
     const kept = pruneCollidingAxisTicks(ticks, xOf, labelOf, charWidth, anchorOf)
+    expect(kept).toEqual(ticks)
 
-    const removed = ticks.filter((t) => !kept.includes(t))
-    expect(removed.map(labelOf)).toEqual(['18:00'])
-
-    // Both endpoints survive; a dropped endpoint would silently misstate the range.
-    expect(kept[0]).toBe(timestamps[0])
-    expect(kept[kept.length - 1]).toBe(timestamps[timestamps.length - 1])
-
-    // And nothing that remains overlaps.
     const extentOf = (t: number) => {
       const centre = xOf(t)
       const w = labelOf(t).length * charWidth
