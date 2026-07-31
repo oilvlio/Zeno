@@ -182,46 +182,38 @@ func (h *handler) handlePublicNodeResource(w http.ResponseWriter, r *http.Reques
 	}
 	nodeID := parts[0]
 	rangeName := r.URL.Query().Get("range")
+	var resolveWindow func(string) (latencyWindow, bool)
+	var handleWebSocket func(http.ResponseWriter, *http.Request, string, latencyWindow)
+	var detailJSON func(context.Context, string, latencyWindow) ([]byte, error)
 	switch parts[1] {
 	case "latency":
-		window, ok := resolveLatencyWindow(rangeName)
-		if !ok {
-			writeError(w, http.StatusBadRequest, "unsupported range")
-			return
-		}
-		if extendedHistoryWindow(window) && !h.authorizeExtendedHistoryRequest(w, r) {
-			return
-		}
-		if len(parts) == 3 {
-			h.handleNodeLatencyWebSocket(w, r, nodeID, window)
-			return
-		}
-		payload, err := h.nodeLatencyJSON(r.Context(), nodeID, window)
-		if err != nil {
-			writeStoreError(w, err)
-			return
-		}
-		writeRawJSON(w, http.StatusOK, payload)
+		resolveWindow = resolveLatencyWindow
+		handleWebSocket = h.handleNodeLatencyWebSocket
+		detailJSON = h.nodeLatencyJSON
 	case "state":
-		window, ok := resolveStateWindow(rangeName)
-		if !ok {
-			writeError(w, http.StatusBadRequest, "unsupported range")
-			return
-		}
-		if extendedHistoryWindow(window) && !h.authorizeExtendedHistoryRequest(w, r) {
-			return
-		}
-		if len(parts) == 3 {
-			h.handleNodeStateWebSocket(w, r, nodeID, window)
-			return
-		}
-		payload, err := h.nodeStateJSON(r.Context(), nodeID, window)
-		if err != nil {
-			writeStoreError(w, err)
-			return
-		}
-		writeRawJSON(w, http.StatusOK, payload)
+		resolveWindow = resolveStateWindow
+		handleWebSocket = h.handleNodeStateWebSocket
+		detailJSON = h.nodeStateJSON
 	default:
 		writeError(w, http.StatusNotFound, "not found")
+		return
 	}
+	window, ok := resolveWindow(rangeName)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "unsupported range")
+		return
+	}
+	if extendedHistoryWindow(window) && !h.authorizeExtendedHistoryRequest(w, r) {
+		return
+	}
+	if len(parts) == 3 {
+		handleWebSocket(w, r, nodeID, window)
+		return
+	}
+	payload, err := detailJSON(r.Context(), nodeID, window)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeRawJSON(w, http.StatusOK, payload)
 }
