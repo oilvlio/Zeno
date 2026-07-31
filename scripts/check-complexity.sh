@@ -17,7 +17,6 @@ cd "$(dirname "$0")/.."
 # to, as these functions are split up.
 ALLOWED_OVER_THRESHOLD=(
   "(*handler).handleAgentState"
-  "(*handler).handleAgentProbeResults"
   "(*SQLiteStore).insertAgentProbeResultsOnce"
   "(*handler).handleAgentPresenceWebSocket"
 )

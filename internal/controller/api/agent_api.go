@@ -130,101 +130,16 @@ func (h *handler) handleAgentProbeResults(w http.ResponseWriter, r *http.Request
 	if !decodeJSONBody(w, r, &request, agentProbeJSONBodyLimit, false) {
 		return
 	}
-	if len(request.Rounds) == 0 {
-		writeError(w, http.StatusBadRequest, "rounds required")
-		return
-	}
-	if len(request.Rounds) > maxAgentProbeRounds {
-		writeError(w, http.StatusBadRequest, "too many rounds")
-		return
-	}
 	configVersion, validConfigVersion := request.effectiveConfigVersion()
 	if !validConfigVersion {
 		writeError(w, http.StatusBadRequest, "invalid config version")
 		return
 	}
 
-	prepared := make([]preparedAgentProbeRound, 0, len(request.Rounds))
-	seenTargetIDs := make(map[string]struct{}, len(request.Rounds))
-	seenRoundIDs := make(map[string]struct{}, len(request.Rounds))
-	totalErrorBytes := 0
-	for _, round := range request.Rounds {
-		roundID := strings.TrimSpace(round.RoundID)
-		if roundID != "" && !validAgentProbeRoundID(roundID) {
-			writeError(w, http.StatusBadRequest, "invalid probe round id")
-			return
-		}
-		if roundID != "" {
-			if _, duplicate := seenRoundIDs[roundID]; duplicate {
-				writeError(w, http.StatusBadRequest, "duplicate probe round id")
-				return
-			}
-			seenRoundIDs[roundID] = struct{}{}
-		}
-		targetID := strings.TrimSpace(round.TargetID)
-		if targetID == "" {
-			writeError(w, http.StatusBadRequest, "unknown target")
-			return
-		}
-		if _, duplicate := seenTargetIDs[targetID]; duplicate {
-			writeError(w, http.StatusBadRequest, "duplicate target in probe batch")
-			return
-		}
-		seenTargetIDs[targetID] = struct{}{}
-		targetType := strings.TrimSpace(round.Type)
-		if round.TS <= 0 {
-			writeError(w, http.StatusBadRequest, "invalid timestamp")
-			return
-		}
-		roundTS := time.Unix(round.TS, 0).UTC()
-		if len(round.Samples) > maxAgentProbeSamplesPerRound {
-			writeError(w, http.StatusBadRequest, "too many samples")
-			return
-		}
-		samples := make([]probe.Sample, 0, len(round.Samples))
-		seenSequences := make(map[int]struct{}, len(round.Samples))
-		roundErrorBytes := 0
-		for index, sample := range round.Samples {
-			seq := sample.Seq
-			if seq == 0 {
-				seq = index + 1
-			}
-			if seq < 1 {
-				writeError(w, http.StatusBadRequest, "invalid sample sequence")
-				return
-			}
-			if _, duplicate := seenSequences[seq]; duplicate {
-				writeError(w, http.StatusBadRequest, "duplicate sample sequence")
-				return
-			}
-			seenSequences[seq] = struct{}{}
-			latency := sample.LatencyMS
-			if latency != nil {
-				if math.IsNaN(*latency) || math.IsInf(*latency, 0) || *latency < 0 {
-					writeError(w, http.StatusBadRequest, "invalid sample latency")
-					return
-				}
-			}
-			errorText := strings.TrimSpace(sample.Error)
-			if len(errorText) > maxProbeErrorBytes {
-				writeError(w, http.StatusBadRequest, "sample error too long")
-				return
-			}
-			roundErrorBytes += len(errorText)
-			totalErrorBytes += len(errorText)
-			if roundErrorBytes > maxProbeErrorBytesPerRound || totalErrorBytes > maxAgentProbeErrorBytesPerRequest {
-				writeError(w, http.StatusBadRequest, "probe error budget exceeded")
-				return
-			}
-			samples = append(samples, probe.Sample{Seq: seq, Success: sample.Success, LatencyMS: latency, Error: errorText})
-		}
-		if len(samples) == 0 {
-			writeError(w, http.StatusBadRequest, "samples required")
-			return
-		}
-		preparedRound := preparedAgentProbeRound{targetID: targetID, targetType: targetType, ts: roundTS, agentRoundID: roundID, samples: samples}
-		preparedRound.payloadHash = agentProbeRoundPayloadHash(preparedRound)
-		prepared = append(prepared, preparedRound)
+	prepared, validationErr := validateAgentProbeRounds(request)
+	if validationErr != nil {
+		writeError(w, validationErr.status, validationErr.message)
+		return
 	}
 	releaseWrite, ok := h.admitAgentWrite(w, nodeID, agentProbeWriteUnits(request, r.ContentLength))
 	if !ok {
