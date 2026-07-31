@@ -101,32 +101,64 @@ describe('axis ticks are spaced evenly rather than picked by wall clock', () => 
     return 'middle' as const
   }
 
-  it('spaces interior ticks evenly and keeps the true window endpoints', () => {
+  it('gives every interior gap exactly the same width', () => {
     const ticks = axisTicksForTimestamps(timestamps, 12)
+    const interior = ticks.slice(1, -1)
+    expect(interior.length).toBeGreaterThan(2)
 
-    expect(ticks[0]).toBe(timestamps[0])
-    expect(ticks[ticks.length - 1]).toBe(timestamps[timestamps.length - 1])
+    // Strict equality is the contract. An earlier version positioned ticks evenly
+    // and then snapped each to its nearest hour, which let neighbours round in
+    // opposite directions and produced a 2h gap next to a 3h gap. Deriving the
+    // positions from one chosen step is what makes this exact.
+    const gaps = interior.slice(1).map((t, i) => t - interior[i])
+    expect(new Set(gaps).size).toBe(1)
 
-    // Interior marks are snapped to the hour, so two adjacent interior gaps can
-    // differ by a full hour (one mark rounded down, the next rounded up). The
-    // endpoints are deliberately left unsnapped -- they show the true window --
-    // so their gaps add up to another half hour on top.
-    const deltas = ticks.slice(1).map((t, i) => t - ticks[i])
-    const interior = deltas.slice(1, -1)
-    expect(Math.max(...interior) - Math.min(...interior)).toBeLessThanOrEqual(60 * minute)
-    expect(Math.max(...deltas) - Math.min(...deltas)).toBeLessThanOrEqual(90 * minute)
-
-    // Most labels should still read as round hours; that is why snapping exists.
-    const roundHours = ticks.filter((t) => new Date(t).getMinutes() === 0).length
-    expect(roundHours).toBeGreaterThanOrEqual(ticks.length - 2)
+    // Interior marks land on round hours, so the labels read as a sequence.
+    expect(interior.every((t) => new Date(t).getMinutes() === 0)).toBe(true)
   })
 
-  it('produces an axis that needs no pruning at all in the common case', () => {
+  it('keeps the true window endpoints even though they are not on the step', () => {
+    const ticks = axisTicksForTimestamps(timestamps, 12)
+    expect(ticks[0]).toBe(timestamps[0])
+    expect(ticks[ticks.length - 1]).toBe(timestamps[timestamps.length - 1])
+  })
+
+  it('chooses a step that keeps the tick count within budget', () => {
+    // A one-hour window cannot use the same step as a 24h one; the step has to
+    // shrink or the axis would show only its endpoints.
+    const shortWindow = Array.from({ length: 60 }, (_, i) => end - (59 - i) * minute)
+    const ticks = axisTicksForTimestamps(shortWindow, 12)
+    expect(ticks.length).toBeLessThanOrEqual(12)
+    expect(ticks.length).toBeGreaterThan(2)
+  })
+
+  it('drops the mark an endpoint sits on top of, and only that mark', () => {
+    // An evenly spaced axis cannot avoid this: the endpoints are not on the step,
+    // so whichever mark is nearest can end up only minutes away. Here the window
+    // ends at 18:57 and the last step mark is 18:00 -- 57 minutes apart, which
+    // overlaps by 19px at this width. Pruning exists for exactly this case.
     const ticks = axisTicksForTimestamps(timestamps, 12)
     const kept = pruneCollidingAxisTicks(ticks, xOf, labelOf, charWidth, anchorOf)
 
-    // Even spacing means the collision guard has nothing to remove here, which
-    // is the whole point: pruning is a safety net, not the mechanism.
-    expect(kept).toEqual(ticks)
+    const removed = ticks.filter((t) => !kept.includes(t))
+    expect(removed.map(labelOf)).toEqual(['18:00'])
+
+    // Both endpoints survive; a dropped endpoint would silently misstate the range.
+    expect(kept[0]).toBe(timestamps[0])
+    expect(kept[kept.length - 1]).toBe(timestamps[timestamps.length - 1])
+
+    // And nothing that remains overlaps.
+    const extentOf = (t: number) => {
+      const centre = xOf(t)
+      const w = labelOf(t).length * charWidth
+      const anchor = anchorOf(t)
+      if (anchor === 'start') return { left: centre, right: centre + w }
+      if (anchor === 'end') return { left: centre - w, right: centre }
+      return { left: centre - w / 2, right: centre + w / 2 }
+    }
+    const extents = kept.map(extentOf)
+    for (let i = 1; i < extents.length; i += 1) {
+      expect(extents[i].left).toBeGreaterThanOrEqual(extents[i - 1].right)
+    }
   })
 })

@@ -446,18 +446,30 @@ function avgPacketLoss(rows: KulinChartRow[], packetLossKey: string): number {
   return count === 0 ? 0 : total / count
 }
 
-// Places ticks at even intervals across the window instead of collecting every
-// round hour. Selecting by wall-clock (":00", then every 2nd or 12th hour) made
-// spacing a side effect of where the window happened to start: the endpoints are
-// "now" and exactly N hours earlier, neither of which lands on an hour boundary,
-// so the distance between an endpoint and its neighbouring hour mark was
-// arbitrary and could be a few pixels.
+const hourMs = 3_600_000
+
+// Candidate spacings, in hours. Every one divides 24 so that a tick falling on
+// midnight keeps falling on midnight as the window scrolls, which is what makes
+// the labels read as a regular sequence (0:00, 3:00, 6:00 ...) instead of
+// drifting.
+const axisStepHours = [1, 2, 3, 4, 6, 8, 12, 24]
+
+// Ticks are placed on exact multiples of a single step, so every interior gap is
+// identical by construction.
 //
-// Each interior position is then snapped to the nearest hour, because "14:00"
-// reads better than "14:35" and the shift is at most half an hour -- small
-// enough that the axis still looks evenly spaced. Snapping can push a mark back
-// towards an endpoint, so the caller still prunes by rendered label width; even
-// spacing greatly reduces how often that has to drop anything.
+// Two earlier attempts got this wrong. Selecting by wall clock (every ":00", or
+// every 2nd hour) made spacing a side effect of where the window happened to
+// start, because the endpoints are "now" and exactly N hours earlier and neither
+// lands on an hour boundary. Spacing positions evenly and then snapping each one
+// to its nearest hour fixed the overlap but reintroduced unequal gaps: two
+// neighbouring marks could round in opposite directions, leaving a 2h gap beside
+// a 3h gap. Choosing the step first and deriving positions from it is what makes
+// the axis genuinely evenly spaced.
+//
+// The endpoints are appended unsnapped: they state the true range, and their
+// distance to the neighbouring mark is necessarily irregular. The caller still
+// prunes by rendered label width, which is what absorbs an endpoint that lands
+// too close to its neighbour.
 export function axisTicksForTimestamps(timestamps: number[], maxTicks: number): number[] {
   if (timestamps.length <= 1) return timestamps
   if (timestamps.length < 6) return [timestamps[0], timestamps.at(-1)!]
@@ -467,28 +479,40 @@ export function axisTicksForTimestamps(timestamps: number[], maxTicks: number): 
   const span = end - start
   if (span <= 0) return [start]
 
-  const slots = Math.max(2, maxTicks)
+  const stepHours = chooseAxisStepHours(span, maxTicks)
+  const stepMs = stepHours * hourMs
+
   const ticks: number[] = [start]
-
-  for (let index = 1; index < slots - 1; index += 1) {
-    const target = start + (span * index) / (slots - 1)
-    const snapped = snapToNearestHour(target)
-    // Keep only marks that stay strictly inside the window and still advance,
-    // so snapping cannot duplicate a tick or step outside the axis range.
-    if (snapped > start && snapped < end && snapped > ticks[ticks.length - 1]) ticks.push(snapped)
+  for (let tick = firstAlignedTickAfter(start, stepHours); tick < end; tick += stepMs) {
+    if (tick > start) ticks.push(tick)
   }
-
   ticks.push(end)
   return ticks
 }
 
-const hourMs = 3_600_000
+// Picks the smallest step that keeps the tick count within budget. Falling back
+// to whole days lets long windows keep a fixed step rather than degrading into
+// an arbitrary spacing.
+function chooseAxisStepHours(span: number, maxTicks: number): number {
+  const interiorSlots = Math.max(1, maxTicks - 1)
+  const idealHours = span / interiorSlots / hourMs
+  for (const candidate of axisStepHours) {
+    if (candidate >= idealHours) return candidate
+  }
+  return Math.ceil(idealHours / 24) * 24
+}
 
-function snapToNearestHour(timestamp: number): number {
-  const floor = new Date(timestamp)
-  floor.setMinutes(0, 0, 0)
-  const floorMs = floor.getTime()
-  return timestamp - floorMs > hourMs / 2 ? floorMs + hourMs : floorMs
+// Walks forward from the window start to the first local-time hour that is a
+// multiple of the step. Local time is used deliberately so the marks line up
+// with the hours a reader sees, including across a DST shift where the interval
+// in real time is not constant.
+function firstAlignedTickAfter(start: number, stepHours: number): number {
+  const aligned = new Date(start)
+  aligned.setMinutes(0, 0, 0)
+  while (aligned.getTime() <= start || aligned.getHours() % stepHours !== 0) {
+    aligned.setTime(aligned.getTime() + hourMs)
+  }
+  return aligned.getTime()
 }
 
 function axisTickAnchor(x: number, width: number, pad: { left: number; right: number }): 'start' | 'middle' | 'end' {
