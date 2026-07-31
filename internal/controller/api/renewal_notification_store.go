@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -14,7 +15,12 @@ type renewalNotificationCandidate struct {
 	mark  string
 }
 
-func (s *SQLiteStore) PendingRenewalNotifications(ctx context.Context, now time.Time) ([]notificationEvent, error) {
+type sqliteRenewalNotifications struct {
+	db *sql.DB
+	mu sync.Mutex
+}
+
+func (s *sqliteRenewalNotifications) PendingRenewalNotifications(ctx context.Context, now time.Time) ([]notificationEvent, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -39,13 +45,13 @@ func (s *SQLiteStore) PendingRenewalNotifications(ctx context.Context, now time.
 // deliveries in one SQLite transaction. The notification_event_marks primary
 // key is the stable idempotency key, so concurrent scanners or a crash between
 // claim and delivery creation cannot produce duplicate reminders.
-func (s *SQLiteStore) QueueDueRenewalNotifications(ctx context.Context, now time.Time) (int, error) {
+func (s *sqliteRenewalNotifications) QueueDueRenewalNotifications(ctx context.Context, now time.Time) (int, error) {
 	// Serialize in-process scans before opening a deferred SQLite transaction.
 	// Otherwise concurrent readers can all try to upgrade to writers and one may
 	// fail immediately with SQLITE_BUSY despite busy_timeout. The database mark
 	// primary key remains the cross-process idempotency boundary.
-	s.renewalMu.Lock()
-	defer s.renewalMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	queued := 0
 	err := retrySQLiteBusy(ctx, func() error {
 		var err error
@@ -55,7 +61,7 @@ func (s *SQLiteStore) QueueDueRenewalNotifications(ctx context.Context, now time
 	return queued, err
 }
 
-func (s *SQLiteStore) queueDueRenewalNotificationsOnce(ctx context.Context, now time.Time) (int, error) {
+func (s *sqliteRenewalNotifications) queueDueRenewalNotificationsOnce(ctx context.Context, now time.Time) (int, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -200,7 +206,7 @@ func renewalNotificationDueDate(rawDate string, billingCycle sql.NullString, now
 	return dateOnlyUTC(expiresAt), true
 }
 
-func (s *SQLiteStore) MarkRenewalNotification(ctx context.Context, event notificationEvent, now time.Time) error {
+func (s *sqliteRenewalNotifications) MarkRenewalNotification(ctx context.Context, event notificationEvent, now time.Time) error {
 	nodeID := strings.TrimSpace(event.NodeID)
 	if nodeID == "" {
 		return nil

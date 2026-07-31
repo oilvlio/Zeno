@@ -30,9 +30,9 @@ type SQLiteStore struct {
 	db *sql.DB
 	*sqliteAdminAuth
 	*sqliteAdminDeletion
+	*sqliteRenewalNotifications
 	agentWrites                   agentWriteScheduler
 	telemetryStorage              *telemetryStorageGuard
-	renewalMu                     sync.Mutex
 	notificationCredentialMu      sync.RWMutex
 	notificationCredentialKeyring *notifycrypto.Keyring
 	summaryAggregateMu            sync.Mutex
@@ -164,10 +164,11 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 		return nil, err
 	}
 	store := &SQLiteStore{
-		db:                  db,
-		sqliteAdminAuth:     &sqliteAdminAuth{db: db},
-		sqliteAdminDeletion: &sqliteAdminDeletion{db: db},
-		telemetryStorage:    newTelemetryStorageGuard(path),
+		db:                         db,
+		sqliteAdminAuth:            &sqliteAdminAuth{db: db},
+		sqliteAdminDeletion:        &sqliteAdminDeletion{db: db},
+		sqliteRenewalNotifications: &sqliteRenewalNotifications{db: db},
+		telemetryStorage:           newTelemetryStorageGuard(path),
 	}
 	if err := store.ensureSchema(context.Background()); err != nil {
 		_ = db.Close()
