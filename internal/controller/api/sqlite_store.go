@@ -19,11 +19,15 @@ type SQLiteStore struct {
 	*sqliteAdminAuth
 	*sqliteAdminDeletion
 	*sqliteRenewalNotifications
-	agentWrites             agentWriteScheduler
 	telemetryStorage        *telemetryStorageGuard
 	notificationCredentials notificationCredentialState
 	summaryCache            sqliteSummaryCache
-	sqliteBusyRetries       atomic.Uint64
+	writes                  sqliteWriteState
+}
+
+type sqliteWriteState struct {
+	scheduler   agentWriteScheduler
+	busyRetries atomic.Uint64
 }
 
 const (
@@ -46,7 +50,7 @@ const (
 func (s *SQLiteStore) withAgentWrite(ctx context.Context, nodeID string, operation func(context.Context) error) error {
 	writeCtx, cancel := context.WithTimeout(ctx, sqliteAgentWriteTimeout)
 	defer cancel()
-	release, err := s.agentWrites.acquire(writeCtx, nodeID)
+	release, err := s.writes.scheduler.acquire(writeCtx, nodeID)
 	if err != nil {
 		return err
 	}
@@ -57,7 +61,7 @@ func (s *SQLiteStore) withAgentWrite(ctx context.Context, nodeID string, operati
 			return err
 		}
 		return operation(writeCtx)
-	}, func() { s.sqliteBusyRetries.Add(1) })
+	}, func() { s.writes.busyRetries.Add(1) })
 }
 
 func retrySQLiteBusy(ctx context.Context, operation func() error) error {
