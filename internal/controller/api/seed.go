@@ -25,7 +25,7 @@ type ProbeTarget struct {
 	DisplayOrder int
 }
 
-func (s *SQLiteStore) SeedPreviewData(ctx context.Context, options PreviewSeedOptions) error {
+func (s *sqliteAdminDomain) SeedPreviewData(ctx context.Context, options PreviewSeedOptions) error {
 	nodeID := options.NodeID
 	if nodeID == "" {
 		nodeID = "example-node-a"
@@ -150,11 +150,11 @@ func previewTarget(id, name, address string, port int) ProbeTarget {
 	}
 }
 
-func (s *SQLiteStore) EnabledProbeTargets(ctx context.Context, nodeID string) ([]ProbeTarget, error) {
+func (s *sqliteAgentDomain) EnabledProbeTargets(ctx context.Context, nodeID string) ([]ProbeTarget, error) {
 	return enabledProbeTargetsQuery(ctx, s.db, nodeID)
 }
 
-func (s *SQLiteStore) EnabledProbeTargetsWithConfigVersion(ctx context.Context, nodeID string) ([]ProbeTarget, int64, error) {
+func (s *sqliteAgentDomain) EnabledProbeTargetsWithConfigVersion(ctx context.Context, nodeID string) ([]ProbeTarget, int64, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, 0, err
