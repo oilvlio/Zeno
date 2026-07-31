@@ -6,13 +6,13 @@ import (
 	"time"
 )
 
-func (s *SQLiteStore) UpsertAgentHost(ctx context.Context, nodeID string, host AgentHostRequest) error {
-	return s.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
+func (s *sqliteAgentDomain) UpsertAgentHost(ctx context.Context, nodeID string, host AgentHostRequest) error {
+	return s.writes.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
 		return s.upsertAgentHostOnce(ctx, nodeID, host)
 	})
 }
 
-func (s *SQLiteStore) upsertAgentHostOnce(ctx context.Context, nodeID string, host AgentHostRequest) error {
+func (s *sqliteAgentDomain) upsertAgentHostOnce(ctx context.Context, nodeID string, host AgentHostRequest) error {
 	now := time.Now().UTC().Unix()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

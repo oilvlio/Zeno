@@ -11,20 +11,20 @@ import (
 	"github.com/shui1iao/zeno/internal/shared/probe"
 )
 
-func (s *SQLiteStore) InsertProbeRound(ctx context.Context, nodeID string, target ProbeTarget, ts time.Time, samples []probe.Sample) error {
+func (s *sqliteAgentDomain) InsertProbeRound(ctx context.Context, nodeID string, target ProbeTarget, ts time.Time, samples []probe.Sample) error {
 	return s.InsertProbeRounds(ctx, nodeID, []preparedAgentProbeRound{{target: target, ts: ts, samples: samples}})
 }
 
-func (s *SQLiteStore) InsertProbeRounds(ctx context.Context, nodeID string, rounds []preparedAgentProbeRound) error {
+func (s *sqliteAgentDomain) InsertProbeRounds(ctx context.Context, nodeID string, rounds []preparedAgentProbeRound) error {
 	if len(rounds) == 0 {
 		return nil
 	}
-	return s.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
+	return s.writes.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
 		return s.insertProbeRoundsOnce(ctx, nodeID, rounds)
 	})
 }
 
-func (s *SQLiteStore) insertProbeRoundsOnce(ctx context.Context, nodeID string, rounds []preparedAgentProbeRound) error {
+func (s *sqliteAgentDomain) insertProbeRoundsOnce(ctx context.Context, nodeID string, rounds []preparedAgentProbeRound) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func (s *SQLiteStore) insertProbeRoundsOnce(ctx context.Context, nodeID string, 
 	return nil
 }
 
-func (s *SQLiteStore) InsertAgentProbeResults(ctx context.Context, nodeID string, configVersion int64, rounds []preparedAgentProbeRound) (agentProbeInsertResult, error) {
+func (s *sqliteAgentDomain) InsertAgentProbeResults(ctx context.Context, nodeID string, configVersion int64, rounds []preparedAgentProbeRound) (agentProbeInsertResult, error) {
 	if configVersion < 0 {
 		return agentProbeInsertResult{}, errInvalidAgentProbeResults
 	}
@@ -87,7 +87,7 @@ func (s *SQLiteStore) InsertAgentProbeResults(ctx context.Context, nodeID string
 		return agentProbeInsertResult{}, errInvalidAgentProbeResults
 	}
 	var result agentProbeInsertResult
-	err := s.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
+	err := s.writes.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
 		var err error
 		result, err = s.insertAgentProbeResultsOnce(ctx, nodeID, configVersion, rounds)
 		return err
@@ -114,7 +114,7 @@ func validAgentProbeErrorBudget(rounds []preparedAgentProbeRound) bool {
 	return true
 }
 
-func (s *SQLiteStore) insertAgentProbeResultsOnce(ctx context.Context, nodeID string, configVersion int64, rounds []preparedAgentProbeRound) (agentProbeInsertResult, error) {
+func (s *sqliteAgentDomain) insertAgentProbeResultsOnce(ctx context.Context, nodeID string, configVersion int64, rounds []preparedAgentProbeRound) (agentProbeInsertResult, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return agentProbeInsertResult{}, err

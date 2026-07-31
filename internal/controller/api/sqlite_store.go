@@ -32,7 +32,9 @@ type sqliteAdminDomain struct {
 
 type sqliteAgentDomain struct {
 	*sqliteAgentAccess
+	db               *sql.DB
 	telemetryStorage *telemetryStorageGuard
+	writes           *sqliteWriteState
 }
 
 type sqliteMonitoringDomain struct {
@@ -199,7 +201,9 @@ func newSQLiteStore(db *sql.DB, telemetryStorage *telemetryStorageGuard) *SQLite
 		},
 		sqliteAgentDomain: &sqliteAgentDomain{
 			sqliteAgentAccess: &sqliteAgentAccess{db: db},
+			db:                db,
 			telemetryStorage:  telemetryStorage,
+			writes:            writes,
 		},
 		sqliteMonitoringDomain: &sqliteMonitoringDomain{
 			sqliteHistoryStore:   &sqliteHistoryStore{db: db, writes: writes},

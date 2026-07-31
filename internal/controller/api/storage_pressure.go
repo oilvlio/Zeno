@@ -79,7 +79,7 @@ func (guard *telemetryStorageGuard) check(now time.Time) error {
 	return nil
 }
 
-func (s *SQLiteStore) ensureTelemetryStorage() error {
+func (s *sqliteAgentDomain) ensureTelemetryStorage() error {
 	if s == nil {
 		return errTelemetryStoragePressure
 	}

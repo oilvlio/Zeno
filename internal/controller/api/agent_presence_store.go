@@ -7,14 +7,14 @@ import (
 	"time"
 )
 
-func (s *SQLiteStore) RecordAgentHeartbeat(ctx context.Context, nodeID string, ts time.Time, status, agentVersion string) error {
+func (s *sqliteAgentDomain) RecordAgentHeartbeat(ctx context.Context, nodeID string, ts time.Time, status, agentVersion string) error {
 	_, err := s.RecordAgentHeartbeatTransition(ctx, nodeID, ts, status, agentVersion)
 	return err
 }
 
-func (s *SQLiteStore) RecordAgentHeartbeatTransition(ctx context.Context, nodeID string, ts time.Time, status, agentVersion string) (notificationStatusTransition, error) {
+func (s *sqliteAgentDomain) RecordAgentHeartbeatTransition(ctx context.Context, nodeID string, ts time.Time, status, agentVersion string) (notificationStatusTransition, error) {
 	var transition notificationStatusTransition
-	err := s.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
+	err := s.writes.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
 		var err error
 		transition, err = s.recordAgentHeartbeatTransitionOnce(ctx, nodeID, ts, status, agentVersion)
 		return err
@@ -22,7 +22,7 @@ func (s *SQLiteStore) RecordAgentHeartbeatTransition(ctx context.Context, nodeID
 	return transition, err
 }
 
-func (s *SQLiteStore) recordAgentHeartbeatTransitionOnce(ctx context.Context, nodeID string, ts time.Time, status, agentVersion string) (notificationStatusTransition, error) {
+func (s *sqliteAgentDomain) recordAgentHeartbeatTransitionOnce(ctx context.Context, nodeID string, ts time.Time, status, agentVersion string) (notificationStatusTransition, error) {
 	now := time.Now().UTC()
 	nowUnix := now.Unix()
 	seenAt := nowUnix
@@ -117,17 +117,17 @@ func (s *SQLiteStore) recordAgentHeartbeatTransitionOnce(ctx context.Context, no
 	return notificationStatusTransition{Previous: previous, Current: current}, nil
 }
 
-func (s *SQLiteStore) RecordAgentPresenceOnlineTransition(ctx context.Context, nodeID string, ts time.Time) (notificationStatusTransition, error) {
+func (s *sqliteAgentDomain) RecordAgentPresenceOnlineTransition(ctx context.Context, nodeID string, ts time.Time) (notificationStatusTransition, error) {
 	return s.recordAgentPresenceTransition(ctx, nodeID, ts, "online")
 }
 
-func (s *SQLiteStore) RecordAgentPresenceOfflineTransition(ctx context.Context, nodeID string, ts time.Time) (notificationStatusTransition, error) {
+func (s *sqliteAgentDomain) RecordAgentPresenceOfflineTransition(ctx context.Context, nodeID string, ts time.Time) (notificationStatusTransition, error) {
 	return s.recordAgentPresenceTransition(ctx, nodeID, ts, "offline")
 }
 
-func (s *SQLiteStore) recordAgentPresenceTransition(ctx context.Context, nodeID string, ts time.Time, status string) (notificationStatusTransition, error) {
+func (s *sqliteAgentDomain) recordAgentPresenceTransition(ctx context.Context, nodeID string, ts time.Time, status string) (notificationStatusTransition, error) {
 	var transition notificationStatusTransition
-	err := s.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
+	err := s.writes.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
 		var err error
 		transition, err = s.recordAgentPresenceTransitionOnce(ctx, nodeID, ts, status)
 		return err
@@ -135,7 +135,7 @@ func (s *SQLiteStore) recordAgentPresenceTransition(ctx context.Context, nodeID 
 	return transition, err
 }
 
-func (s *SQLiteStore) StaleAgentOfflineNodeIDs(ctx context.Context, now time.Time) ([]string, error) {
+func (s *sqliteAgentDomain) StaleAgentOfflineNodeIDs(ctx context.Context, now time.Time) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT n.id, n.last_seen_at,
 		       COALESCE((
@@ -177,10 +177,10 @@ func (s *SQLiteStore) StaleAgentOfflineNodeIDs(ctx context.Context, now time.Tim
 	return nodeIDs, nil
 }
 
-func (s *SQLiteStore) RecordStaleAgentOfflineTransition(ctx context.Context, nodeID string, now time.Time) (notificationStatusTransition, bool, error) {
+func (s *sqliteAgentDomain) RecordStaleAgentOfflineTransition(ctx context.Context, nodeID string, now time.Time) (notificationStatusTransition, bool, error) {
 	var transition notificationStatusTransition
 	var changed bool
-	err := s.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
+	err := s.writes.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
 		var err error
 		transition, changed, err = s.recordStaleAgentOfflineTransitionOnce(ctx, nodeID, now)
 		return err
@@ -188,7 +188,7 @@ func (s *SQLiteStore) RecordStaleAgentOfflineTransition(ctx context.Context, nod
 	return transition, changed, err
 }
 
-func (s *SQLiteStore) recordStaleAgentOfflineTransitionOnce(ctx context.Context, nodeID string, now time.Time) (notificationStatusTransition, bool, error) {
+func (s *sqliteAgentDomain) recordStaleAgentOfflineTransitionOnce(ctx context.Context, nodeID string, now time.Time) (notificationStatusTransition, bool, error) {
 	var offlineDurationSec sql.NullInt64
 	if err := s.db.QueryRowContext(ctx, `
 		SELECT COALESCE((
@@ -279,7 +279,7 @@ func (s *SQLiteStore) recordStaleAgentOfflineTransitionOnce(ctx context.Context,
 	return transition, true, nil
 }
 
-func (s *SQLiteStore) recordAgentPresenceTransitionOnce(ctx context.Context, nodeID string, ts time.Time, status string) (notificationStatusTransition, error) {
+func (s *sqliteAgentDomain) recordAgentPresenceTransitionOnce(ctx context.Context, nodeID string, ts time.Time, status string) (notificationStatusTransition, error) {
 	now := time.Now().UTC()
 	nowUnix := now.Unix()
 	tx, err := s.db.BeginTx(ctx, nil)

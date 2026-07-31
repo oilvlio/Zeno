@@ -11,16 +11,16 @@ import (
 	"time"
 )
 
-func (s *SQLiteStore) InsertAgentState(ctx context.Context, nodeID string, state AgentStateRequest) error {
+func (s *sqliteAgentDomain) InsertAgentState(ctx context.Context, nodeID string, state AgentStateRequest) error {
 	if err := s.ensureTelemetryStorage(); err != nil {
 		return err
 	}
-	return s.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
+	return s.writes.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
 		return s.insertAgentStateOnce(ctx, nodeID, state)
 	})
 }
 
-func (s *SQLiteStore) insertAgentStateOnce(ctx context.Context, nodeID string, state AgentStateRequest) error {
+func (s *sqliteAgentDomain) insertAgentStateOnce(ctx context.Context, nodeID string, state AgentStateRequest) error {
 	now := time.Now().UTC()
 	nowUnix := now.Unix()
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -42,13 +42,13 @@ func (s *SQLiteStore) insertAgentStateOnce(ctx context.Context, nodeID string, s
 	return nil
 }
 
-func (s *SQLiteStore) RecordAgentStateReport(ctx context.Context, nodeID string, state AgentStateRequest) (bool, notificationStatusTransition, error) {
+func (s *sqliteAgentDomain) RecordAgentStateReport(ctx context.Context, nodeID string, state AgentStateRequest) (bool, notificationStatusTransition, error) {
 	if err := s.ensureTelemetryStorage(); err != nil {
 		return false, notificationStatusTransition{}, err
 	}
 	var accepted bool
 	var transition notificationStatusTransition
-	err := s.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
+	err := s.writes.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
 		var err error
 		accepted, transition, err = s.recordAgentStateReportOnce(ctx, nodeID, state)
 		return err
@@ -56,7 +56,7 @@ func (s *SQLiteStore) RecordAgentStateReport(ctx context.Context, nodeID string,
 	return accepted, transition, err
 }
 
-func (s *SQLiteStore) recordAgentStateReportOnce(ctx context.Context, nodeID string, state AgentStateRequest) (bool, notificationStatusTransition, error) {
+func (s *sqliteAgentDomain) recordAgentStateReportOnce(ctx context.Context, nodeID string, state AgentStateRequest) (bool, notificationStatusTransition, error) {
 	now := time.Now().UTC()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

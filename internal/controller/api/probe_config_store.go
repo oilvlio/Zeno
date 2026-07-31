@@ -14,7 +14,7 @@ type probeConfigVersionStore interface {
 
 var errProbeConfigAckInvalid = errors.New("invalid probe config ack")
 
-func (s *SQLiteStore) BumpProbeConfigVersion(ctx context.Context) (int64, error) {
+func (s *sqliteAgentDomain) BumpProbeConfigVersion(ctx context.Context) (int64, error) {
 	if _, err := s.db.ExecContext(ctx, bumpProbeConfigVersionSQL, time.Now().UTC().Unix()); err != nil {
 		return 0, err
 	}
@@ -35,7 +35,7 @@ func bumpProbeConfigVersionTx(ctx context.Context, tx *sql.Tx) error {
 	return err
 }
 
-func (s *SQLiteStore) ProbeConfigVersion(ctx context.Context) (int64, error) {
+func (s *sqliteAgentDomain) ProbeConfigVersion(ctx context.Context) (int64, error) {
 	var version int64
 	err := s.db.QueryRowContext(ctx, `SELECT version FROM probe_config_meta WHERE id = 1`).Scan(&version)
 	if err != nil {
@@ -44,16 +44,16 @@ func (s *SQLiteStore) ProbeConfigVersion(ctx context.Context) (int64, error) {
 	return version, nil
 }
 
-func (s *SQLiteStore) RecordProbeConfigApplied(ctx context.Context, nodeID string, version int64, now time.Time) error {
+func (s *sqliteAgentDomain) RecordProbeConfigApplied(ctx context.Context, nodeID string, version int64, now time.Time) error {
 	if version <= 0 {
 		return errProbeConfigAckInvalid
 	}
-	return s.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
+	return s.writes.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
 		return s.recordProbeConfigAppliedOnce(ctx, nodeID, version, now)
 	})
 }
 
-func (s *SQLiteStore) recordProbeConfigAppliedOnce(ctx context.Context, nodeID string, version int64, now time.Time) error {
+func (s *sqliteAgentDomain) recordProbeConfigAppliedOnce(ctx context.Context, nodeID string, version int64, now time.Time) error {
 	if version <= 0 {
 		return errProbeConfigAckInvalid
 	}
