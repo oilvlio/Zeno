@@ -13,7 +13,7 @@ var adminNotificationTypeCatalog = []AdminNotificationType{
 	{EventType: "renewal_due", Label: "续费"},
 }
 
-func (s *SQLiteStore) AdminNotificationChannels(ctx context.Context) ([]AdminNotificationChannel, error) {
+func (s *sqliteNotificationDomain) AdminNotificationChannels(ctx context.Context) ([]AdminNotificationChannel, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, name, destination, credential, enabled, created_at, updated_at
 		FROM notification_channels
@@ -45,7 +45,7 @@ func (s *SQLiteStore) AdminNotificationChannels(ctx context.Context) ([]AdminNot
 	return channels, nil
 }
 
-func (s *SQLiteStore) CreateAdminNotificationChannel(ctx context.Context, create AdminNotificationChannelCreateRequest) (AdminNotificationChannel, error) {
+func (s *sqliteNotificationDomain) CreateAdminNotificationChannel(ctx context.Context, create AdminNotificationChannelCreateRequest) (AdminNotificationChannel, error) {
 	if err := create.normalize(); err != nil {
 		return AdminNotificationChannel{}, err
 	}
@@ -87,7 +87,7 @@ func (s *SQLiteStore) CreateAdminNotificationChannel(ctx context.Context, create
 	return s.adminNotificationChannelByID(ctx, channelID)
 }
 
-func (s *SQLiteStore) UpdateAdminNotificationChannel(ctx context.Context, channelID string, update AdminNotificationChannelUpdateRequest) (AdminNotificationChannel, error) {
+func (s *sqliteNotificationDomain) UpdateAdminNotificationChannel(ctx context.Context, channelID string, update AdminNotificationChannelUpdateRequest) (AdminNotificationChannel, error) {
 	channelID = strings.TrimSpace(channelID)
 	if channelID == "" {
 		return AdminNotificationChannel{}, errNotificationChannelNotFound
@@ -190,7 +190,7 @@ func (s *SQLiteStore) UpdateAdminNotificationChannel(ctx context.Context, channe
 	return s.adminNotificationChannelByID(ctx, channelID)
 }
 
-func (s *SQLiteStore) DeleteAdminNotificationChannel(ctx context.Context, channelID string) error {
+func (s *sqliteNotificationDomain) DeleteAdminNotificationChannel(ctx context.Context, channelID string) error {
 	channelID = strings.TrimSpace(channelID)
 	if channelID == "" {
 		return errNotificationChannelNotFound
@@ -228,7 +228,7 @@ func (s *SQLiteStore) DeleteAdminNotificationChannel(ctx context.Context, channe
 	return nil
 }
 
-func (s *SQLiteStore) adminNotificationChannelByID(ctx context.Context, channelID string) (AdminNotificationChannel, error) {
+func (s *sqliteNotificationDomain) adminNotificationChannelByID(ctx context.Context, channelID string) (AdminNotificationChannel, error) {
 	channels, err := s.AdminNotificationChannels(ctx)
 	if err != nil {
 		return AdminNotificationChannel{}, err
@@ -241,7 +241,7 @@ func (s *SQLiteStore) adminNotificationChannelByID(ctx context.Context, channelI
 	return AdminNotificationChannel{}, errNotificationChannelNotFound
 }
 
-func (s *SQLiteStore) AdminNotificationDispatchChannel(ctx context.Context, channelID string) (notificationDispatchChannel, error) {
+func (s *sqliteNotificationDomain) AdminNotificationDispatchChannel(ctx context.Context, channelID string) (notificationDispatchChannel, error) {
 	channelID = strings.TrimSpace(channelID)
 	if channelID == "" {
 		return notificationDispatchChannel{}, errNotificationChannelNotFound
@@ -271,7 +271,7 @@ func (s *SQLiteStore) AdminNotificationDispatchChannel(ctx context.Context, chan
 	return channel, nil
 }
 
-func (s *SQLiteStore) UpdateAdminNotificationType(ctx context.Context, eventType string, update AdminNotificationTypeUpdateRequest) (AdminNotificationType, error) {
+func (s *sqliteNotificationDomain) UpdateAdminNotificationType(ctx context.Context, eventType string, update AdminNotificationTypeUpdateRequest) (AdminNotificationType, error) {
 	eventType = strings.TrimSpace(eventType)
 	if err := update.normalize(); err != nil {
 		return AdminNotificationType{}, err

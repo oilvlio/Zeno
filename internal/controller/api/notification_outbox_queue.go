@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func (s *SQLiteStore) QueueNotificationEvent(ctx context.Context, event notificationEvent, channels []notificationDispatchChannel) (bool, error) {
+func (s *sqliteNotificationDomain) QueueNotificationEvent(ctx context.Context, event notificationEvent, channels []notificationDispatchChannel) (bool, error) {
 	if len(channels) == 0 {
 		return false, nil
 	}

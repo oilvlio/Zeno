@@ -47,7 +47,9 @@ type sqliteMonitoringDomain struct {
 type sqliteNotificationDomain struct {
 	*sqliteNotificationAuthority
 	*sqliteRenewalNotifications
+	db                      *sql.DB
 	notificationCredentials notificationCredentialState
+	writes                  *sqliteWriteState
 }
 
 type sqliteWriteState struct {
@@ -213,6 +215,8 @@ func newSQLiteStore(db *sql.DB, telemetryStorage *telemetryStorageGuard) *SQLite
 		sqliteNotificationDomain: &sqliteNotificationDomain{
 			sqliteNotificationAuthority: &sqliteNotificationAuthority{db: db},
 			sqliteRenewalNotifications:  &sqliteRenewalNotifications{db: db},
+			db:                          db,
+			writes:                      writes,
 		},
 	}
 }

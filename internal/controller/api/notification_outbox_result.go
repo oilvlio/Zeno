@@ -7,13 +7,13 @@ import (
 	"time"
 )
 
-func (s *SQLiteStore) RecordNotificationDeliveryAttempt(ctx context.Context, delivery queuedNotificationDelivery, sendErr error, now time.Time) error {
-	return s.withAgentWrite(ctx, notificationOutboxWriteKey, func(writeCtx context.Context) error {
+func (s *sqliteNotificationDomain) RecordNotificationDeliveryAttempt(ctx context.Context, delivery queuedNotificationDelivery, sendErr error, now time.Time) error {
+	return s.writes.withAgentWrite(ctx, notificationOutboxWriteKey, func(writeCtx context.Context) error {
 		return s.recordNotificationDeliveryAttemptOnce(writeCtx, delivery, sendErr, now)
 	})
 }
 
-func (s *SQLiteStore) recordNotificationDeliveryAttemptOnce(ctx context.Context, delivery queuedNotificationDelivery, sendErr error, now time.Time) error {
+func (s *sqliteNotificationDomain) recordNotificationDeliveryAttemptOnce(ctx context.Context, delivery queuedNotificationDelivery, sendErr error, now time.Time) error {
 	nowUnix := now.UTC().Unix()
 	if sendErr == nil {
 		result, err := s.db.ExecContext(ctx, `
@@ -74,7 +74,7 @@ func requireOneNotificationDeliveryRow(result sql.Result) error {
 	return nil
 }
 
-func (s *SQLiteStore) RetryFailedNotificationDelivery(ctx context.Context, deliveryID int64, now time.Time) error {
+func (s *sqliteNotificationDomain) RetryFailedNotificationDelivery(ctx context.Context, deliveryID int64, now time.Time) error {
 	if deliveryID <= 0 {
 		return errNotificationDeliveryNotFound
 	}

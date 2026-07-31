@@ -11,7 +11,7 @@ import (
 // binding it to today's mutable channel would invent evidence and could disclose
 // an old notification to a new recipient. Active legacy rows are therefore
 // canceled fail-closed while their historical metadata is backfilled.
-func (s *SQLiteStore) migrateNotificationRoutingBindings(ctx context.Context) error {
+func (s *sqliteNotificationDomain) migrateNotificationRoutingBindings(ctx context.Context) error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("sqlite store is closed")
 	}

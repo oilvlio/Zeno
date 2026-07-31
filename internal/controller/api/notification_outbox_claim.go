@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func (s *SQLiteStore) PendingNotificationDeliveries(ctx context.Context, now time.Time, limit int) ([]queuedNotificationDelivery, error) {
+func (s *sqliteNotificationDomain) PendingNotificationDeliveries(ctx context.Context, now time.Time, limit int) ([]queuedNotificationDelivery, error) {
 	// Claim a single row so the 5s serial send timeout stays well within the 30s
 	// lease. Continue past a bounded number of malformed rows: one bad encrypted
 	// credential is isolated on the low-frequency retry cadence and cannot roll
@@ -19,7 +19,7 @@ func (s *SQLiteStore) PendingNotificationDeliveries(ctx context.Context, now tim
 	for scanned := 0; scanned < notificationDeliveryScanLimit; scanned++ {
 		var delivery queuedNotificationDelivery
 		var found, quarantined bool
-		err := s.withAgentWrite(ctx, notificationOutboxWriteKey, func(writeCtx context.Context) error {
+		err := s.writes.withAgentWrite(ctx, notificationOutboxWriteKey, func(writeCtx context.Context) error {
 			var claimErr error
 			delivery, found, quarantined, claimErr = s.claimNextNotificationDelivery(writeCtx, now)
 			return claimErr
@@ -37,7 +37,7 @@ func (s *SQLiteStore) PendingNotificationDeliveries(ctx context.Context, now tim
 	return nil, fmt.Errorf("notification delivery quarantine scan limit reached")
 }
 
-func (s *SQLiteStore) claimNextNotificationDelivery(ctx context.Context, now time.Time) (queuedNotificationDelivery, bool, bool, error) {
+func (s *sqliteNotificationDomain) claimNextNotificationDelivery(ctx context.Context, now time.Time) (queuedNotificationDelivery, bool, bool, error) {
 	nowUnix := now.Unix()
 	claimToken := notificationClaimToken(now)
 	leaseUntil := now.Add(notificationDeliveryLease).Unix()

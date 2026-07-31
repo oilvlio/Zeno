@@ -404,7 +404,7 @@ func notificationEventTypeForStatusChange(previousStatus, currentStatus string) 
 	}
 }
 
-func (s *SQLiteStore) NotificationNode(ctx context.Context, nodeID string) (notificationNodeSnapshot, error) {
+func (s *sqliteNotificationDomain) NotificationNode(ctx context.Context, nodeID string) (notificationNodeSnapshot, error) {
 	var snapshot notificationNodeSnapshot
 	var storedStatus string
 	var lastSeenAt sql.NullInt64
@@ -432,7 +432,7 @@ func (s *SQLiteStore) NotificationNode(ctx context.Context, nodeID string) (noti
 	return snapshot, nil
 }
 
-func (s *SQLiteStore) EnabledNotificationChannelsForEvent(ctx context.Context, eventType, nodeID string) (string, []notificationDispatchChannel, error) {
+func (s *sqliteNotificationDomain) EnabledNotificationChannelsForEvent(ctx context.Context, eventType, nodeID string) (string, []notificationDispatchChannel, error) {
 	label, ok := adminNotificationTypeLabel(eventType)
 	if !ok {
 		return "", nil, errNotificationTypeNotFound
@@ -485,7 +485,7 @@ func (s *SQLiteStore) EnabledNotificationChannelsForEvent(ctx context.Context, e
 	return label, channels, nil
 }
 
-func (s *SQLiteStore) NotificationEventDelay(ctx context.Context, eventType, nodeID string) (time.Duration, bool, error) {
+func (s *sqliteNotificationDomain) NotificationEventDelay(ctx context.Context, eventType, nodeID string) (time.Duration, bool, error) {
 	eventType = strings.TrimSpace(eventType)
 	nodeID = strings.TrimSpace(nodeID)
 	var durationSec sql.NullInt64
@@ -512,7 +512,7 @@ func (s *SQLiteStore) NotificationEventDelay(ctx context.Context, eventType, nod
 	return time.Duration(seconds) * time.Second, true, nil
 }
 
-func (s *SQLiteStore) ClaimStatusNotification(ctx context.Context, event notificationEvent) (bool, error) {
+func (s *sqliteNotificationDomain) ClaimStatusNotification(ctx context.Context, event notificationEvent) (bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err

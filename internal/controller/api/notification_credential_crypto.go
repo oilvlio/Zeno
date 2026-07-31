@@ -28,6 +28,25 @@ type notificationCredentialState struct {
 	keyring *notifycrypto.Keyring
 }
 
+func (s *SQLiteStore) notificationDomain() *sqliteNotificationDomain {
+	if s == nil || s.sqliteNotificationDomain == nil {
+		return &sqliteNotificationDomain{}
+	}
+	return s.sqliteNotificationDomain
+}
+
+func (s *SQLiteStore) ConfigureNotificationCredentialEncryption(ctx context.Context, key []byte) error {
+	return s.notificationDomain().ConfigureNotificationCredentialEncryption(ctx, key)
+}
+
+func (s *SQLiteStore) ConfigureNotificationCredentialKeyring(ctx context.Context, activeKeyID string, keys map[string][]byte) error {
+	return s.notificationDomain().ConfigureNotificationCredentialKeyring(ctx, activeKeyID, keys)
+}
+
+func (s *SQLiteStore) RequireNotificationCredentialKeyForExistingCredentials(ctx context.Context) error {
+	return s.notificationDomain().RequireNotificationCredentialKeyForExistingCredentials(ctx)
+}
+
 func newNotificationCredentialCipher(key []byte) (*notifycrypto.Cipher, error) {
 	return notifycrypto.NewCipher(key)
 }
@@ -41,7 +60,7 @@ func translateNotificationCredentialError(err error) error {
 	return err
 }
 
-func (s *SQLiteStore) ConfigureNotificationCredentialEncryption(ctx context.Context, key []byte) error {
+func (s *sqliteNotificationDomain) ConfigureNotificationCredentialEncryption(ctx context.Context, key []byte) error {
 	keyID := notifycrypto.DerivedKeyID(key)
 	return s.ConfigureNotificationCredentialKeyring(ctx, keyID, map[string][]byte{keyID: key})
 }
@@ -50,7 +69,7 @@ func (s *SQLiteStore) ConfigureNotificationCredentialEncryption(ctx context.Cont
 // Existing ciphertext is decrypted with the supplied ring and atomically
 // re-encrypted under activeKeyID. Callers can therefore remove retired keys on
 // a later restart without asking administrators to re-enter every credential.
-func (s *SQLiteStore) ConfigureNotificationCredentialKeyring(ctx context.Context, activeKeyID string, keys map[string][]byte) error {
+func (s *sqliteNotificationDomain) ConfigureNotificationCredentialKeyring(ctx context.Context, activeKeyID string, keys map[string][]byte) error {
 	ring, err := notifycrypto.NewKeyring(activeKeyID, keys)
 	if err != nil {
 		return translateNotificationCredentialError(err)
@@ -64,7 +83,7 @@ func (s *SQLiteStore) ConfigureNotificationCredentialKeyring(ctx context.Context
 	return nil
 }
 
-func (s *SQLiteStore) RequireNotificationCredentialKeyForExistingCredentials(ctx context.Context) error {
+func (s *sqliteNotificationDomain) RequireNotificationCredentialKeyForExistingCredentials(ctx context.Context) error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("sqlite store is closed")
 	}
@@ -78,7 +97,7 @@ func (s *SQLiteStore) RequireNotificationCredentialKeyForExistingCredentials(ctx
 	return nil
 }
 
-func (s *SQLiteStore) notificationCredentialKeyringSnapshot() *notifycrypto.Keyring {
+func (s *sqliteNotificationDomain) notificationCredentialKeyringSnapshot() *notifycrypto.Keyring {
 	if s == nil {
 		return nil
 	}
@@ -88,7 +107,7 @@ func (s *SQLiteStore) notificationCredentialKeyringSnapshot() *notifycrypto.Keyr
 	return ring
 }
 
-func (s *SQLiteStore) encryptNotificationCredentialForStorage(channelID, channelType, credential string) (string, error) {
+func (s *sqliteNotificationDomain) encryptNotificationCredentialForStorage(channelID, channelType, credential string) (string, error) {
 	ring := s.notificationCredentialKeyringSnapshot()
 	if ring == nil {
 		return "", errNotificationCredentialKeyRequired
@@ -100,7 +119,7 @@ func (s *SQLiteStore) encryptNotificationCredentialForStorage(channelID, channel
 	return sealed, nil
 }
 
-func (s *SQLiteStore) decryptNotificationCredentialFromStorage(channelID, channelType, storedCredential string) (string, error) {
+func (s *sqliteNotificationDomain) decryptNotificationCredentialFromStorage(channelID, channelType, storedCredential string) (string, error) {
 	ring := s.notificationCredentialKeyringSnapshot()
 	if ring == nil {
 		return "", errNotificationCredentialKeyRequired
@@ -119,7 +138,7 @@ type notificationCredentialRewrite struct {
 	next      string
 }
 
-func (s *SQLiteStore) migrateNotificationCredentialsToEncrypted(ctx context.Context, keyring *notifycrypto.Keyring) error {
+func (s *sqliteNotificationDomain) migrateNotificationCredentialsToEncrypted(ctx context.Context, keyring *notifycrypto.Keyring) error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("sqlite store is closed")
 	}
