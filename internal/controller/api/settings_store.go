@@ -26,15 +26,19 @@ const (
 	settingKeyCustomCode           = "custom_code"
 )
 
-func (s *SQLiteStore) PublicSettings(ctx context.Context) (SiteSettings, error) {
+type sqliteSettings struct {
+	db *sql.DB
+}
+
+func (s *sqliteSettings) PublicSettings(ctx context.Context) (SiteSettings, error) {
 	return s.siteSettings(ctx)
 }
 
-func (s *SQLiteStore) AdminSettings(ctx context.Context) (SiteSettings, error) {
+func (s *sqliteSettings) AdminSettings(ctx context.Context) (SiteSettings, error) {
 	return s.siteSettings(ctx)
 }
 
-func (s *SQLiteStore) UpdateAdminSettings(ctx context.Context, update AdminSettingsUpdateRequest) (SiteSettings, error) {
+func (s *sqliteSettings) UpdateAdminSettings(ctx context.Context, update AdminSettingsUpdateRequest) (SiteSettings, error) {
 	if err := update.normalize(); err != nil {
 		return SiteSettings{}, err
 	}
@@ -63,7 +67,7 @@ func (s *SQLiteStore) UpdateAdminSettings(ctx context.Context, update AdminSetti
 	return s.siteSettings(ctx)
 }
 
-func (s *SQLiteStore) siteSettings(ctx context.Context) (SiteSettings, error) {
+func (s *sqliteSettings) siteSettings(ctx context.Context) (SiteSettings, error) {
 	settings := defaultSiteSettings()
 	bindings := siteSettingsBindings()
 	query, args := siteSettingsQuery(bindings)
