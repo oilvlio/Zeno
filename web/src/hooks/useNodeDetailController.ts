@@ -127,6 +127,10 @@ export function useNodeDetailController({ nodeId, summary, adminToken, expireAdm
       subscribe: useLiveStream ? (onData, onError, onStatus) => subscribeNodeLatency(nodeId, nodeLatencyRange, onData, onError, onStatus) : null,
       fetch: (signal) => fetchNodeLatency(nodeId, nodeLatencyRange, requestToken, signal),
       applyData,
+      // Cold-open the detail view over HTTP rather than waiting out the socket
+      // handshake: the seeded single-point chart would otherwise sit on screen
+      // for about a second and then visibly jump to the real series.
+      fetchImmediately: true,
       initialFallbackDelayMs: detailHttpFallbackDelayMs,
       onError: (error) => {
         if (cancelled) return
@@ -166,6 +170,10 @@ export function useNodeDetailController({ nodeId, summary, adminToken, expireAdm
       subscribe: useLiveStream ? (onData, onError, onStatus) => subscribeNodeState(nodeId, stateRange, onData, onError, onStatus) : null,
       fetch: (signal) => fetchNodeState(nodeId, stateRange, requestToken, signal),
       applyData,
+      // Cold-open the detail view over HTTP rather than waiting out the socket
+      // handshake: the seeded single-point chart would otherwise sit on screen
+      // for about a second and then visibly jump to the real series.
+      fetchImmediately: true,
       initialFallbackDelayMs: detailHttpFallbackDelayMs,
       onError: (error) => {
         if (cancelled) return

@@ -178,12 +178,20 @@ describe('homepage and admin shell layout', () => {
     expect(styles).toContain('.usage-row--memory { --resource-accent: var(--green); }')
     expect(styles).toContain('.usage-row--disk { --resource-accent: var(--purple); }')
     expect(styles).toContain('.usage-row--traffic { --resource-accent: var(--orange); }')
-    expect(styles).toMatch(/\.node-footer-grid\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*gap: 8px;[^}]*\}/)
-    expect(styles).toMatch(/\.node-metric\s*\{[^}]*min-height: 40px;[^}]*flex-direction: row;[^}]*justify-content: space-between;[^}]*gap: 8px;[^}]*border: 1px solid var\(--border\);[^}]*background: var\(--control-bg\);[^}]*font-size: 11px;[^}]*\}/)
+    expect(styles).toMatch(/\.node-footer-grid\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*gap: 6px;[^}]*\}/)
+    expect(styles).toMatch(/\.node-metric\s*\{[^}]*min-height: 40px;[^}]*flex-direction: row;[^}]*justify-content: space-between;[^}]*gap: 4px;[^}]*border: 1px solid var\(--border\);[^}]*background: var\(--control-bg\);[^}]*font-size: 11px;[^}]*\}/)
     expect(styles).not.toContain('.node-metric:nth-child(2n)')
     expect(styles).not.toContain('.node-metric:nth-child(n + 3)')
     expect(styles).toMatch(/\.server-card-list\s*\{[^}]*grid-auto-rows: auto;[^}]*align-items: start;[^}]*\}/)
     expect(styles).toMatch(/\.kulin-node-card\s*\{[^}]*min-height: 0;[^}]*height: auto;[^}]*\}/)
+
+    // The billing metric holds the longest footer string (currency + amount +
+    // a cycle like "五年"), so it must be able to claim the whole row when a
+    // half row would ellipsise it. This is measured against the card, not the
+    // viewport, because the same viewport yields different card widths at 2 vs
+    // 3 columns -- a media query cannot express that.
+    expect(styles).toMatch(/\.node-usage\s*\{[^}]*container-type: inline-size;[^}]*\}/)
+    expect(styles).toMatch(/@container \(max-width: 285px\) \{\s*\.node-footer-grid \.metric-billing \{ grid-column: 1 \/ -1; \}/)
     expect(styles).toMatch(/\.node-usage\s*\{[^}]*margin-top: 20px;[^}]*flex: none;[^}]*align-content: start;[^}]*gap: 14px;[^}]*\}/)
     expect(styles).toMatch(/\.node-health-history\s*\{[^}]*display: grid;[^}]*gap: 8px;[^}]*\}/)
     expect(styles).toMatch(/\.node-health-metric\s*\{[^}]*min-height: 40px;[^}]*padding: 8px;[^}]*border: 1px solid var\(--border\);[^}]*background: var\(--control-bg\);[^}]*font-size: 11px;[^}]*\}/)

@@ -63,6 +63,8 @@ export function useServiceDetailController({ targetId, adminToken, expireAdminSe
       subscribe: useLiveStream ? (onData, onError, onStatus) => subscribeServiceLatency(targetId, serviceLatencyRange, onData, onError, onStatus) : null,
       fetch: (signal) => fetchServiceLatency(targetId, serviceLatencyRange, requestToken, signal),
       applyData,
+      // Same cold-open race as the node detail view.
+      fetchImmediately: true,
       initialFallbackDelayMs: detailHttpFallbackDelayMs,
       onError: (error) => {
         if (cancelled) return

@@ -22,6 +22,17 @@ export interface ResilientLiveOptions<T> {
   sustainedFallbackDelayMs?: number
   httpFallbackIntervalMs?: number
   httpFallbackTimeoutMs?: number
+  /**
+   * Fetch once over HTTP immediately, in parallel with the websocket handshake,
+   * instead of only after the fallback delay.
+   *
+   * For detail views the socket is not the fast path on a cold open: the
+   * handshake plus the first frame is slower than a plain request for the same
+   * payload, so waiting for it leaves a seeded one-point chart on screen that
+   * visibly jumps when real data lands. The race is safe because a websocket
+   * frame always wins over this response, whenever it arrives.
+   */
+  fetchImmediately?: boolean
 }
 
 export function startResilientLiveData<T>(options: ResilientLiveOptions<T>): () => void {
@@ -34,6 +45,7 @@ export function startResilientLiveData<T>(options: ResilientLiveOptions<T>): () 
   let fallbackActive = false
   let fallbackInFlight = false
   let fallbackGeneration = 0
+  let immediateFetchController: AbortController | null = null
   let initialFallbackTimer: ReturnType<typeof setTimeout> | null = null
   let sustainedFallbackTimer: ReturnType<typeof setTimeout> | null = null
   let fallbackInterval: ReturnType<typeof setInterval> | null = null
@@ -139,6 +151,30 @@ export function startResilientLiveData<T>(options: ResilientLiveOptions<T>): () 
     }, sustainedDelayMs)
   }
 
+  // Prime the view over HTTP while the socket is still connecting. This only
+  // ever fills an empty or seeded view: once a websocket frame has arrived, or
+  // the periodic fallback has taken over, its result is dropped so it can never
+  // overwrite fresher data with an older snapshot.
+  const runImmediateFetch = () => {
+    if (stopped) return
+    const controller = new AbortController()
+    immediateFetchController = controller
+    options.fetch(controller.signal)
+      .then((data) => {
+        if (stopped || controller.signal.aborted) return
+        if (receivedLiveFrame || fallbackActive) return
+        options.applyData(data, 'http')
+      })
+      .catch(() => {
+        // Silent: the socket or the regular fallback still owns error reporting,
+        // and a failed priming request must not surface an error over a view
+        // that is about to receive a live frame.
+      })
+      .finally(() => {
+        if (immediateFetchController === controller) immediateFetchController = null
+      })
+  }
+
   if (!options.subscribe) {
     startFallback()
     return () => {
@@ -149,6 +185,10 @@ export function startResilientLiveData<T>(options: ResilientLiveOptions<T>): () 
       cancelFallbackRequest()
     }
   }
+
+  // Only worth racing when there is a socket to race against; without one the
+  // fallback below already fetches immediately.
+  if (options.fetchImmediately) runImmediateFetch()
 
   stopStream = options.subscribe(
     (data) => {
@@ -192,6 +232,8 @@ export function startResilientLiveData<T>(options: ResilientLiveOptions<T>): () 
     clearSustainedTimer()
     clearFallbackInterval()
     cancelFallbackRequest()
+    immediateFetchController?.abort()
+    immediateFetchController = null
     stopStream?.()
   }
 }

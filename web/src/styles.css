@@ -763,6 +763,9 @@ svg { display: block; }
   grid-template-rows: auto auto auto;
   align-content: start;
   gap: 14px;
+  /* The footer metrics size themselves against the card, not the viewport: the
+     same viewport gives a different card width at 2 vs 3 columns. */
+  container-type: inline-size;
 }
 .node-usage-grid {
   display: grid;
@@ -787,7 +790,14 @@ svg { display: block; }
 .node-footer-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
+}
+/* The billing value is the longest string in the footer: currency, amount and
+   a cycle that can be three characters ("五年"/"三年"). Below this width a half
+   row ellipsises it, so it takes the full row instead -- a truncated price is
+   worse than a slightly taller card. Above it the compact 2x2 grid is kept. */
+@container (max-width: 285px) {
+  .node-footer-grid .metric-billing { grid-column: 1 / -1; }
 }
 .node-metric {
   --metric-accent: var(--blue);
@@ -797,8 +807,8 @@ svg { display: block; }
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 4px;
+  padding: 6px 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-field);
   background: var(--control-bg);

@@ -196,3 +196,110 @@ describe('startResilientLiveData', () => {
     stop()
   })
 })
+
+describe('startResilientLiveData immediate HTTP priming', () => {
+  it('fetches over HTTP straight away instead of waiting out the websocket handshake', async () => {
+    vi.useFakeTimers()
+    const fetch = vi.fn().mockResolvedValue('http-primed')
+    const applyData = vi.fn()
+
+    const stop = startResilientLiveData<string>({
+      subscribe: () => vi.fn(),
+      fetch,
+      applyData,
+      fetchImmediately: true,
+    })
+
+    // No timer advance: the request must already be in flight.
+    expect(fetch).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(applyData).toHaveBeenCalledWith('http-primed', 'http')
+
+    stop()
+  })
+
+  it('does not prime over HTTP unless asked, so summary views keep socket-first behaviour', () => {
+    vi.useFakeTimers()
+    const fetch = vi.fn().mockResolvedValue('unused')
+
+    const stop = startResilientLiveData<string>({
+      subscribe: () => vi.fn(),
+      fetch,
+      applyData: vi.fn(),
+    })
+
+    expect(fetch).not.toHaveBeenCalled()
+    stop()
+  })
+
+  // The whole point of the race is that it may not lose. A websocket frame is
+  // the fresher source, so a priming response that resolves later must be
+  // discarded rather than overwrite live data with an older snapshot.
+  it('drops a late priming response once a websocket frame has arrived', async () => {
+    vi.useFakeTimers()
+    let resolveFetch: (value: string) => void = () => {}
+    const fetch = vi.fn().mockReturnValue(new Promise<string>((resolve) => { resolveFetch = resolve }))
+    const applyData = vi.fn()
+    let pushLive = (_data: string) => {}
+
+    const stop = startResilientLiveData<string>({
+      subscribe: (onData) => {
+        pushLive = onData
+        return vi.fn()
+      },
+      fetch,
+      applyData,
+      fetchImmediately: true,
+    })
+
+    pushLive('ws-frame')
+    expect(applyData).toHaveBeenLastCalledWith('ws-frame', 'ws')
+
+    resolveFetch('stale-http')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(applyData).toHaveBeenCalledTimes(1)
+    expect(applyData).toHaveBeenLastCalledWith('ws-frame', 'ws')
+
+    stop()
+  })
+
+  it('reports no error when the priming request fails, because the socket still owns the view', async () => {
+    vi.useFakeTimers()
+    const fetch = vi.fn().mockRejectedValue(new Error('primed request failed'))
+    const onError = vi.fn()
+
+    const stop = startResilientLiveData<string>({
+      subscribe: () => vi.fn(),
+      fetch,
+      applyData: vi.fn(),
+      onError,
+      fetchImmediately: true,
+    })
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onError).not.toHaveBeenCalled()
+
+    stop()
+  })
+
+  it('aborts an in-flight priming request when the view is torn down', () => {
+    vi.useFakeTimers()
+    let capturedSignal: AbortSignal | undefined
+    const fetch = vi.fn().mockImplementation((signal?: AbortSignal) => {
+      capturedSignal = signal
+      return new Promise<string>(() => {})
+    })
+
+    const stop = startResilientLiveData<string>({
+      subscribe: () => vi.fn(),
+      fetch,
+      applyData: vi.fn(),
+      fetchImmediately: true,
+    })
+
+    expect(capturedSignal?.aborted).toBe(false)
+    stop()
+    expect(capturedSignal?.aborted).toBe(true)
+  })
+})

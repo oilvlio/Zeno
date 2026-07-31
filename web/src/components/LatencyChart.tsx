@@ -48,7 +48,11 @@ export function LatencyChart({
   const timeEnd = timestamps.at(-1) ?? timeStart
   const timeSpan = Math.max(0, timeEnd - timeStart)
   const maxAxisTicks = width <= 480 ? 4 : 14
-  const axisTicks = useMemo(() => axisTicksForTimestamps(timestamps, maxAxisTicks), [timestamps, maxAxisTicks])
+  const axisLabelCharWidth = width <= 480 ? 6 : 7.2
+  const candidateAxisTicks = useMemo(
+    () => axisTicksForTimestamps(timestamps, maxAxisTicks),
+    [timestamps, maxAxisTicks],
+  )
   const plotHeight = height - pad.top - pad.bottom
   const domain = useMemo(() => integerYAxisDomain(yDomainForRows(rows, baseView.lineKeys)), [rows, baseView.lineKeys])
   const packetLossSeries = baseView.showPacketLossArea
@@ -68,6 +72,20 @@ export function LatencyChart({
   }
   const yDelay = (value: number) => pad.top + (1 - (value - domain.min) / (domain.max - domain.min)) * plotHeight
   const yLoss = (value: number) => pad.top + (1 - Math.max(0, Math.min(100, value)) / 100) * plotHeight
+
+  // Tick selection above is time-based, so it cannot know how wide the rendered
+  // labels are. The newest sample is "now" and is force-added as the final tick,
+  // which lands an arbitrary distance from the previous hour mark -- as little as
+  // a few pixels. Drop labels that would physically collide, keeping the last
+  // one: the right edge is the reading anchor, so a stale-looking axis end is
+  // worse than one missing intermediate mark.
+  const axisTicks = pruneCollidingAxisTicks(
+    candidateAxisTicks,
+    (tick) => clampAxisTickX(x(tick), width, pad),
+    (tick) => formatAxisTime(tick, timestamps),
+    axisLabelCharWidth,
+    (tick) => axisTickAnchor(x(tick), width, pad),
+  )
 
   const setActiveHoverColumn = (column: HoverColumn | null) => {
     setHoverColumn((current) => (current?.createdAt === column?.createdAt ? current : column))
@@ -143,7 +161,7 @@ export function LatencyChart({
           return (
             <text
               key={tick}
-              x={Math.min(width - pad.right, Math.max(pad.left, xx))}
+              x={clampAxisTickX(xx, width, pad)}
               y={height - 12}
               className="axis-label"
               textAnchor={axisTickAnchor(xx, width, pad)}
@@ -479,6 +497,58 @@ function axisTickAnchor(x: number, width: number, pad: { left: number; right: nu
   if (x <= pad.left + 8) return 'start'
   if (x >= width - pad.right - 8) return 'end'
   return 'middle'
+}
+
+export function clampAxisTickX(x: number, width: number, pad: { left: number; right: number }): number {
+  return Math.min(width - pad.right, Math.max(pad.left, x))
+}
+
+// The horizontal extent a label occupies, which depends on its anchor: 'start'
+// grows rightward, 'end' grows leftward, 'middle' grows both ways.
+function axisLabelExtent(
+  centre: number,
+  text: string,
+  charWidth: number,
+  anchor: 'start' | 'middle' | 'end',
+): { left: number; right: number } {
+  const labelWidth = text.length * charWidth
+  if (anchor === 'start') return { left: centre, right: centre + labelWidth }
+  if (anchor === 'end') return { left: centre - labelWidth, right: centre }
+  return { left: centre - labelWidth / 2, right: centre + labelWidth / 2 }
+}
+
+// Keeps the first and last ticks and drops any in between whose rendered labels
+// would touch. Sweeping backwards from the end means the final tick always
+// survives; the earliest tick is then re-checked against whatever remains,
+// because on narrow charts even it can collide with the tick that follows.
+export function pruneCollidingAxisTicks(
+  ticks: number[],
+  xOf: (tick: number) => number,
+  labelOf: (tick: number) => string,
+  charWidth: number,
+  anchorOf: (tick: number) => 'start' | 'middle' | 'end',
+  minGapPx = 6,
+): number[] {
+  if (ticks.length <= 2) return ticks
+
+  const extentOf = (tick: number) => axisLabelExtent(xOf(tick), labelOf(tick), charWidth, anchorOf(tick))
+  const kept: number[] = [ticks[ticks.length - 1]]
+  let nextExtent = extentOf(ticks[ticks.length - 1])
+
+  for (let index = ticks.length - 2; index >= 1; index -= 1) {
+    const extent = extentOf(ticks[index])
+    if (extent.right + minGapPx <= nextExtent.left) {
+      kept.push(ticks[index])
+      nextExtent = extent
+    }
+  }
+
+  const firstExtent = extentOf(ticks[0])
+  if (firstExtent.right + minGapPx <= nextExtent.left) {
+    kept.push(ticks[0])
+  }
+
+  return kept.reverse()
 }
 
 function formatAxisTime(createdAt: number, timestamps: number[]): string {
