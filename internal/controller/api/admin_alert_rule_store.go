@@ -70,13 +70,17 @@ var defaultAdminAlertRules = []AdminAlertRule{
 	},
 }
 
+type sqliteAdminAlertRules struct {
+	db *sql.DB
+}
+
 var retiredAdminAlertRuleIDs = []string{"probe_latency_high", "probe_loss_high", "node_recovered"}
 
 var retiredAdminNotificationEventTypes = []string{"node_online"}
 
 var allowedRenewalNoticeDays = map[int]bool{0: true, 1: true, 3: true, 7: true, 15: true, 30: true}
 
-func (s *SQLiteStore) ensureDefaultAlertRules(ctx context.Context) error {
+func (s *sqliteAdminAlertRules) ensureDefaultAlertRules(ctx context.Context) error {
 	now := time.Now().UTC().Unix()
 	for sortOrder, rule := range defaultAdminAlertRules {
 		enabled := 0
@@ -113,7 +117,7 @@ func (s *SQLiteStore) ensureDefaultAlertRules(ctx context.Context) error {
 	return nil
 }
 
-func (s *SQLiteStore) migrateDefaultAlertRuleDurations(ctx context.Context) error {
+func (s *sqliteAdminAlertRules) migrateDefaultAlertRuleDurations(ctx context.Context) error {
 	now := time.Now().UTC().Unix()
 	const migrationKey = "alert_default_durations_v2_migrated"
 	var marker string
@@ -151,7 +155,7 @@ func (s *SQLiteStore) migrateDefaultAlertRuleDurations(ctx context.Context) erro
 	return nil
 }
 
-func (s *SQLiteStore) migrateNotificationTypesToAlertRules(ctx context.Context) error {
+func (s *sqliteAdminAlertRules) migrateNotificationTypesToAlertRules(ctx context.Context) error {
 	const migrationKey = "notification_types_alert_rules_migrated"
 	var marker string
 	if err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, migrationKey).Scan(&marker); err != nil {
@@ -224,7 +228,7 @@ func (s *SQLiteStore) migrateNotificationTypesToAlertRules(ctx context.Context) 
 	return tx.Commit()
 }
 
-func (s *SQLiteStore) migrateResourceAlertRuleDurationToFiveMinutes(ctx context.Context) error {
+func (s *sqliteAdminAlertRules) migrateResourceAlertRuleDurationToFiveMinutes(ctx context.Context) error {
 	now := time.Now().UTC().Unix()
 	const migrationKey = "resource_alert_duration_5m_migrated"
 	var marker string
@@ -264,7 +268,7 @@ func (s *SQLiteStore) migrateResourceAlertRuleDurationToFiveMinutes(ctx context.
 	return nil
 }
 
-func (s *SQLiteStore) pruneRetiredNotificationConfig(ctx context.Context) error {
+func (s *sqliteAdminAlertRules) pruneRetiredNotificationConfig(ctx context.Context) error {
 	for _, ruleID := range retiredAdminAlertRuleIDs {
 		if _, err := s.db.ExecContext(ctx, `DELETE FROM alert_rule_node_scopes WHERE rule_id = ?`, ruleID); err != nil {
 			return err
@@ -285,7 +289,7 @@ func (s *SQLiteStore) pruneRetiredNotificationConfig(ctx context.Context) error 
 	return err
 }
 
-func (s *SQLiteStore) AdminAlertRules(ctx context.Context) ([]AdminAlertRule, error) {
+func (s *sqliteAdminAlertRules) AdminAlertRules(ctx context.Context) ([]AdminAlertRule, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, name, category, metric, comparator, threshold, threshold_unit, duration_sec,
 		       enabled, notification_event_type, description, created_at, updated_at
@@ -311,7 +315,7 @@ func (s *SQLiteStore) AdminAlertRules(ctx context.Context) ([]AdminAlertRule, er
 	return s.attachAlertRuleScopes(ctx, rules)
 }
 
-func (s *SQLiteStore) UpdateAdminAlertRule(ctx context.Context, ruleID string, update AdminAlertRuleUpdateRequest) (AdminAlertRule, error) {
+func (s *sqliteAdminAlertRules) UpdateAdminAlertRule(ctx context.Context, ruleID string, update AdminAlertRuleUpdateRequest) (AdminAlertRule, error) {
 	ruleID = strings.TrimSpace(ruleID)
 	if ruleID == "" {
 		return AdminAlertRule{}, errAlertRuleNotFound
@@ -371,7 +375,7 @@ func (s *SQLiteStore) UpdateAdminAlertRule(ctx context.Context, ruleID string, u
 	return s.adminAlertRuleByID(ctx, ruleID)
 }
 
-func (s *SQLiteStore) adminAlertRuleByID(ctx context.Context, ruleID string) (AdminAlertRule, error) {
+func (s *sqliteAdminAlertRules) adminAlertRuleByID(ctx context.Context, ruleID string) (AdminAlertRule, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, name, category, metric, comparator, threshold, threshold_unit, duration_sec,
 		       enabled, notification_event_type, description, created_at, updated_at
@@ -392,7 +396,7 @@ func (s *SQLiteStore) adminAlertRuleByID(ctx context.Context, ruleID string) (Ad
 	return rules[0], nil
 }
 
-func (s *SQLiteStore) attachAlertRuleScopes(ctx context.Context, rules []AdminAlertRule) ([]AdminAlertRule, error) {
+func (s *sqliteAdminAlertRules) attachAlertRuleScopes(ctx context.Context, rules []AdminAlertRule) ([]AdminAlertRule, error) {
 	if len(rules) == 0 {
 		return rules, nil
 	}
@@ -406,7 +410,7 @@ func (s *SQLiteStore) attachAlertRuleScopes(ctx context.Context, rules []AdminAl
 	return rules, nil
 }
 
-func (s *SQLiteStore) alertRuleScopeNodeIDs(ctx context.Context, ruleID string) ([]string, error) {
+func (s *sqliteAdminAlertRules) alertRuleScopeNodeIDs(ctx context.Context, ruleID string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT scope.node_id
 		FROM alert_rule_node_scopes scope

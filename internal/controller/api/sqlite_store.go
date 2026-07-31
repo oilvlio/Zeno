@@ -16,6 +16,7 @@ import (
 
 type SQLiteStore struct {
 	db *sql.DB
+	*sqliteAdminAlertRules
 	*sqliteAdminAuth
 	*sqliteAdminDeletion
 	*sqliteRenewalNotifications
@@ -151,6 +152,7 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 	}
 	store := &SQLiteStore{
 		db:                         db,
+		sqliteAdminAlertRules:      &sqliteAdminAlertRules{db: db},
 		sqliteAdminAuth:            &sqliteAdminAuth{db: db},
 		sqliteAdminDeletion:        &sqliteAdminDeletion{db: db},
 		sqliteRenewalNotifications: &sqliteRenewalNotifications{db: db},
