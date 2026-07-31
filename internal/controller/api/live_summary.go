@@ -388,36 +388,31 @@ func (h *handler) loadSummaryJSON(ctx context.Context, maxAge time.Duration, all
 	}
 }
 
-func (h *handler) nodeStateJSON(ctx context.Context, nodeID string, window latencyWindow) ([]byte, error) {
-	key := nodeStateLiveTopic(nodeID, window.Name)
+func (h *handler) detailJSON(ctx context.Context, key string, load func(context.Context) (any, error)) ([]byte, error) {
 	return h.detailCache.get(ctx, key, detailCacheFreshFor, func() ([]byte, error) {
-		state, err := h.store.NodeState(ctx, nodeID, window)
+		value, err := load(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return json.Marshal(state)
+		return json.Marshal(value)
+	})
+}
+
+func (h *handler) nodeStateJSON(ctx context.Context, nodeID string, window latencyWindow) ([]byte, error) {
+	return h.detailJSON(ctx, nodeStateLiveTopic(nodeID, window.Name), func(ctx context.Context) (any, error) {
+		return h.store.NodeState(ctx, nodeID, window)
 	})
 }
 
 func (h *handler) nodeLatencyJSON(ctx context.Context, nodeID string, window latencyWindow) ([]byte, error) {
-	key := nodeLatencyLiveTopic(nodeID, window.Name)
-	return h.detailCache.get(ctx, key, detailCacheFreshFor, func() ([]byte, error) {
-		latency, err := h.store.NodeLatency(ctx, nodeID, window)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(latency)
+	return h.detailJSON(ctx, nodeLatencyLiveTopic(nodeID, window.Name), func(ctx context.Context) (any, error) {
+		return h.store.NodeLatency(ctx, nodeID, window)
 	})
 }
 
 func (h *handler) serviceLatencyJSON(ctx context.Context, targetID string, window latencyWindow) ([]byte, error) {
-	key := serviceLatencyLiveTopic(targetID, window.Name)
-	return h.detailCache.get(ctx, key, detailCacheFreshFor, func() ([]byte, error) {
-		latency, err := h.store.ServiceTargetLatency(ctx, targetID, window)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(latency)
+	return h.detailJSON(ctx, serviceLatencyLiveTopic(targetID, window.Name), func(ctx context.Context) (any, error) {
+		return h.store.ServiceTargetLatency(ctx, targetID, window)
 	})
 }
 
