@@ -103,8 +103,8 @@ func (performance *runtimePerformance) snapshot(now time.Time) runtimePerformanc
 	return snapshot
 }
 
-func (s *SQLiteStore) RuntimePerformance(ctx context.Context) (sqliteRuntimePerformance, error) {
-	snapshot := sqliteRuntimePerformance{BusyRetries: s.sqliteWriteState.busyRetries.Load()}
+func (s *sqliteMonitoringDomain) RuntimePerformance(ctx context.Context) (sqliteRuntimePerformance, error) {
+	snapshot := sqliteRuntimePerformance{BusyRetries: s.writes.busyRetries.Load()}
 	if err := s.db.QueryRowContext(ctx, `
 		SELECT
 			COALESCE(SUM(CASE WHEN state = 'pending' THEN 1 ELSE 0 END), 0),
