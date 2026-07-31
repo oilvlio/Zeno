@@ -417,29 +417,23 @@ func (h *handler) serviceLatencyJSON(ctx context.Context, targetID string, windo
 }
 
 func (h *handler) scheduleNodeStatePublish(nodeID string) {
-	if !h.hasNodeStateClients(nodeID) {
-		return
-	}
-	h.scheduleDetailPublish("node-state:"+nodeID, func(ctx context.Context) {
-		h.publishNodeState(ctx, nodeID)
-	})
+	h.scheduleDetailFor(nodeID, "node-state:", nodeStateLiveTopic, h.publishNodeState)
 }
 
 func (h *handler) scheduleNodeLatencyPublish(nodeID string) {
-	if !h.hasNodeLatencyClients(nodeID) {
-		return
-	}
-	h.scheduleDetailPublish("node-latency:"+nodeID, func(ctx context.Context) {
-		h.publishNodeLatency(ctx, nodeID)
-	})
+	h.scheduleDetailFor(nodeID, "node-latency:", nodeLatencyLiveTopic, h.publishNodeLatency)
 }
 
 func (h *handler) scheduleServiceLatencyPublish(targetID string) {
-	if !h.hasServiceLatencyClients(targetID) {
+	h.scheduleDetailFor(targetID, "service-latency:", serviceLatencyLiveTopic, h.publishServiceLatency)
+}
+
+func (h *handler) scheduleDetailFor(subjectID, keyPrefix string, topicFor func(string, string) string, publish func(context.Context, string)) {
+	if !h.hasDetailClients(subjectID, topicFor) {
 		return
 	}
-	h.scheduleDetailPublish("service-latency:"+targetID, func(ctx context.Context) {
-		h.publishServiceLatency(ctx, targetID)
+	h.scheduleDetailPublish(keyPrefix+subjectID, func(ctx context.Context) {
+		publish(ctx, subjectID)
 	})
 }
 
@@ -497,18 +491,6 @@ func (h *handler) scheduleDetailPublish(key string, publish func(context.Context
 			return
 		}
 	}()
-}
-
-func (h *handler) hasNodeStateClients(nodeID string) bool {
-	return h.hasDetailClients(nodeID, nodeStateLiveTopic)
-}
-
-func (h *handler) hasNodeLatencyClients(nodeID string) bool {
-	return h.hasDetailClients(nodeID, nodeLatencyLiveTopic)
-}
-
-func (h *handler) hasServiceLatencyClients(targetID string) bool {
-	return h.hasDetailClients(targetID, serviceLatencyLiveTopic)
 }
 
 func (h *handler) hasDetailClients(subjectID string, topicFor func(string, string) string) bool {
