@@ -20,7 +20,7 @@ type SQLiteStore struct {
 	*sqliteAgentDomain
 	*sqliteMonitoringDomain
 	*sqliteNotificationDomain
-	writes sqliteWriteState
+	*sqliteWriteState
 }
 
 type sqliteAdminDomain struct {
@@ -69,10 +69,10 @@ const (
 	notificationOutboxWriteKey = "_notification_outbox"
 )
 
-func (s *SQLiteStore) withAgentWrite(ctx context.Context, nodeID string, operation func(context.Context) error) error {
+func (s *sqliteWriteState) withAgentWrite(ctx context.Context, nodeID string, operation func(context.Context) error) error {
 	writeCtx, cancel := context.WithTimeout(ctx, sqliteAgentWriteTimeout)
 	defer cancel()
-	release, err := s.writes.scheduler.acquire(writeCtx, nodeID)
+	release, err := s.scheduler.acquire(writeCtx, nodeID)
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func (s *SQLiteStore) withAgentWrite(ctx context.Context, nodeID string, operati
 			return err
 		}
 		return operation(writeCtx)
-	}, func() { s.writes.busyRetries.Add(1) })
+	}, func() { s.busyRetries.Add(1) })
 }
 
 func retrySQLiteBusy(ctx context.Context, operation func() error) error {
@@ -187,7 +187,8 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 func newSQLiteStore(db *sql.DB, telemetryStorage *telemetryStorageGuard) *SQLiteStore {
 	latencyQueries := &sqliteLatencyQueries{db: db}
 	return &SQLiteStore{
-		db: db,
+		db:               db,
+		sqliteWriteState: &sqliteWriteState{},
 		sqliteAdminDomain: &sqliteAdminDomain{
 			sqliteAdminAlertRules: &sqliteAdminAlertRules{db: db},
 			sqliteAdminAuth:       &sqliteAdminAuth{db: db},
