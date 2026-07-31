@@ -108,27 +108,23 @@ func (s *sqliteNotificationDomain) notificationCredentialKeyringSnapshot() *noti
 }
 
 func (s *sqliteNotificationDomain) encryptNotificationCredentialForStorage(channelID, channelType, credential string) (string, error) {
-	ring := s.notificationCredentialKeyringSnapshot()
-	if ring == nil {
-		return "", errNotificationCredentialKeyRequired
-	}
-	sealed, err := ring.Encrypt(channelID, channelType, credential)
-	if err != nil {
-		return "", translateNotificationCredentialError(err)
-	}
-	return sealed, nil
+	return s.transformNotificationCredential(channelID, channelType, credential, (*notifycrypto.Keyring).Encrypt)
 }
 
 func (s *sqliteNotificationDomain) decryptNotificationCredentialFromStorage(channelID, channelType, storedCredential string) (string, error) {
+	return s.transformNotificationCredential(channelID, channelType, storedCredential, (*notifycrypto.Keyring).Decrypt)
+}
+
+func (s *sqliteNotificationDomain) transformNotificationCredential(channelID, channelType, credential string, transform func(*notifycrypto.Keyring, string, string, string) (string, error)) (string, error) {
 	ring := s.notificationCredentialKeyringSnapshot()
 	if ring == nil {
 		return "", errNotificationCredentialKeyRequired
 	}
-	credential, err := ring.Decrypt(channelID, channelType, storedCredential)
+	transformed, err := transform(ring, channelID, channelType, credential)
 	if err != nil {
 		return "", translateNotificationCredentialError(err)
 	}
-	return credential, nil
+	return transformed, nil
 }
 
 // notificationCredentialRewrite records one row that must move to the active key.
