@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/shui1iao/zeno/internal/controller/notifycrypto"
 )
@@ -21,6 +22,11 @@ var (
 	errNotificationCredentialKeyRequired       = notifycrypto.ErrKeyRequired
 	errNotificationCredentialCiphertextInvalid = notifycrypto.ErrCiphertextInvalid
 )
+
+type notificationCredentialState struct {
+	mu      sync.RWMutex
+	keyring *notifycrypto.Keyring
+}
 
 func newNotificationCredentialCipher(key []byte) (*notifycrypto.Cipher, error) {
 	return notifycrypto.NewCipher(key)
@@ -52,9 +58,9 @@ func (s *SQLiteStore) ConfigureNotificationCredentialKeyring(ctx context.Context
 	if err := s.migrateNotificationCredentialsToEncrypted(ctx, ring); err != nil {
 		return err
 	}
-	s.notificationCredentialMu.Lock()
-	s.notificationCredentialKeyring = ring
-	s.notificationCredentialMu.Unlock()
+	s.notificationCredentials.mu.Lock()
+	s.notificationCredentials.keyring = ring
+	s.notificationCredentials.mu.Unlock()
 	return nil
 }
 
@@ -76,9 +82,9 @@ func (s *SQLiteStore) notificationCredentialKeyringSnapshot() *notifycrypto.Keyr
 	if s == nil {
 		return nil
 	}
-	s.notificationCredentialMu.RLock()
-	ring := s.notificationCredentialKeyring
-	s.notificationCredentialMu.RUnlock()
+	s.notificationCredentials.mu.RLock()
+	ring := s.notificationCredentials.keyring
+	s.notificationCredentials.mu.RUnlock()
 	return ring
 }
 

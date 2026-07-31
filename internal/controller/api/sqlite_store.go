@@ -8,13 +8,10 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	moderncsqlite "modernc.org/sqlite"
-
-	"github.com/shui1iao/zeno/internal/controller/notifycrypto"
 )
 
 type SQLiteStore struct {
@@ -22,12 +19,11 @@ type SQLiteStore struct {
 	*sqliteAdminAuth
 	*sqliteAdminDeletion
 	*sqliteRenewalNotifications
-	agentWrites                   agentWriteScheduler
-	telemetryStorage              *telemetryStorageGuard
-	notificationCredentialMu      sync.RWMutex
-	notificationCredentialKeyring *notifycrypto.Keyring
-	summaryCache                  sqliteSummaryCache
-	sqliteBusyRetries             atomic.Uint64
+	agentWrites             agentWriteScheduler
+	telemetryStorage        *telemetryStorageGuard
+	notificationCredentials notificationCredentialState
+	summaryCache            sqliteSummaryCache
+	sqliteBusyRetries       atomic.Uint64
 }
 
 const (
