@@ -26,10 +26,6 @@ func newNotificationCredentialCipher(key []byte) (*notifycrypto.Cipher, error) {
 	return notifycrypto.NewCipher(key)
 }
 
-func validNotificationCredentialKeyID(keyID string) bool {
-	return notifycrypto.ValidKeyID(keyID)
-}
-
 // translateNotificationCredentialError maps the crypto package's blank
 // credential signal onto the admin write error the HTTP layer already reports.
 func translateNotificationCredentialError(err error) error {
@@ -128,7 +124,7 @@ func (s *SQLiteStore) migrateNotificationCredentialsToEncrypted(ctx context.Cont
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	rewrites, err := collectNotificationCredentialRewrites(ctx, tx, keyring)
 	if err != nil {

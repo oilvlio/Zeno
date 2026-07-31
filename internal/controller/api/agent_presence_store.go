@@ -31,7 +31,7 @@ func (s *SQLiteStore) recordAgentHeartbeatTransitionOnce(ctx context.Context, no
 	if err != nil {
 		return notificationStatusTransition{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	// Acquire SQLite's write reservation before taking the read snapshot. A
 	// deferred read-then-write transaction can lose an upgrade race against a
 	// concurrent state report and return SQLITE_BUSY immediately even with a
@@ -210,7 +210,7 @@ func (s *SQLiteStore) recordStaleAgentOfflineTransitionOnce(ctx context.Context,
 	if err != nil {
 		return notificationStatusTransition{}, false, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if err := lockAgentNodeWriteTx(ctx, tx, nodeID); err != nil {
 		return notificationStatusTransition{}, false, err
 	}
@@ -286,7 +286,7 @@ func (s *SQLiteStore) recordAgentPresenceTransitionOnce(ctx context.Context, nod
 	if err != nil {
 		return notificationStatusTransition{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if err := lockAgentNodeWriteTx(ctx, tx, nodeID); err != nil {
 		return notificationStatusTransition{}, err
 	}

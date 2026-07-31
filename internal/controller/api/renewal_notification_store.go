@@ -19,7 +19,7 @@ func (s *SQLiteStore) PendingRenewalNotifications(ctx context.Context, now time.
 	if err != nil {
 		return nil, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	candidates, err := renewalNotificationCandidatesTx(ctx, tx, now, true)
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func (s *SQLiteStore) queueDueRenewalNotificationsOnce(ctx context.Context, now 
 	if err != nil {
 		return 0, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	channels, err := enabledNotificationChannelsTx(ctx, tx)
 	if err != nil {

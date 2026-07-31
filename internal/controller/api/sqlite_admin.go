@@ -187,7 +187,7 @@ func (s *SQLiteStore) CreateAdminProbeTarget(ctx context.Context, create AdminPr
 	if err != nil {
 		return AdminProbeTarget{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if _, err := tx.ExecContext(ctx, `UPDATE probe_config_meta SET version = version WHERE id = 1`); err != nil {
 		return AdminProbeTarget{}, err
 	}
@@ -289,7 +289,7 @@ func (s *SQLiteStore) UpdateAdminProbeTarget(ctx context.Context, targetID strin
 	if err != nil {
 		return AdminProbeTarget{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if _, err := tx.ExecContext(ctx, `UPDATE probe_config_meta SET version = version WHERE id = 1`); err != nil {
 		return AdminProbeTarget{}, err
 	}
@@ -455,7 +455,7 @@ func (s *SQLiteStore) UpdateAdminNode(ctx context.Context, nodeID string, update
 	if err != nil {
 		return AdminNode{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if _, err := tx.ExecContext(ctx, `UPDATE probe_config_meta SET version = version WHERE id = 1`); err != nil {
 		return AdminNode{}, err
 	}

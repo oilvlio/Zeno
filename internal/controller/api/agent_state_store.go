@@ -27,7 +27,7 @@ func (s *SQLiteStore) insertAgentStateOnce(ctx context.Context, nodeID string, s
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if _, err := insertAgentStateSampleTx(ctx, tx, nodeID, state, now, false); err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (s *SQLiteStore) recordAgentStateReportOnce(ctx context.Context, nodeID str
 	if err != nil {
 		return false, notificationStatusTransition{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	accepted, err := insertAgentStateSampleTx(ctx, tx, nodeID, state, now, true)
 	if err != nil {

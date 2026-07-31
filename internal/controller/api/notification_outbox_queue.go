@@ -19,7 +19,7 @@ func (s *SQLiteStore) QueueNotificationEvent(ctx context.Context, event notifica
 	if err != nil {
 		return false, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	if shouldClaimStatusNotification(event) {
 		claimed, err := claimStatusNotificationTx(ctx, tx, event)

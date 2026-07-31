@@ -26,7 +26,7 @@ func (s *SQLiteStore) recordAgentStateAlertRuleTransitionOnce(ctx context.Contex
 	if err != nil {
 		return notificationStatusTransition{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if err := lockAgentNodeWriteTx(ctx, tx, nodeID); err != nil {
 		return notificationStatusTransition{}, err
 	}

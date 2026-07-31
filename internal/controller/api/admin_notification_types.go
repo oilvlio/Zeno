@@ -1,7 +1,6 @@
 package api
 
 import (
-	"math"
 	"strings"
 )
 
@@ -61,42 +60,15 @@ type AdminNotificationChannelUpdateRequest struct {
 }
 
 func (request *AdminNotificationChannelUpdateRequest) normalize() error {
-	changed := false
-	if request.Name != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.Name)
-		if trimmed == "" {
-			return errInvalidAdminNotificationChannelWrite
-		}
-		request.Name = &trimmed
-	}
-	if request.Destination != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.Destination)
-		if trimmed == "" {
-			return errInvalidAdminNotificationChannelWrite
-		}
-		request.Destination = &trimmed
-	}
-	if request.Credential != nil {
-		trimmed := strings.TrimSpace(*request.Credential)
-		if trimmed == "" {
-			// Notification credentials are write-only. Treat an explicitly blank
-			// PATCH credential the same as an omitted credential so admin forms can
-			// leave the field empty without clearing or exposing the stored token.
-			request.Credential = nil
-		} else {
-			changed = true
-			request.Credential = &trimmed
-		}
-	}
-	if request.Enabled != nil {
-		changed = true
-	}
-	if !changed {
-		return errInvalidAdminNotificationChannelWrite
-	}
-	return nil
+	normalizer := newPatchNormalizer(errInvalidAdminNotificationChannelWrite)
+	normalizer.text(&request.Name, trimRequired)
+	normalizer.text(&request.Destination, trimRequired)
+	// Notification credentials are write-only. A blank PATCH credential is
+	// treated as omitted so admin forms can leave the field empty without
+	// clearing or exposing the stored token.
+	normalizer.clearableText(&request.Credential)
+	normalizer.present(request.Enabled != nil)
+	return normalizer.result()
 }
 
 type AdminNotificationTypeUpdateRequest struct {
@@ -118,40 +90,12 @@ type AdminAlertRuleUpdateRequest struct {
 }
 
 func (request *AdminAlertRuleUpdateRequest) normalize() error {
-	changed := false
-	if request.Enabled != nil {
-		changed = true
-	}
-	if request.Threshold != nil {
-		changed = true
-		if math.IsNaN(*request.Threshold) || math.IsInf(*request.Threshold, 0) || *request.Threshold < 0 {
-			return errInvalidAdminAlertRuleUpdate
-		}
-	}
-	if request.DurationSec != nil {
-		changed = true
-		if *request.DurationSec < 0 {
-			return errInvalidAdminAlertRuleUpdate
-		}
-	}
-	if request.ScopeNodeIDs != nil {
-		changed = true
-		normalized := make([]string, 0, len(*request.ScopeNodeIDs))
-		seen := map[string]bool{}
-		for _, rawNodeID := range *request.ScopeNodeIDs {
-			nodeID := normalizeAdminNodeID(rawNodeID)
-			if nodeID == "" || seen[nodeID] {
-				return errInvalidAdminAlertRuleUpdate
-			}
-			seen[nodeID] = true
-			normalized = append(normalized, nodeID)
-		}
-		request.ScopeNodeIDs = &normalized
-	}
-	if !changed {
-		return errInvalidAdminAlertRuleUpdate
-	}
-	return nil
+	normalizer := newPatchNormalizer(errInvalidAdminAlertRuleUpdate)
+	normalizer.present(request.Enabled != nil)
+	normalizer.float(&request.Threshold, finiteNonNegativeFloat)
+	normalizer.number(&request.DurationSec, nonNegativeInt)
+	normalizer.identifierSet(&request.ScopeNodeIDs, normalizeAdminNodeID)
+	return normalizer.result()
 }
 
 type AdminAlertRule struct {

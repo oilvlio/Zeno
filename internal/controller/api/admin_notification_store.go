@@ -108,7 +108,7 @@ func (s *SQLiteStore) UpdateAdminNotificationChannel(ctx context.Context, channe
 	if err != nil {
 		return AdminNotificationChannel{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	var currentDestination string
 	var currentVersion int64
 	if err := tx.QueryRowContext(ctx, `
@@ -134,39 +134,26 @@ func (s *SQLiteStore) UpdateAdminNotificationChannel(ctx context.Context, channe
 	}
 	newFingerprint := notificationDestinationFingerprint("telegram", newDestination)
 
-	sets := make([]string, 0, 8)
-	args := make([]any, 0, 9)
-	if update.Name != nil {
-		sets = append(sets, "name = ?")
-		args = append(args, *update.Name)
-	}
-	if update.Destination != nil {
-		sets = append(sets, "destination = ?")
-		args = append(args, *update.Destination)
-	}
+	patch := newSQLPatch(8)
+	patch.addString("name", update.Name)
+	patch.addString("destination", update.Destination)
 	if update.Credential != nil {
-		sets = append(sets, "credential = ?")
-		args = append(args, encryptedCredential)
+		patch.set("credential", encryptedCredential)
 	}
-	if update.Enabled != nil {
-		sets = append(sets, "enabled = ?")
-		if *update.Enabled {
-			args = append(args, 1)
-		} else {
-			args = append(args, 0)
-		}
-	}
+	patch.addBoolInt("enabled", update.Enabled)
 	if routingChanged {
-		sets = append(sets, "delivery_version = ?", "destination_fingerprint = ?")
-		args = append(args, newVersion, newFingerprint)
+		// Version and fingerprint move together: consumers use the pair to
+		// detect that a queued payload targets a superseded destination.
+		patch.set("delivery_version", newVersion)
+		patch.set("destination_fingerprint", newFingerprint)
 	}
-	if len(sets) == 0 {
+	if patch.empty() {
 		return AdminNotificationChannel{}, errInvalidAdminNotificationChannelWrite
 	}
 	nowUnix := time.Now().UTC().Unix()
-	sets = append(sets, "updated_at = ?")
-	args = append(args, nowUnix, channelID)
-	result, err := tx.ExecContext(ctx, "UPDATE notification_channels SET "+strings.Join(sets, ", ")+" WHERE id = ?", args...)
+	patch.set("updated_at", nowUnix)
+	statement, args := patch.updateStatement("notification_channels", "id = ?", channelID)
+	result, err := tx.ExecContext(ctx, statement, args...)
 	if err != nil {
 		return AdminNotificationChannel{}, err
 	}
@@ -212,7 +199,7 @@ func (s *SQLiteStore) DeleteAdminNotificationChannel(ctx context.Context, channe
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	nowUnix := time.Now().UTC().Unix()
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries
@@ -308,7 +295,7 @@ func (s *SQLiteStore) UpdateAdminNotificationType(ctx context.Context, eventType
 	if err != nil {
 		return AdminNotificationType{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO notification_types (event_type, enabled, updated_at)
 		VALUES (?, ?, ?)

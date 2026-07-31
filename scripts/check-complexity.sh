@@ -23,8 +23,6 @@ ALLOWED_OVER_THRESHOLD=(
   "insertAgentStateSampleTx"
   "(*SQLiteStore).ensureSchema"
   "(*SQLiteStore).siteSettings"
-  "(*SQLiteStore).UpdateAdminNotificationChannel"
-  "(*SQLiteStore).AuthorizeNotificationAuthorityKeyring"
   "(*SQLiteStore).insertAgentProbeResultsOnce"
   "(*handler).handleAgentPresenceWebSocket"
 )

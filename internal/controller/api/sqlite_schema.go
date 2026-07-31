@@ -596,7 +596,7 @@ func (s *SQLiteStore) migrateNotificationChannels(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if _, err := tx.ExecContext(ctx, `
 		CREATE TABLE notification_channels_new (
 			id TEXT PRIMARY KEY,
@@ -711,7 +711,7 @@ func (s *SQLiteStore) migrateTrafficMonthlySchema(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if _, err := tx.ExecContext(ctx, `DROP TABLE IF EXISTS traffic_monthly_new`); err != nil {
 		return err
 	}

@@ -41,7 +41,7 @@ func (s *SQLiteStore) recordNotificationDeliveryAttemptOnce(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	result, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries
 		SET state = ?, attempts = ?, next_attempt_at = ?, last_error = ?, lease_until = 0, claim_token = '', updated_at = ?

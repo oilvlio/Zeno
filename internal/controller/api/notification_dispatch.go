@@ -517,7 +517,7 @@ func (s *SQLiteStore) ClaimStatusNotification(ctx context.Context, event notific
 	if err != nil {
 		return false, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	claimed, err := claimStatusNotificationTx(ctx, tx, event)
 	if err != nil {
 		return false, err

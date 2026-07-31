@@ -323,7 +323,7 @@ func (s *SQLiteStore) UpdateAdminAlertRule(ctx context.Context, ruleID string, u
 	if err != nil {
 		return AdminAlertRule{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	var metric string
 	if err := tx.QueryRowContext(ctx, `SELECT metric FROM alert_rules WHERE id = ?`, ruleID).Scan(&metric); err != nil {
@@ -339,32 +339,22 @@ func (s *SQLiteStore) UpdateAdminAlertRule(ctx context.Context, ruleID string, u
 			return AdminAlertRule{}, errInvalidAdminAlertRuleUpdate
 		}
 	}
-	sets := make([]string, 0, 4)
-	args := make([]any, 0, 5)
-	if update.Enabled != nil {
-		sets = append(sets, "enabled = ?")
-		if *update.Enabled {
-			args = append(args, 1)
-		} else {
-			args = append(args, 0)
-		}
-	}
+	patch := newSQLPatch(4)
+	patch.addBoolInt("enabled", update.Enabled)
 	if update.Threshold != nil {
-		sets = append(sets, "threshold = ?")
-		args = append(args, *update.Threshold)
+		patch.set("threshold", *update.Threshold)
 	}
-	if update.DurationSec != nil {
-		sets = append(sets, "duration_sec = ?")
-		args = append(args, *update.DurationSec)
-	}
+	patch.addInt("duration_sec", update.DurationSec)
 	now := time.Now().UTC().Unix()
-	if len(sets) > 0 {
-		sets = append(sets, "updated_at = ?")
-		args = append(args, now, ruleID)
-		if _, err := tx.ExecContext(ctx, "UPDATE alert_rules SET "+strings.Join(sets, ", ")+" WHERE id = ?", args...); err != nil {
+	if !patch.empty() {
+		patch.set("updated_at", now)
+		statement, args := patch.updateStatement("alert_rules", "id = ?", ruleID)
+		if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
 			return AdminAlertRule{}, err
 		}
 	} else if update.ScopeNodeIDs != nil {
+		// Scope-only edits still bump updated_at so clients can tell the rule
+		// changed even though no column on the rule row differs.
 		if _, err := tx.ExecContext(ctx, `UPDATE alert_rules SET updated_at = ? WHERE id = ?`, now, ruleID); err != nil {
 			return AdminAlertRule{}, err
 		}

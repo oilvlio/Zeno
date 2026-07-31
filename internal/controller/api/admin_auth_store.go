@@ -151,7 +151,7 @@ func (s *SQLiteStore) ResetAdminAccount(ctx context.Context, password string) er
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	for key, value := range map[string]string{
 		settingKeyAdminUsername:     "admin",
 		settingKeyAdminPasswordHash: passwordHash,
@@ -203,7 +203,7 @@ func (s *SQLiteStore) UpdateAdminAccount(ctx context.Context, username, currentP
 	if err != nil {
 		return AdminSession{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO settings (key, value, updated_at)
 		VALUES (?, ?, ?)
@@ -257,7 +257,7 @@ func (s *SQLiteStore) createAdminSession(ctx context.Context, token string) erro
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO admin_sessions (token_hash, created_at, last_seen_at)
 		VALUES (?, ?, ?)

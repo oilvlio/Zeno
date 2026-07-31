@@ -227,7 +227,7 @@ func seedAdminDeleteHistory(t *testing.T, store *SQLiteStore, nodeID, targetID s
 	if err != nil {
 		t.Fatalf("begin history seed: %v", err)
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	stateStmt, err := tx.PrepareContext(ctx, `INSERT INTO state_samples (node_id, ts, cpu_percent) VALUES (?, ?, 12.5)`)
 	if err != nil {

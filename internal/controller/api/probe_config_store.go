@@ -62,7 +62,7 @@ func (s *SQLiteStore) recordProbeConfigAppliedOnce(ctx context.Context, nodeID s
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	var currentVersion int64
 	if err := tx.QueryRowContext(ctx, `SELECT version FROM probe_config_meta WHERE id = 1`).Scan(&currentVersion); err != nil {
 		return err

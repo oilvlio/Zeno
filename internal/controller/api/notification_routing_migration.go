@@ -19,7 +19,7 @@ func (s *SQLiteStore) migrateNotificationRoutingBindings(ctx context.Context) er
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, destination, delivery_version, destination_fingerprint

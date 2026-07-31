@@ -53,7 +53,7 @@ func (s *SQLiteStore) issueAgentEnrollment(ctx context.Context, nodeID string) (
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	if err := lockAgentNodeWriteTx(ctx, tx, nodeID); err != nil {
 		if errors.Is(err, errNodeNotFound) {
@@ -113,7 +113,7 @@ func (s *SQLiteStore) RedeemAgentEnrollment(ctx context.Context, nodeID, enrollm
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	result, err := tx.ExecContext(ctx, `
 		UPDATE agent_enrollment_tokens

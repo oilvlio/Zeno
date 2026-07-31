@@ -18,7 +18,7 @@ func (s *SQLiteStore) upsertAgentHostOnce(ctx context.Context, nodeID string, ho
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if err := lockAgentNodeWriteTx(ctx, tx, nodeID); err != nil {
 		return err
 	}

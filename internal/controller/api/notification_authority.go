@@ -2,14 +2,13 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/subtle"
 	"database/sql"
-	"encoding/hex"
+	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
+
+	"github.com/shui1iao/zeno/internal/controller/notifycrypto"
 )
 
 const (
@@ -24,7 +23,7 @@ func (s *SQLiteStore) AuthorizeNotificationAuthority(ctx context.Context, author
 	if authorityKey == "" {
 		return false, nil
 	}
-	keyID := notificationAuthorityDerivedKeyID(authorityKey)
+	keyID := notifycrypto.AuthorityDerivedKeyID(authorityKey)
 	return s.AuthorizeNotificationAuthorityKeyring(ctx, keyID, map[string]string{keyID: authorityKey})
 }
 
@@ -33,47 +32,71 @@ func (s *SQLiteStore) AuthorizeNotificationAuthority(ctx context.Context, author
 // matches any supplied old key, it is atomically advanced to activeKeyID; a
 // subsequent restart can safely remove the old key from the ring.
 func (s *SQLiteStore) AuthorizeNotificationAuthorityKeyring(ctx context.Context, activeKeyID string, keys map[string]string) (bool, error) {
-	normalizedActiveKeyID := strings.TrimSpace(activeKeyID)
-	if normalizedActiveKeyID == "" && len(keys) == 0 {
+	keyring, configured, err := notifycrypto.NewAuthorityKeyring(activeKeyID, keys)
+	if err != nil {
+		return false, translateNotificationAuthorityError(err)
+	}
+	if !configured {
 		return false, nil
-	}
-	if normalizedActiveKeyID != activeKeyID || !validNotificationCredentialKeyID(normalizedActiveKeyID) || len(keys) == 0 {
-		return false, fmt.Errorf("invalid notification authority key ring")
-	}
-	fingerprints := make(map[string]string, len(keys))
-	keyIDs := make([]string, 0, len(keys))
-	for rawKeyID, key := range keys {
-		keyID := strings.TrimSpace(rawKeyID)
-		key = strings.TrimSpace(key)
-		if keyID != rawKeyID || !validNotificationCredentialKeyID(keyID) || key == "" {
-			return false, fmt.Errorf("invalid notification authority key ring")
-		}
-		if _, duplicate := fingerprints[keyID]; duplicate {
-			return false, fmt.Errorf("invalid notification authority key ring")
-		}
-		fingerprints[keyID] = notificationAuthorityFingerprint(key)
-		keyIDs = append(keyIDs, keyID)
-	}
-	sort.Strings(keyIDs)
-	activeFingerprint, ok := fingerprints[normalizedActiveKeyID]
-	if !ok {
-		return false, fmt.Errorf("active notification authority key id is not in key ring")
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	nowUnix := time.Now().UTC().Unix()
-	// Write first so concurrent controller startups serialize before deciding
-	// who owns an unbound database. A read-then-upsert transaction could let two
-	// different keys both observe no binding and each report authorization.
+
+	claimed, err := claimNotificationAuthority(ctx, tx, keyring.ActiveFingerprint(), nowUnix)
+	if err != nil {
+		return false, err
+	}
+	if claimed {
+		if err := writeNotificationAuthorityKeyID(ctx, tx, keyring.ActiveKeyID(), nowUnix); err != nil {
+			return false, err
+		}
+		return true, commitNotificationAuthority(&tx)
+	}
+
+	var storedFingerprint string
+	if err := tx.QueryRowContext(ctx,
+		`SELECT value FROM settings WHERE key = ?`,
+		settingKeyNotificationAuthorityFingerprint,
+	).Scan(&storedFingerprint); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, fmt.Errorf("notification authority binding disappeared")
+		}
+		return false, err
+	}
+
+	if !keyring.Matches(storedFingerprint) {
+		// Not an error: an unrelated controller simply does not own this
+		// database. Commit so the read transaction does not linger.
+		return false, commitNotificationAuthority(&tx)
+	}
+
+	// Matching an old authority proves continuity. Advance both fingerprint and
+	// key id in one transaction; neither secret nor key material is persisted.
+	if err := writeNotificationAuthoritySetting(ctx, tx,
+		settingKeyNotificationAuthorityFingerprint, keyring.ActiveFingerprint(), nowUnix); err != nil {
+		return false, err
+	}
+	if err := writeNotificationAuthorityKeyID(ctx, tx, keyring.ActiveKeyID(), nowUnix); err != nil {
+		return false, err
+	}
+	return true, commitNotificationAuthority(&tx)
+}
+
+// claimNotificationAuthority attempts to install the binding on an unbound
+// database. The insert runs before any read so concurrent controller startups
+// serialize on the write: a read-then-upsert transaction could let two
+// different keys both observe no binding and each report authorization.
+func claimNotificationAuthority(ctx context.Context, tx *sql.Tx, fingerprint string, nowUnix int64) (bool, error) {
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO settings (key, value, updated_at)
 		VALUES (?, ?, ?)
 		ON CONFLICT(key) DO NOTHING
-	`, settingKeyNotificationAuthorityFingerprint, activeFingerprint, nowUnix)
+	`, settingKeyNotificationAuthorityFingerprint, fingerprint, nowUnix)
 	if err != nil {
 		return false, err
 	}
@@ -81,73 +104,41 @@ func (s *SQLiteStore) AuthorizeNotificationAuthorityKeyring(ctx context.Context,
 	if err != nil {
 		return false, err
 	}
-	if inserted == 1 {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO settings (key, value, updated_at)
-			VALUES (?, ?, ?)
-			ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-		`, settingKeyNotificationAuthorityKeyID, normalizedActiveKeyID, nowUnix); err != nil {
-			return false, err
-		}
-		if err := tx.Commit(); err != nil {
-			return false, err
-		}
-		tx = nil
-		return true, nil
-	}
+	return inserted == 1, nil
+}
 
-	var storedFingerprint string
-	err = tx.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, settingKeyNotificationAuthorityFingerprint).Scan(&storedFingerprint)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return false, fmt.Errorf("notification authority binding disappeared")
-		}
-		return false, err
-	}
+func writeNotificationAuthorityKeyID(ctx context.Context, tx *sql.Tx, keyID string, nowUnix int64) error {
+	return writeNotificationAuthoritySetting(ctx, tx, settingKeyNotificationAuthorityKeyID, keyID, nowUnix)
+}
 
-	matched := false
-	for _, keyID := range keyIDs {
-		candidate := fingerprints[keyID]
-		if len(candidate) == len(storedFingerprint) && subtle.ConstantTimeCompare([]byte(candidate), []byte(storedFingerprint)) == 1 {
-			matched = true
-		}
-	}
-	if !matched {
-		if err := tx.Commit(); err != nil {
-			return false, err
-		}
-		tx = nil
-		return false, nil
-	}
-	// Matching an old authority proves continuity. Advance both fingerprint and
-	// key id in one transaction; neither secret nor key material is persisted.
-	if _, err := tx.ExecContext(ctx, `
+func writeNotificationAuthoritySetting(ctx context.Context, tx *sql.Tx, key, value string, nowUnix int64) error {
+	_, err := tx.ExecContext(ctx, `
 		INSERT INTO settings (key, value, updated_at)
 		VALUES (?, ?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-	`, settingKeyNotificationAuthorityFingerprint, activeFingerprint, nowUnix); err != nil {
-		return false, err
-	}
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO settings (key, value, updated_at)
-		VALUES (?, ?, ?)
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-	`, settingKeyNotificationAuthorityKeyID, normalizedActiveKeyID, nowUnix); err != nil {
-		return false, err
-	}
-	if err := tx.Commit(); err != nil {
-		return false, err
-	}
-	tx = nil
-	return true, nil
+	`, key, value, nowUnix)
+	return err
 }
 
-func notificationAuthorityFingerprint(key string) string {
-	sum := sha256.Sum256([]byte(strings.TrimSpace(key)))
-	return hex.EncodeToString(sum[:])
+// commitNotificationAuthority commits and clears the caller's transaction
+// handle so the deferred rollback becomes a no-op.
+func commitNotificationAuthority(tx **sql.Tx) error {
+	if err := (*tx).Commit(); err != nil {
+		return err
+	}
+	*tx = nil
+	return nil
 }
 
-func notificationAuthorityDerivedKeyID(key string) string {
-	fingerprint := notificationAuthorityFingerprint(key)
-	return "authority-" + fingerprint[:16]
+// translateNotificationAuthorityError keeps the store's historical error text
+// stable now that validation lives in notifycrypto.
+func translateNotificationAuthorityError(err error) error {
+	switch {
+	case errors.Is(err, notifycrypto.ErrAuthorityKeyring):
+		return fmt.Errorf("invalid notification authority key ring")
+	case errors.Is(err, notifycrypto.ErrAuthorityActiveKeyMissing):
+		return fmt.Errorf("active notification authority key id is not in key ring")
+	default:
+		return err
+	}
 }

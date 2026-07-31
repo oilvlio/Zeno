@@ -45,7 +45,7 @@ func (s *SQLiteStore) claimNextNotificationDelivery(ctx context.Context, now tim
 	if err != nil {
 		return queuedNotificationDelivery{}, false, false, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries

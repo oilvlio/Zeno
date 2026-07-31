@@ -44,7 +44,7 @@ func (s *SQLiteStore) UpdateAdminSettings(ctx context.Context, update AdminSetti
 	if err != nil {
 		return SiteSettings{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	// PATCH is deliberately sparse: persisting a read/modify/write snapshot of
 	// every setting lets two disjoint concurrent requests overwrite each other
 	// with stale values. Only keys represented by this request are upserted.

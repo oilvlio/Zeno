@@ -79,7 +79,7 @@ func (s *SQLiteStore) RefreshExchangeRates(ctx context.Context, client *http.Cli
 		if err != nil {
 			return err
 		}
-		defer rollbackUnlessCommitted(tx)
+		defer func() { rollbackUnlessCommitted(tx) }()
 		now := time.Now().UTC().Unix()
 		for _, currency := range exchangeRateCurrencies {
 			if _, err := tx.ExecContext(writeCtx, `

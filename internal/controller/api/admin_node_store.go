@@ -50,7 +50,7 @@ func (s *SQLiteStore) CreateAdminNode(ctx context.Context, create AdminNodeCreat
 	if err != nil {
 		return AdminNode{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	result, err := tx.ExecContext(ctx, `
 		INSERT OR IGNORE INTO nodes (id, display_name, token_hash, install_token, status, country_code, region, expiry_date, expiry_permanent, billing_cycle, renewal_amount, renewal_currency, display_order, public_ipv4, public_ipv6, billing_mode, monthly_quota_bytes, monthly_reset_day, disabled, created_at, updated_at, last_seen_at)

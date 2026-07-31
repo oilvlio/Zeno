@@ -275,7 +275,7 @@ func insertNotificationDeliveriesTxForTest(ctx context.Context, store *SQLiteSto
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if err := insertNotificationDeliveriesTx(ctx, tx, event, []notificationDispatchChannel{channel}, time.Now().UTC().Unix()); err != nil {
 		return err
 	}

@@ -141,7 +141,7 @@ func (s *SQLiteStore) migrateProbeRoundIdempotency(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	if !stringSlicesEqual(indexColumns, wantColumns) || !indexUnique {
 		if _, err := tx.ExecContext(ctx, `DROP INDEX IF EXISTS idx_probe_rounds_idempotency`); err != nil {
 			return err
@@ -243,7 +243,7 @@ func (s *SQLiteStore) repairProbeRoundDuplicateAgentIDBatch(ctx context.Context,
 	if err != nil {
 		return 0, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	statement := `
 		WITH repairs(id, idempotency_key, payload_hash) AS (
 			VALUES ` + strings.Join(values, ",") + `
@@ -372,7 +372,7 @@ func (s *SQLiteStore) applyProbeRoundIdempotencyBackfillBatch(ctx context.Contex
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	statement := `
 		WITH backfill(id, idempotency_key, agent_round_id, payload_hash) AS (
 			VALUES ` + strings.Join(values, ",") + `

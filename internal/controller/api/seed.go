@@ -48,7 +48,7 @@ func (s *SQLiteStore) SeedPreviewData(ctx context.Context, options PreviewSeedOp
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO nodes (id, display_name, token_hash, install_token, status, country_code, billing_mode, monthly_quota_bytes, monthly_reset_day, disabled, created_at, updated_at, last_seen_at)
@@ -159,7 +159,7 @@ func (s *SQLiteStore) EnabledProbeTargetsWithConfigVersion(ctx context.Context, 
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	var version int64
 	if err := tx.QueryRowContext(ctx, `SELECT version FROM probe_config_meta WHERE id = 1`).Scan(&version); err != nil {
 		return nil, 0, err

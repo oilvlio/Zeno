@@ -68,7 +68,7 @@ func (s *SQLiteStore) enqueueAdminNodeDeletion(ctx context.Context, nodeID strin
 		if err != nil {
 			return err
 		}
-		defer rollbackUnlessCommitted(tx)
+		defer func() { rollbackUnlessCommitted(tx) }()
 
 		// Reserve the SQLite writer before existence/job reads. This serializes
 		// the tombstone with Agent writes and probe-config mutations.
@@ -151,7 +151,7 @@ func (s *SQLiteStore) enqueueAdminProbeTargetDeletion(ctx context.Context, targe
 		if err != nil {
 			return err
 		}
-		defer rollbackUnlessCommitted(tx)
+		defer func() { rollbackUnlessCommitted(tx) }()
 		if _, err := tx.ExecContext(ctx, `UPDATE probe_config_meta SET version = version WHERE id = 1`); err != nil {
 			return err
 		}
@@ -373,7 +373,7 @@ func (s *SQLiteStore) finalizeAdminNodeDeletion(ctx context.Context, nodeID stri
 		if err != nil {
 			return err
 		}
-		defer rollbackUnlessCommitted(tx)
+		defer func() { rollbackUnlessCommitted(tx) }()
 		if _, err := tx.ExecContext(ctx, `UPDATE probe_config_meta SET version = version WHERE id = 1`); err != nil {
 			return err
 		}
@@ -436,7 +436,7 @@ func (s *SQLiteStore) finalizeAdminProbeTargetDeletion(ctx context.Context, targ
 		if err != nil {
 			return err
 		}
-		defer rollbackUnlessCommitted(tx)
+		defer func() { rollbackUnlessCommitted(tx) }()
 		if _, err := tx.ExecContext(ctx, `UPDATE probe_config_meta SET version = version WHERE id = 1`); err != nil {
 			return err
 		}

@@ -29,7 +29,7 @@ func (s *SQLiteStore) insertProbeRoundsOnce(ctx context.Context, nodeID string, 
 	if err != nil {
 		return err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 	// Acquire SQLite's writer reservation before insertProbeRoundTx performs
 	// idempotency reads. Otherwise a concurrent writer can commit between the
 	// read and INSERT and make the deferred transaction fail with BUSY_SNAPSHOT.
@@ -119,7 +119,7 @@ func (s *SQLiteStore) insertAgentProbeResultsOnce(ctx context.Context, nodeID st
 	if err != nil {
 		return agentProbeInsertResult{}, err
 	}
-	defer rollbackUnlessCommitted(tx)
+	defer func() { rollbackUnlessCommitted(tx) }()
 
 	// Acquire the SQLite writer lock before reading the probe config version and
 	// target set. This keeps the non-zero config_version comparison and the full
