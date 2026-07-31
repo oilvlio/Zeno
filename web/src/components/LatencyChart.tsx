@@ -446,51 +446,49 @@ function avgPacketLoss(rows: KulinChartRow[], packetLossKey: string): number {
   return count === 0 ? 0 : total / count
 }
 
-function axisTicksForTimestamps(timestamps: number[], maxTicks: number): number[] {
+// Places ticks at even intervals across the window instead of collecting every
+// round hour. Selecting by wall-clock (":00", then every 2nd or 12th hour) made
+// spacing a side effect of where the window happened to start: the endpoints are
+// "now" and exactly N hours earlier, neither of which lands on an hour boundary,
+// so the distance between an endpoint and its neighbouring hour mark was
+// arbitrary and could be a few pixels.
+//
+// Each interior position is then snapped to the nearest hour, because "14:00"
+// reads better than "14:35" and the shift is at most half an hour -- small
+// enough that the axis still looks evenly spaced. Snapping can push a mark back
+// towards an endpoint, so the caller still prunes by rendered label width; even
+// spacing greatly reduces how often that has to drop anything.
+export function axisTicksForTimestamps(timestamps: number[], maxTicks: number): number[] {
   if (timestamps.length <= 1) return timestamps
   if (timestamps.length < 6) return [timestamps[0], timestamps.at(-1)!]
 
   const start = timestamps[0]
   const end = timestamps.at(-1)!
-  const spanHours = (end - start) / 3_600_000
-  const lastIndex = timestamps.length - 1
-  if (spanHours <= 12) {
-    const ticks = timestamps.filter((timestamp, index) => {
-      const date = new Date(timestamp)
-      return index === 0 || index === lastIndex || date.getMinutes() === 0
-    })
-    return thinTicks(withEndpointTicks(ticks, start, end), maxTicks)
+  const span = end - start
+  if (span <= 0) return [start]
+
+  const slots = Math.max(2, maxTicks)
+  const ticks: number[] = [start]
+
+  for (let index = 1; index < slots - 1; index += 1) {
+    const target = start + (span * index) / (slots - 1)
+    const snapped = snapToNearestHour(target)
+    // Keep only marks that stay strictly inside the window and still advance,
+    // so snapping cannot duplicate a tick or step outside the axis range.
+    if (snapped > start && snapped < end && snapped > ticks[ticks.length - 1]) ticks.push(snapped)
   }
 
-  if (spanHours <= 36) {
-    const ticks = timestamps.filter((timestamp, index) => {
-      if (index === 0 || index === lastIndex) return false
-      const date = new Date(timestamp)
-      return date.getMinutes() === 0 && date.getHours() % 2 === 0
-    })
-    return thinTicks(withEndpointTicks(ticks, start, end), maxTicks)
-  }
-
-  if (spanHours <= 24 * 10) {
-    const ticks = timestamps.filter((timestamp, index) => {
-      if (index === 0 || index === lastIndex) return false
-      const date = new Date(timestamp)
-      return date.getHours() % 12 === 0 && date.getMinutes() === 0
-    })
-    return thinTicks(withEndpointTicks(ticks, start, end), maxTicks)
-  }
-
-  return thinTicks(timestamps, maxTicks)
+  ticks.push(end)
+  return ticks
 }
 
-function withEndpointTicks(ticks: number[], start: number, end: number): number[] {
-  return [...new Set([start, ...ticks, end])].sort((left, right) => left - right)
-}
+const hourMs = 3_600_000
 
-function thinTicks(ticks: number[], maxTicks: number): number[] {
-  if (ticks.length <= maxTicks) return ticks
-  const step = Math.ceil(ticks.length / maxTicks)
-  return ticks.filter((_, index) => index % step === 0)
+function snapToNearestHour(timestamp: number): number {
+  const floor = new Date(timestamp)
+  floor.setMinutes(0, 0, 0)
+  const floorMs = floor.getTime()
+  return timestamp - floorMs > hourMs / 2 ? floorMs + hourMs : floorMs
 }
 
 function axisTickAnchor(x: number, width: number, pad: { left: number; right: number }): 'start' | 'middle' | 'end' {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampAxisTickX, pruneCollidingAxisTicks } from './LatencyChart'
+import { axisTicksForTimestamps, clampAxisTickX, pruneCollidingAxisTicks } from './LatencyChart'
 
 // Exact geometry captured from https://shuijiao.li/server/datawave-hk at a
 // 1440px viewport: viewBox 960x320, 14 axis ticks, real rendered char width
@@ -69,5 +69,64 @@ describe('production axis geometry that 水饺 reported', () => {
     // round-hour marks may be sacrificed.
     expect(PROD[kept[0]].txt).toBe('18:44')
     expect(PROD[kept[kept.length - 1]].txt).toBe('18:43')
+  })
+})
+
+// The reason the axis overlapped was that ticks were chosen by wall-clock hour,
+// which makes spacing depend on where the window happens to start. These pin the
+// even-interval contract so a future change cannot quietly go back to that.
+describe('axis ticks are spaced evenly rather than picked by wall clock', () => {
+  const minute = 60_000
+  const width = 960
+  const pad = { left: 52, right: 24 }
+  const charWidth = 7.2
+
+  // A 24h window ending at :57 -- neither endpoint is on an hour boundary, which
+  // is exactly the case that used to collide.
+  const end = new Date('2026-07-31T18:57:00+08:00').getTime()
+  const timestamps = Array.from({ length: 1440 }, (_, i) => end - (1439 - i) * minute)
+
+  const xOf = (t: number) => {
+    const span = timestamps[timestamps.length - 1] - timestamps[0]
+    return pad.left + ((t - timestamps[0]) / span) * (width - pad.left - pad.right)
+  }
+  const labelOf = (t: number) => {
+    const d = new Date(t)
+    return `${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`
+  }
+  const anchorOf = (t: number) => {
+    const x = xOf(t)
+    if (x <= pad.left + 8) return 'start' as const
+    if (x >= width - pad.right - 8) return 'end' as const
+    return 'middle' as const
+  }
+
+  it('spaces interior ticks evenly and keeps the true window endpoints', () => {
+    const ticks = axisTicksForTimestamps(timestamps, 12)
+
+    expect(ticks[0]).toBe(timestamps[0])
+    expect(ticks[ticks.length - 1]).toBe(timestamps[timestamps.length - 1])
+
+    // Interior marks are snapped to the hour, so two adjacent interior gaps can
+    // differ by a full hour (one mark rounded down, the next rounded up). The
+    // endpoints are deliberately left unsnapped -- they show the true window --
+    // so their gaps add up to another half hour on top.
+    const deltas = ticks.slice(1).map((t, i) => t - ticks[i])
+    const interior = deltas.slice(1, -1)
+    expect(Math.max(...interior) - Math.min(...interior)).toBeLessThanOrEqual(60 * minute)
+    expect(Math.max(...deltas) - Math.min(...deltas)).toBeLessThanOrEqual(90 * minute)
+
+    // Most labels should still read as round hours; that is why snapping exists.
+    const roundHours = ticks.filter((t) => new Date(t).getMinutes() === 0).length
+    expect(roundHours).toBeGreaterThanOrEqual(ticks.length - 2)
+  })
+
+  it('produces an axis that needs no pruning at all in the common case', () => {
+    const ticks = axisTicksForTimestamps(timestamps, 12)
+    const kept = pruneCollidingAxisTicks(ticks, xOf, labelOf, charWidth, anchorOf)
+
+    // Even spacing means the collision guard has nothing to remove here, which
+    // is the whole point: pruning is a safety net, not the mechanism.
+    expect(kept).toEqual(ticks)
   })
 })
