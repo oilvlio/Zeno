@@ -567,41 +567,24 @@ func (h *handler) invalidateSummaryAggregates() {
 }
 
 func (h *handler) publishNodeState(ctx context.Context, nodeID string) {
-	h.publishDetail(ctx, nodeID, resolveStateWindow, nodeStateLiveTopic, func(window latencyWindow) ([]byte, error) {
-		state, err := h.store.NodeState(ctx, nodeID, window)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(state)
-	})
+	publishDetail(h, ctx, nodeID, resolveStateWindow, nodeStateLiveTopic, h.store.NodeState)
 }
 
 func (h *handler) publishNodeLatency(ctx context.Context, nodeID string) {
-	h.publishDetail(ctx, nodeID, resolveLatencyWindow, nodeLatencyLiveTopic, func(window latencyWindow) ([]byte, error) {
-		latency, err := h.store.NodeLatency(ctx, nodeID, window)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(latency)
-	})
+	publishDetail(h, ctx, nodeID, resolveLatencyWindow, nodeLatencyLiveTopic, h.store.NodeLatency)
 }
 
 func (h *handler) publishServiceLatency(ctx context.Context, targetID string) {
-	h.publishDetail(ctx, targetID, resolveLatencyWindow, serviceLatencyLiveTopic, func(window latencyWindow) ([]byte, error) {
-		latency, err := h.store.ServiceTargetLatency(ctx, targetID, window)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(latency)
-	})
+	publishDetail(h, ctx, targetID, resolveLatencyWindow, serviceLatencyLiveTopic, h.store.ServiceTargetLatency)
 }
 
-func (h *handler) publishDetail(
+func publishDetail[T any](
+	h *handler,
 	ctx context.Context,
 	subjectID string,
 	resolveWindow func(string) (latencyWindow, bool),
 	topicFor func(string, string) string,
-	load func(latencyWindow) ([]byte, error),
+	load func(context.Context, string, latencyWindow) (T, error),
 ) {
 	if h.liveHub == nil {
 		return
@@ -615,7 +598,13 @@ func (h *handler) publishDetail(
 		if !h.liveHub.hasClients(topic) {
 			continue
 		}
-		payload, err := h.detailCache.refresh(topic, func() ([]byte, error) { return load(window) })
+		payload, err := h.detailCache.refresh(topic, func() ([]byte, error) {
+			value, err := load(ctx, subjectID, window)
+			if err != nil {
+				return nil, err
+			}
+			return json.Marshal(value)
+		})
 		if err == nil {
 			h.liveHub.publish(topic, payload)
 		}
