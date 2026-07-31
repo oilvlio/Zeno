@@ -238,32 +238,80 @@ func (h *handler) handleAdminAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
+	handleAdminReadMutation(h, w, r, http.MethodPatch, http.StatusOK, readAdminSettings, updateAdminSettings)
+}
+
+func readAdminSettings(ctx context.Context, store adminStore) (AdminSettingsResponse, error) {
+	settings, err := store.AdminSettings(ctx)
+	return AdminSettingsResponse{Settings: settings}, err
+}
+
+func updateAdminSettings(ctx context.Context, store adminStore, update AdminSettingsUpdateRequest) (AdminSettingsResponse, error) {
+	settings, err := store.UpdateAdminSettings(ctx, update)
+	return AdminSettingsResponse{Settings: settings}, err
+}
+
+func handleAdminReadMutation[Request, ReadResponse, MutationResponse any](
+	h *handler, w http.ResponseWriter, r *http.Request, mutationMethod string, mutationStatus int,
+	read func(context.Context, adminStore) (ReadResponse, error),
+	mutate func(context.Context, adminStore, Request) (MutationResponse, error),
+) {
 	store, ok := h.authorizeAdminRequest(w, r)
 	if !ok {
 		return
 	}
 	switch r.Method {
 	case http.MethodGet:
-		settings, err := store.AdminSettings(r.Context())
+		response, err := read(r.Context(), store)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		writeJSON(w, http.StatusOK, AdminSettingsResponse{Settings: settings})
-	case http.MethodPatch:
-		var update AdminSettingsUpdateRequest
-		if !decodeJSONBody(w, r, &update, adminJSONBodyLimit, true) {
+		writeJSON(w, http.StatusOK, response)
+	case mutationMethod:
+		var request Request
+		if !decodeJSONBody(w, r, &request, adminJSONBodyLimit, true) {
 			return
 		}
-		settings, err := store.UpdateAdminSettings(r.Context(), update)
+		response, err := mutate(r.Context(), store, request)
 		if err != nil {
 			writeAdminError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, AdminSettingsResponse{Settings: settings})
+		writeJSON(w, mutationStatus, response)
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func handleAdminPatchResource[Request, Response any](
+	h *handler, w http.ResponseWriter, r *http.Request, pathPrefix string,
+	update func(context.Context, adminStore, string, Request) (Response, error),
+) {
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, pathPrefix), "/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 1 || parts[0] == "" {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if r.Method != http.MethodPatch {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	store, ok := h.authorizeAdminRequest(w, r)
+	if !ok {
+		return
+	}
+	var request Request
+	if !decodeJSONBody(w, r, &request, adminJSONBodyLimit, true) {
+		return
+	}
+	response, err := update(r.Context(), store, parts[0], request)
+	if err != nil {
+		writeAdminError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *handler) handleAdminProbeTargets(w http.ResponseWriter, r *http.Request) {

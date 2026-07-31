@@ -37,32 +37,17 @@ func (h *handler) handleAdminNotificationDeliveryResource(w http.ResponseWriter,
 }
 
 func (h *handler) handleAdminNotificationChannels(w http.ResponseWriter, r *http.Request) {
-	store, ok := h.authorizeAdminRequest(w, r)
-	if !ok {
-		return
-	}
-	switch r.Method {
-	case http.MethodGet:
-		channels, err := store.AdminNotificationChannels(r.Context())
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-		writeJSON(w, http.StatusOK, AdminNotificationChannelsResponse{Channels: channels})
-	case http.MethodPost:
-		var create AdminNotificationChannelCreateRequest
-		if !decodeJSONBody(w, r, &create, adminJSONBodyLimit, true) {
-			return
-		}
-		channel, err := store.CreateAdminNotificationChannel(r.Context(), create)
-		if err != nil {
-			writeAdminError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, AdminNotificationChannelResponse{Channel: channel})
-	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-	}
+	handleAdminReadMutation(h, w, r, http.MethodPost, http.StatusCreated, readAdminNotificationChannels, createAdminNotificationChannel)
+}
+
+func readAdminNotificationChannels(ctx context.Context, store adminStore) (AdminNotificationChannelsResponse, error) {
+	channels, err := store.AdminNotificationChannels(ctx)
+	return AdminNotificationChannelsResponse{Channels: channels}, err
+}
+
+func createAdminNotificationChannel(ctx context.Context, store adminStore, create AdminNotificationChannelCreateRequest) (AdminNotificationChannelResponse, error) {
+	channel, err := store.CreateAdminNotificationChannel(ctx, create)
+	return AdminNotificationChannelResponse{Channel: channel}, err
 }
 
 func (h *handler) handleAdminNotificationChannelResource(w http.ResponseWriter, r *http.Request) {
@@ -156,28 +141,10 @@ func adminTestNotificationEvent(ts time.Time) notificationEvent {
 }
 
 func (h *handler) handleAdminNotificationTypeResource(w http.ResponseWriter, r *http.Request) {
-	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/admin/v1/notification-types/"), "/")
-	parts := strings.Split(path, "/")
-	if len(parts) != 1 || parts[0] == "" {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	if r.Method != http.MethodPatch {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	store, ok := h.authorizeAdminRequest(w, r)
-	if !ok {
-		return
-	}
-	var update AdminNotificationTypeUpdateRequest
-	if !decodeJSONBody(w, r, &update, adminJSONBodyLimit, true) {
-		return
-	}
-	notificationType, err := store.UpdateAdminNotificationType(r.Context(), parts[0], update)
-	if err != nil {
-		writeAdminError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, AdminNotificationTypeResponse{Type: notificationType})
+	handleAdminPatchResource(h, w, r, "/api/admin/v1/notification-types/", updateAdminNotificationType)
+}
+
+func updateAdminNotificationType(ctx context.Context, store adminStore, eventType string, update AdminNotificationTypeUpdateRequest) (AdminNotificationTypeResponse, error) {
+	notificationType, err := store.UpdateAdminNotificationType(ctx, eventType, update)
+	return AdminNotificationTypeResponse{Type: notificationType}, err
 }

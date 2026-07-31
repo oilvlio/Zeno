@@ -1,8 +1,8 @@
 package api
 
 import (
+	"context"
 	"net/http"
-	"strings"
 )
 
 func (h *handler) handleAdminAlertRules(w http.ResponseWriter, r *http.Request) {
@@ -23,28 +23,10 @@ func (h *handler) handleAdminAlertRules(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *handler) handleAdminAlertRuleResource(w http.ResponseWriter, r *http.Request) {
-	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/admin/v1/alert-rules/"), "/")
-	parts := strings.Split(path, "/")
-	if len(parts) != 1 || parts[0] == "" {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	if r.Method != http.MethodPatch {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	store, ok := h.authorizeAdminRequest(w, r)
-	if !ok {
-		return
-	}
-	var update AdminAlertRuleUpdateRequest
-	if !decodeJSONBody(w, r, &update, adminJSONBodyLimit, true) {
-		return
-	}
-	rule, err := store.UpdateAdminAlertRule(r.Context(), parts[0], update)
-	if err != nil {
-		writeAdminError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, AdminAlertRuleResponse{Rule: rule})
+	handleAdminPatchResource(h, w, r, "/api/admin/v1/alert-rules/", updateAdminAlertRule)
+}
+
+func updateAdminAlertRule(ctx context.Context, store adminStore, ruleID string, update AdminAlertRuleUpdateRequest) (AdminAlertRuleResponse, error) {
+	rule, err := store.UpdateAdminAlertRule(ctx, ruleID, update)
+	return AdminAlertRuleResponse{Rule: rule}, err
 }
