@@ -25,7 +25,7 @@ type sqliteSummaryCache struct {
 	flight      *summaryAggregateFlight
 }
 
-func (s *SQLiteStore) Summary(ctx context.Context) (SummaryResponse, error) {
+func (s *sqliteMonitoringDomain) Summary(ctx context.Context) (SummaryResponse, error) {
 	nodes, err := s.nodes(ctx)
 	if err != nil {
 		return SummaryResponse{}, err
@@ -55,7 +55,7 @@ func (s *SQLiteStore) Summary(ctx context.Context) (SummaryResponse, error) {
 	return SummaryResponse{Nodes: nodes, Services: services, LatencyPoints: []LatencyPoint{}, ExchangeRates: exchangeRates}, nil
 }
 
-func (s *SQLiteStore) summaryAggregates(ctx context.Context) (map[string]*LatencySummary, []ServiceTarget, map[string][]LatencySummary, error) {
+func (s *sqliteMonitoringDomain) summaryAggregates(ctx context.Context) (map[string]*LatencySummary, []ServiceTarget, map[string][]LatencySummary, error) {
 	retries := 0
 	for {
 		if err := ctx.Err(); err != nil {
@@ -140,7 +140,7 @@ func (s *SQLiteStore) summaryAggregates(ctx context.Context) (map[string]*Latenc
 	}
 }
 
-func (s *SQLiteStore) invalidateSummaryAggregates() {
+func (s *sqliteMonitoringDomain) invalidateSummaryAggregates() {
 	s.summaryCache.mu.Lock()
 	s.summaryCache.generation++
 	s.summaryCache.updated = time.Time{}
@@ -150,7 +150,7 @@ func (s *SQLiteStore) invalidateSummaryAggregates() {
 	s.summaryCache.mu.Unlock()
 }
 
-func (s *SQLiteStore) NodeLatency(ctx context.Context, nodeID string, window latencyWindow) (LatencyResponse, error) {
+func (s *sqliteMonitoringDomain) NodeLatency(ctx context.Context, nodeID string, window latencyWindow) (LatencyResponse, error) {
 	exists, err := s.nodeExists(ctx, nodeID)
 	if err != nil {
 		return LatencyResponse{}, err
@@ -165,7 +165,7 @@ func (s *SQLiteStore) NodeLatency(ctx context.Context, nodeID string, window lat
 	return LatencyResponse{NodeID: nodeID, Range: window.Name, Points: points}, nil
 }
 
-func (s *SQLiteStore) ServiceTargetLatency(ctx context.Context, targetID string, window latencyWindow) (ServiceTargetLatencyResponse, error) {
+func (s *sqliteMonitoringDomain) ServiceTargetLatency(ctx context.Context, targetID string, window latencyWindow) (ServiceTargetLatencyResponse, error) {
 	target, err := s.serviceTargetByID(ctx, targetID)
 	if err != nil {
 		return ServiceTargetLatencyResponse{}, err
@@ -177,7 +177,7 @@ func (s *SQLiteStore) ServiceTargetLatency(ctx context.Context, targetID string,
 	return ServiceTargetLatencyResponse{Target: target, Range: window.Name, Points: points}, nil
 }
 
-func (s *SQLiteStore) NodeState(ctx context.Context, nodeID string, window latencyWindow) (StateResponse, error) {
+func (s *sqliteMonitoringDomain) NodeState(ctx context.Context, nodeID string, window latencyWindow) (StateResponse, error) {
 	exists, err := s.nodeExists(ctx, nodeID)
 	if err != nil {
 		return StateResponse{}, err

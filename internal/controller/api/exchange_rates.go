@@ -31,7 +31,7 @@ type exchangeRateRefreshStore interface {
 	RefreshExchangeRates(context.Context, *http.Client, string) error
 }
 
-func (s *SQLiteStore) RefreshExchangeRates(ctx context.Context, client *http.Client, endpoint string) error {
+func (s *sqliteMonitoringDomain) RefreshExchangeRates(ctx context.Context, client *http.Client, endpoint string) error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("exchange rate store is closed")
 	}
@@ -74,7 +74,7 @@ func (s *SQLiteStore) RefreshExchangeRates(ctx context.Context, client *http.Cli
 	}
 	sourceDate := time.Now().In(time.Local).Format("2006-01-02")
 
-	return s.withAgentWrite(ctx, "_exchange_rates", func(writeCtx context.Context) error {
+	return s.writes.withAgentWrite(ctx, "_exchange_rates", func(writeCtx context.Context) error {
 		tx, err := s.db.BeginTx(writeCtx, nil)
 		if err != nil {
 			return err
@@ -148,7 +148,7 @@ func validExchangeRate(value float64) bool {
 	return value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
-func (s *SQLiteStore) exchangeRateSnapshot(ctx context.Context) (map[string]float64, error) {
+func (s *sqliteMonitoringDomain) exchangeRateSnapshot(ctx context.Context) (map[string]float64, error) {
 	rates := map[string]float64{"CNY": 1}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT currency, cny_rate

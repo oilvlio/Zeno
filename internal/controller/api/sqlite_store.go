@@ -43,7 +43,9 @@ type sqliteMonitoringDomain struct {
 	*sqliteHistoryStore
 	*sqliteLatencyQueries
 	*sqliteReadQueries
+	db           *sql.DB
 	summaryCache sqliteSummaryCache
+	writes       *sqliteWriteState
 }
 
 type sqliteNotificationDomain struct {
@@ -216,6 +218,8 @@ func newSQLiteStore(db *sql.DB, telemetryStorage *telemetryStorageGuard) *SQLite
 			sqliteHistoryStore:   &sqliteHistoryStore{db: db, writes: writes},
 			sqliteLatencyQueries: latencyQueries,
 			sqliteReadQueries:    &sqliteReadQueries{db: db, latency: latencyQueries},
+			db:                   db,
+			writes:               writes,
 		},
 		sqliteNotificationDomain: &sqliteNotificationDomain{
 			sqliteNotificationAuthority: &sqliteNotificationAuthority{db: db},
