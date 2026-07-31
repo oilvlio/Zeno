@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { integerYAxisDomain, LatencyChart, yDomainForRows } from './LatencyChart'
+import { integerYAxisDomain, LatencyChart, pruneCollidingAxisTicks, yDomainForRows } from './LatencyChart'
 
 const points = [
   { ts: '2026-07-02T00:00:00Z', targetId: 'alpha', targetName: 'Alpha', medianMs: 12, avgMs: 12, lossPercent: 0 },
@@ -172,5 +172,49 @@ describe('LatencyChart', () => {
   it('keeps integer tick endpoints within the 5000ms cap', () => {
     expect(integerYAxisDomain({ min: 143.8, max: 145.3 })).toEqual({ min: 142, max: 146 })
     expect(integerYAxisDomain({ min: 4998.8, max: 5000 })).toEqual({ min: 4996, max: 5000 })
+  })
+})
+
+describe('pruneCollidingAxisTicks endpoint reservation', () => {
+  const charWidth = 7.2
+  const label = (t: number) => (t === 0 ? '18:44' : t === 999 ? '18:43' : '12:00')
+  const anchor = (t: number) => (t === 0 ? 'start' as const : t === 999 ? 'end' as const : 'middle' as const)
+
+  // The endpoints state the axis range (oldest sample and "now"); interior marks
+  // are interchangeable round hours. Dropping an endpoint silently changes what
+  // range the chart appears to cover, so it must never be the sacrifice.
+  it('keeps both endpoints and drops the colliding interior tick instead', () => {
+    const kept = pruneCollidingAxisTicks(
+      [0, 1, 999],
+      (t) => (t === 0 ? 52 : t === 1 ? 70 : 936),
+      label,
+      charWidth,
+      anchor,
+    )
+    expect(kept).toEqual([0, 999])
+  })
+
+  it('still returns both endpoints when they collide with each other', () => {
+    const kept = pruneCollidingAxisTicks(
+      [0, 1, 999],
+      (t) => (t === 0 ? 52 : t === 1 ? 60 : 70),
+      label,
+      charWidth,
+      anchor,
+    )
+    expect(kept).toEqual([0, 999])
+  })
+
+  it('rejects an interior tick that clears its right neighbour but overlaps the first tick', () => {
+    // 52 'start' occupies 52..88; an interior label centred at 92 spans 74..110,
+    // so it clears the far right endpoint yet still collides with the first.
+    const kept = pruneCollidingAxisTicks(
+      [0, 1, 999],
+      (t) => (t === 0 ? 52 : t === 1 ? 92 : 936),
+      label,
+      charWidth,
+      anchor,
+    )
+    expect(kept).toEqual([0, 999])
   })
 })

@@ -517,10 +517,12 @@ function axisLabelExtent(
   return { left: centre - labelWidth / 2, right: centre + labelWidth / 2 }
 }
 
-// Keeps the first and last ticks and drops any in between whose rendered labels
-// would touch. Sweeping backwards from the end means the final tick always
-// survives; the earliest tick is then re-checked against whatever remains,
-// because on narrow charts even it can collide with the tick that follows.
+// Both endpoints are reserved before anything else, then interior ticks are
+// filled in where they fit. The endpoints carry the axis range -- the oldest
+// sample and "now" -- whereas interior marks are interchangeable round hours,
+// so an interior label must always be the one sacrificed. Sweeping backwards
+// keeps the marks that remain aligned to the right edge, and every candidate is
+// checked against the reserved first tick as well as its right-hand neighbour.
 export function pruneCollidingAxisTicks(
   ticks: number[],
   xOf: (tick: number) => number,
@@ -532,23 +534,25 @@ export function pruneCollidingAxisTicks(
   if (ticks.length <= 2) return ticks
 
   const extentOf = (tick: number) => axisLabelExtent(xOf(tick), labelOf(tick), charWidth, anchorOf(tick))
-  const kept: number[] = [ticks[ticks.length - 1]]
-  let nextExtent = extentOf(ticks[ticks.length - 1])
+  const firstExtent = extentOf(ticks[0])
+  const lastExtent = extentOf(ticks[ticks.length - 1])
+
+  // Nothing fits between endpoints that already collide; showing the range is
+  // still more useful than showing one endpoint plus an arbitrary round hour.
+  if (firstExtent.right + minGapPx > lastExtent.left) return [ticks[0], ticks[ticks.length - 1]]
+
+  const interior: number[] = []
+  let nextExtent = lastExtent
 
   for (let index = ticks.length - 2; index >= 1; index -= 1) {
     const extent = extentOf(ticks[index])
-    if (extent.right + minGapPx <= nextExtent.left) {
-      kept.push(ticks[index])
-      nextExtent = extent
-    }
+    if (extent.right + minGapPx > nextExtent.left) continue
+    if (firstExtent.right + minGapPx > extent.left) continue
+    interior.push(ticks[index])
+    nextExtent = extent
   }
 
-  const firstExtent = extentOf(ticks[0])
-  if (firstExtent.right + minGapPx <= nextExtent.left) {
-    kept.push(ticks[0])
-  }
-
-  return kept.reverse()
+  return [ticks[0], ...interior.reverse(), ticks[ticks.length - 1]]
 }
 
 function formatAxisTime(createdAt: number, timestamps: number[]): string {
