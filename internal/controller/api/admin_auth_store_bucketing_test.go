@@ -75,7 +75,7 @@ func TestAuthorizeAdminSessionOccasionalPruneKeepsIdleBoundary(t *testing.T) {
 	`, HashAdminToken(activeToken), now-3600, now-10, HashAdminToken(idleExpiredToken), now-3600, now-int64(adminSessionIdleTimeout.Seconds())); err != nil {
 		t.Fatalf("insert sessions: %v", err)
 	}
-	store.adminSessionLastPruned = time.Now().UTC()
+	store.sqliteAdminAuth.lastPruned = time.Now().UTC()
 	authorized, err := store.AuthorizeAdminSession(ctx, idleExpiredToken)
 	if err != nil {
 		t.Fatalf("authorize idle boundary session: %v", err)

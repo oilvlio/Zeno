@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -32,7 +33,13 @@ type AdminAccount struct {
 	Username string `json:"username"`
 }
 
-func (s *SQLiteStore) AdminLogin(ctx context.Context, username, password, fallbackHash string) (AdminSession, error) {
+type sqliteAdminAuth struct {
+	db         *sql.DB
+	pruneMu    sync.Mutex
+	lastPruned time.Time
+}
+
+func (s *sqliteAdminAuth) AdminLogin(ctx context.Context, username, password, fallbackHash string) (AdminSession, error) {
 	account, err := s.AdminAccount(ctx)
 	if err != nil {
 		return AdminSession{}, err
@@ -51,7 +58,7 @@ func (s *SQLiteStore) AdminLogin(ctx context.Context, username, password, fallba
 	return AdminSession{Username: account.Username, Token: token}, nil
 }
 
-func (s *SQLiteStore) AuthorizeAdminSession(ctx context.Context, token string) (bool, error) {
+func (s *sqliteAdminAuth) AuthorizeAdminSession(ctx context.Context, token string) (bool, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return false, nil
@@ -96,7 +103,7 @@ func (s *SQLiteStore) AuthorizeAdminSession(ctx context.Context, token string) (
 	return true, nil
 }
 
-func (s *SQLiteStore) RevokeAdminSession(ctx context.Context, token string) error {
+func (s *sqliteAdminAuth) RevokeAdminSession(ctx context.Context, token string) error {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil
@@ -105,7 +112,7 @@ func (s *SQLiteStore) RevokeAdminSession(ctx context.Context, token string) erro
 	return err
 }
 
-func (s *SQLiteStore) AdminAccount(ctx context.Context) (AdminAccount, error) {
+func (s *sqliteAdminAuth) AdminAccount(ctx context.Context) (AdminAccount, error) {
 	var username string
 	err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, settingKeyAdminUsername).Scan(&username)
 	if err != nil {
@@ -121,7 +128,7 @@ func (s *SQLiteStore) AdminAccount(ctx context.Context) (AdminAccount, error) {
 	return AdminAccount{Username: username}, nil
 }
 
-func (s *SQLiteStore) AdminAccountConfigured(ctx context.Context) (bool, error) {
+func (s *sqliteAdminAuth) AdminAccountConfigured(ctx context.Context) (bool, error) {
 	var count int
 	err := s.db.QueryRowContext(ctx, `
 		SELECT COUNT(*)
@@ -137,7 +144,7 @@ func (s *SQLiteStore) AdminAccountConfigured(ctx context.Context) (bool, error) 
 // ResetAdminAccount is an offline recovery operation. Callers must stop the
 // Controller and protect the supplied password; it resets the username to
 // "admin" and revokes every active session in one transaction.
-func (s *SQLiteStore) ResetAdminAccount(ctx context.Context, password string) error {
+func (s *sqliteAdminAuth) ResetAdminAccount(ctx context.Context, password string) error {
 	password = strings.TrimSpace(password)
 	if length := len([]rune(password)); length < 8 || length > 128 {
 		return errInvalidAdminPasswordUpdate
@@ -173,7 +180,7 @@ func (s *SQLiteStore) ResetAdminAccount(ctx context.Context, password string) er
 	return nil
 }
 
-func (s *SQLiteStore) UpdateAdminAccount(ctx context.Context, username, currentPassword, newPassword, fallbackHash string) (AdminSession, error) {
+func (s *sqliteAdminAuth) UpdateAdminAccount(ctx context.Context, username, currentPassword, newPassword, fallbackHash string) (AdminSession, error) {
 	username = strings.TrimSpace(username)
 	currentPassword = strings.TrimSpace(currentPassword)
 	newPassword = strings.TrimSpace(newPassword)
@@ -236,7 +243,7 @@ func (s *SQLiteStore) UpdateAdminAccount(ctx context.Context, username, currentP
 	return AdminSession{Username: username, Token: token}, nil
 }
 
-func (s *SQLiteStore) adminPasswordMatches(ctx context.Context, password, fallbackHash string) bool {
+func (s *sqliteAdminAuth) adminPasswordMatches(ctx context.Context, password, fallbackHash string) bool {
 	var storedHash string
 	err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, settingKeyAdminPasswordHash).Scan(&storedHash)
 	if err != nil && err != sql.ErrNoRows {
@@ -248,7 +255,7 @@ func (s *SQLiteStore) adminPasswordMatches(ctx context.Context, password, fallba
 	return adminPasswordMatches(storedHash, fallbackHash, password)
 }
 
-func (s *SQLiteStore) createAdminSession(ctx context.Context, token string) error {
+func (s *sqliteAdminAuth) createAdminSession(ctx context.Context, token string) error {
 	now := time.Now().UTC().Unix()
 	if err := s.pruneExpiredAdminSessions(ctx, now); err != nil {
 		return err
@@ -281,7 +288,7 @@ func (s *SQLiteStore) createAdminSession(ctx context.Context, token string) erro
 	return nil
 }
 
-func (s *SQLiteStore) pruneExpiredAdminSessions(ctx context.Context, now int64) error {
+func (s *sqliteAdminAuth) pruneExpiredAdminSessions(ctx context.Context, now int64) error {
 	_, err := s.db.ExecContext(ctx, `
 		DELETE FROM admin_sessions
 		WHERE created_at <= ? OR last_seen_at <= ?
@@ -289,14 +296,14 @@ func (s *SQLiteStore) pruneExpiredAdminSessions(ctx context.Context, now int64) 
 	return err
 }
 
-func (s *SQLiteStore) pruneExpiredAdminSessionsOccasionally(ctx context.Context, now int64) error {
-	s.adminSessionPruneMu.Lock()
-	lastPruned := s.adminSessionLastPruned
+func (s *sqliteAdminAuth) pruneExpiredAdminSessionsOccasionally(ctx context.Context, now int64) error {
+	s.pruneMu.Lock()
+	lastPruned := s.lastPruned
 	if !lastPruned.IsZero() && time.Unix(now, 0).UTC().Sub(lastPruned) < adminSessionPruneInterval {
-		s.adminSessionPruneMu.Unlock()
+		s.pruneMu.Unlock()
 		return nil
 	}
-	s.adminSessionLastPruned = time.Unix(now, 0).UTC()
-	s.adminSessionPruneMu.Unlock()
+	s.lastPruned = time.Unix(now, 0).UTC()
+	s.pruneMu.Unlock()
 	return s.pruneExpiredAdminSessions(ctx, now)
 }

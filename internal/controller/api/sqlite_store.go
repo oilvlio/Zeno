@@ -27,12 +27,11 @@ type summaryAggregateFlight struct {
 }
 
 type SQLiteStore struct {
-	db                            *sql.DB
+	db *sql.DB
+	*sqliteAdminAuth
 	agentWrites                   agentWriteScheduler
 	telemetryStorage              *telemetryStorageGuard
 	renewalMu                     sync.Mutex
-	adminSessionPruneMu           sync.Mutex
-	adminSessionLastPruned        time.Time
 	adminDeletionCancel           context.CancelFunc
 	adminDeletionWG               sync.WaitGroup
 	notificationCredentialMu      sync.RWMutex
@@ -165,7 +164,11 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	store := &SQLiteStore{db: db, telemetryStorage: newTelemetryStorageGuard(path)}
+	store := &SQLiteStore{
+		db:               db,
+		sqliteAdminAuth:  &sqliteAdminAuth{db: db},
+		telemetryStorage: newTelemetryStorageGuard(path),
+	}
 	if err := store.ensureSchema(context.Background()); err != nil {
 		_ = db.Close()
 		return nil, err
