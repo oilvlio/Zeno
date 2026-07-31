@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchSummary, subscribeSummary, type SummaryData } from '../api/publicClient'
-import { loadStoredSummary, rememberSummary } from '../lib/summaryCache'
+import { flushScheduledSummaryWrite, loadStoredSummary, scheduleRememberSummary } from '../lib/summaryCache'
 import { startResilientLiveData } from '../lib/resilientLive'
 import type { HomeCardNode } from '../types'
 
@@ -51,7 +51,7 @@ export function useSummaryController() {
   useEffect(() => {
     let cancelled = false
     const applySummaryData = (data: SummaryData) => {
-      rememberSummary(data, Date.now())
+      scheduleRememberSummary(data, Date.now())
       summaryRef.current = data
       if (cancelled) return
       const now = monotonicNowMs()
@@ -75,6 +75,7 @@ export function useSummaryController() {
     return () => {
       cancelled = true
       stopLiveSummary()
+      flushScheduledSummaryWrite()
     }
   }, [])
 

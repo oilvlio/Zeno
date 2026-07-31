@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	moderncsqlite "modernc.org/sqlite"
@@ -41,6 +42,7 @@ type SQLiteStore struct {
 	summaryAggregateNodeLatency   map[string][]LatencySummary
 	summaryAggregateGeneration    uint64
 	summaryAggregateFlight        *summaryAggregateFlight
+	sqliteBusyRetries             atomic.Uint64
 }
 
 const (
@@ -69,15 +71,19 @@ func (s *SQLiteStore) withAgentWrite(ctx context.Context, nodeID string, operati
 	}
 	defer release()
 
-	return retrySQLiteBusy(writeCtx, func() error {
+	return retrySQLiteBusyObserved(writeCtx, func() error {
 		if err := writeCtx.Err(); err != nil {
 			return err
 		}
 		return operation(writeCtx)
-	})
+	}, func() { s.sqliteBusyRetries.Add(1) })
 }
 
 func retrySQLiteBusy(ctx context.Context, operation func() error) error {
+	return retrySQLiteBusyObserved(ctx, operation, nil)
+}
+
+func retrySQLiteBusyObserved(ctx context.Context, operation func() error, onRetry func()) error {
 	started := time.Now()
 	delay := sqliteBusyRetryInitial
 	for {
@@ -87,6 +93,9 @@ func retrySQLiteBusy(ctx context.Context, operation func() error) error {
 		err := operation()
 		if err == nil || !isSQLiteBusyError(err) {
 			return err
+		}
+		if onRetry != nil {
+			onRetry()
 		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr

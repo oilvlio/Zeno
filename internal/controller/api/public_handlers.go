@@ -132,6 +132,9 @@ func (h *handler) handleSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if payload, ok := h.cachedSummaryJSON(summaryCacheHTTPFreshFor); ok {
+		if h.performance != nil {
+			h.performance.summaryFreshHits.Add(1)
+		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(payload)
@@ -142,9 +145,15 @@ func (h *handler) handleSummary(w http.ResponseWriter, r *http.Request) {
 	// expired cache. A newly started process still blocks once because it has no
 	// safe snapshot to serve.
 	if payload, ok := h.cachedSummaryJSON(0); ok {
+		if h.performance != nil {
+			h.performance.summaryStaleHits.Add(1)
+		}
 		writeRawJSON(w, http.StatusOK, payload)
 		h.scheduleSummaryRefreshAfter(summaryCacheBackgroundDelay)
 		return
+	}
+	if h.performance != nil {
+		h.performance.summaryMisses.Add(1)
 	}
 	payload, err := h.summaryJSONForHTTP(r.Context())
 	if err != nil {

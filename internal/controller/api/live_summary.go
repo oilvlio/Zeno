@@ -362,10 +362,14 @@ func (h *handler) loadSummaryJSON(ctx context.Context, maxAge time.Duration, all
 		h.summaryCacheFlight = flight
 		h.summaryCacheMu.Unlock()
 
+		started := time.Now()
 		summary, err := h.store.Summary(ctx)
 		var payload []byte
 		if err == nil {
 			payload, err = json.Marshal(summary)
+		}
+		if h.performance != nil {
+			h.performance.recordSummaryBuild(time.Since(started), len(payload), err)
 		}
 
 		h.summaryCacheMu.Lock()

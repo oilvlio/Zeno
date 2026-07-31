@@ -135,17 +135,28 @@ func (s *SQLiteStore) latencyGridPoints(ctx context.Context, nodeID string, wind
 	start, end, stepSeconds := latencyGridBounds(gridWindow)
 	buckets := make(map[string]map[int64]*latencyGridBucket, len(targets))
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT (pr.ts / ?) * ? AS bucket_ts, pr.target_id,
-		       AVG(pr.median_ms), AVG(pr.avg_ms), AVG(pr.loss_percent)
-		FROM probe_rounds pr
-		JOIN probe_targets pt ON pt.id = pr.target_id
-		LEFT JOIN node_probe_targets npt ON npt.node_id = pr.node_id AND npt.target_id = pr.target_id
-		WHERE pr.node_id = ?
-		  AND pr.ts >= ?
-		  AND pr.ts < ?
+		WITH measurements AS (
+			SELECT ts, node_id, target_id,
+			       COALESCE(median_ms, 0) AS median_sum, CASE WHEN median_ms IS NULL THEN 0 ELSE 1 END AS median_count,
+			       COALESCE(avg_ms, 0) AS avg_sum, CASE WHEN avg_ms IS NULL THEN 0 ELSE 1 END AS avg_count,
+			       loss_percent AS loss_sum, 1 AS loss_count
+			FROM probe_rounds WHERE node_id = ? AND ts >= ? AND ts < ?
+			UNION ALL
+			SELECT bucket_start AS ts, node_id, target_id,
+			       median_sum, median_count, avg_sum, avg_count, loss_sum, loss_count
+			FROM latency_history_rollups WHERE node_id = ? AND bucket_start >= ? AND bucket_start < ?
+		)
+		SELECT (measurements.ts / ?) * ? AS bucket_ts, measurements.target_id,
+		       SUM(median_sum) / NULLIF(SUM(median_count), 0),
+		       SUM(avg_sum) / NULLIF(SUM(avg_count), 0),
+		       SUM(loss_sum) / NULLIF(SUM(loss_count), 0)
+		FROM measurements
+		JOIN probe_targets pt ON pt.id = measurements.target_id
+		LEFT JOIN node_probe_targets npt ON npt.node_id = measurements.node_id AND npt.target_id = measurements.target_id
+		WHERE measurements.node_id = ?
 		  AND COALESCE(npt.enabled, 0) = 1
-		GROUP BY bucket_ts, pr.target_id
-	`, stepSeconds, stepSeconds, nodeID, start.Unix(), end.Add(gridWindow.Step).Unix())
+		GROUP BY bucket_ts, measurements.target_id
+	`, nodeID, start.Unix(), end.Add(gridWindow.Step).Unix(), nodeID, start.Unix(), end.Add(gridWindow.Step).Unix(), stepSeconds, stepSeconds, nodeID)
 	if err != nil {
 		return nil, err
 	}
@@ -207,19 +218,30 @@ func (s *SQLiteStore) serviceLatencyGridPoints(ctx context.Context, targetID str
 	start, end, stepSeconds := latencyGridBounds(gridWindow)
 	buckets := make(map[string]map[int64]*latencyGridBucket, len(nodes))
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT (pr.ts / ?) * ? AS bucket_ts, pr.node_id,
-		       AVG(pr.median_ms), AVG(pr.avg_ms), AVG(pr.loss_percent)
-		FROM probe_rounds pr
-		JOIN nodes n ON n.id = pr.node_id
-		JOIN probe_targets pt ON pt.id = pr.target_id
-		LEFT JOIN node_probe_targets npt ON npt.node_id = pr.node_id AND npt.target_id = pr.target_id
-		WHERE pr.target_id = ?
-		  AND pr.ts >= ?
-		  AND pr.ts < ?
+		WITH measurements AS (
+			SELECT ts, node_id, target_id,
+			       COALESCE(median_ms, 0) AS median_sum, CASE WHEN median_ms IS NULL THEN 0 ELSE 1 END AS median_count,
+			       COALESCE(avg_ms, 0) AS avg_sum, CASE WHEN avg_ms IS NULL THEN 0 ELSE 1 END AS avg_count,
+			       loss_percent AS loss_sum, 1 AS loss_count
+			FROM probe_rounds WHERE target_id = ? AND ts >= ? AND ts < ?
+			UNION ALL
+			SELECT bucket_start AS ts, node_id, target_id,
+			       median_sum, median_count, avg_sum, avg_count, loss_sum, loss_count
+			FROM latency_history_rollups WHERE target_id = ? AND bucket_start >= ? AND bucket_start < ?
+		)
+		SELECT (measurements.ts / ?) * ? AS bucket_ts, measurements.node_id,
+		       SUM(median_sum) / NULLIF(SUM(median_count), 0),
+		       SUM(avg_sum) / NULLIF(SUM(avg_count), 0),
+		       SUM(loss_sum) / NULLIF(SUM(loss_count), 0)
+		FROM measurements
+		JOIN nodes n ON n.id = measurements.node_id
+		JOIN probe_targets pt ON pt.id = measurements.target_id
+		LEFT JOIN node_probe_targets npt ON npt.node_id = measurements.node_id AND npt.target_id = measurements.target_id
+		WHERE measurements.target_id = ?
 		  AND n.disabled = 0
 		  AND COALESCE(npt.enabled, 0) = 1
-		GROUP BY bucket_ts, pr.node_id
-	`, stepSeconds, stepSeconds, targetID, start.Unix(), end.Add(gridWindow.Step).Unix())
+		GROUP BY bucket_ts, measurements.node_id
+	`, targetID, start.Unix(), end.Add(gridWindow.Step).Unix(), targetID, start.Unix(), end.Add(gridWindow.Step).Unix(), stepSeconds, stepSeconds, targetID)
 	if err != nil {
 		return nil, err
 	}
@@ -332,17 +354,12 @@ func (s *SQLiteStore) statePoints(ctx context.Context, nodeID string, window lat
 	if stepSeconds <= 0 {
 		stepSeconds = 1
 	}
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT (ts / ?) * ? AS bucket_ts, AVG(cpu_percent), AVG(load1), AVG(load5), AVG(load15),
-		       AVG(memory_used_bytes), AVG(memory_total_bytes), AVG(swap_used_bytes), AVG(swap_total_bytes),
-		       AVG(disk_used_bytes), AVG(disk_total_bytes), AVG(net_in_total_bytes), AVG(net_out_total_bytes),
-		       AVG(net_in_speed_bps), AVG(net_out_speed_bps), AVG(process_count), AVG(tcp_connection_count), AVG(udp_connection_count), AVG(uptime_seconds)
-		FROM state_samples
-		WHERE node_id = ?
-		  AND ts >= ?
+	query := `WITH measurements AS (` + stateHistorySourceQuery + `)
+		SELECT (ts / ?) * ? AS bucket_ts, ` + stateHistoryAverageSelect + `
+		FROM measurements
 		GROUP BY bucket_ts
-		ORDER BY bucket_ts ASC
-	`, stepSeconds, stepSeconds, nodeID, since)
+		ORDER BY bucket_ts ASC`
+	rows, err := s.db.QueryContext(ctx, query, nodeID, since, nodeID, since, stepSeconds, stepSeconds)
 	if err != nil {
 		return nil, err
 	}
@@ -350,32 +367,11 @@ func (s *SQLiteStore) statePoints(ctx context.Context, nodeID string, window lat
 
 	var points []StatePoint
 	for rows.Next() {
-		var ts int64
-		var cpuPercent, load1, load5, load15, memoryUsed, memoryTotal, swapUsed, swapTotal, diskUsed, diskTotal, netInTotal, netOutTotal, netInSpeed, netOutSpeed, processCount, tcpConnectionCount, udpConnectionCount, uptimeSeconds sql.NullFloat64
-		if err := rows.Scan(&ts, &cpuPercent, &load1, &load5, &load15, &memoryUsed, &memoryTotal, &swapUsed, &swapTotal, &diskUsed, &diskTotal, &netInTotal, &netOutTotal, &netInSpeed, &netOutSpeed, &processCount, &tcpConnectionCount, &udpConnectionCount, &uptimeSeconds); err != nil {
+		point, err := scanStateHistoryPoint(rows)
+		if err != nil {
 			return nil, err
 		}
-		points = append(points, StatePoint{
-			TS:                 time.Unix(ts, 0).UTC().Format(time.RFC3339),
-			CPUPercent:         floatPtr(cpuPercent),
-			Load1:              floatPtr(load1),
-			Load5:              floatPtr(load5),
-			Load15:             floatPtr(load15),
-			MemoryUsedBytes:    floatPtr(memoryUsed),
-			MemoryTotalBytes:   floatPtr(memoryTotal),
-			SwapUsedBytes:      floatPtr(swapUsed),
-			SwapTotalBytes:     floatPtr(swapTotal),
-			DiskUsedBytes:      floatPtr(diskUsed),
-			DiskTotalBytes:     floatPtr(diskTotal),
-			NetInTotalBytes:    floatPtr(netInTotal),
-			NetOutTotalBytes:   floatPtr(netOutTotal),
-			NetInSpeedBps:      floatPtr(netInSpeed),
-			NetOutSpeedBps:     floatPtr(netOutSpeed),
-			ProcessCount:       floatPtr(processCount),
-			TCPConnectionCount: floatPtr(tcpConnectionCount),
-			UDPConnectionCount: floatPtr(udpConnectionCount),
-			UptimeSeconds:      floatPtr(uptimeSeconds),
-		})
+		points = append(points, point)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

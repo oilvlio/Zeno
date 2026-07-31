@@ -119,6 +119,35 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			uptime_seconds INTEGER
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_state_samples_node_ts ON state_samples(node_id, ts);`,
+		`CREATE TABLE IF NOT EXISTS state_history_rollups (
+			node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+			bucket_start INTEGER NOT NULL,
+			cpu_percent_sum REAL NOT NULL, cpu_percent_count INTEGER NOT NULL,
+			load1_sum REAL NOT NULL, load1_count INTEGER NOT NULL,
+			load5_sum REAL NOT NULL, load5_count INTEGER NOT NULL,
+			load15_sum REAL NOT NULL, load15_count INTEGER NOT NULL,
+			memory_used_bytes_sum REAL NOT NULL, memory_used_bytes_count INTEGER NOT NULL,
+			memory_total_bytes_sum REAL NOT NULL, memory_total_bytes_count INTEGER NOT NULL,
+			swap_used_bytes_sum REAL NOT NULL, swap_used_bytes_count INTEGER NOT NULL,
+			swap_total_bytes_sum REAL NOT NULL, swap_total_bytes_count INTEGER NOT NULL,
+			disk_used_bytes_sum REAL NOT NULL, disk_used_bytes_count INTEGER NOT NULL,
+			disk_total_bytes_sum REAL NOT NULL, disk_total_bytes_count INTEGER NOT NULL,
+			net_in_total_bytes_sum REAL NOT NULL, net_in_total_bytes_count INTEGER NOT NULL,
+			net_out_total_bytes_sum REAL NOT NULL, net_out_total_bytes_count INTEGER NOT NULL,
+			net_in_speed_bps_sum REAL NOT NULL, net_in_speed_bps_count INTEGER NOT NULL,
+			net_out_speed_bps_sum REAL NOT NULL, net_out_speed_bps_count INTEGER NOT NULL,
+			process_count_sum REAL NOT NULL, process_count_count INTEGER NOT NULL,
+			tcp_connection_count_sum REAL NOT NULL, tcp_connection_count_count INTEGER NOT NULL,
+			udp_connection_count_sum REAL NOT NULL, udp_connection_count_count INTEGER NOT NULL,
+			uptime_seconds_sum REAL NOT NULL, uptime_seconds_count INTEGER NOT NULL,
+			PRIMARY KEY (node_id, bucket_start)
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_state_history_rollups_bucket ON state_history_rollups(bucket_start);`,
+		`CREATE TABLE IF NOT EXISTS history_rollup_meta (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			enabled_after INTEGER NOT NULL
+		);`,
+		`INSERT OR IGNORE INTO history_rollup_meta (id, enabled_after) VALUES (1, strftime('%s', 'now') + 86400);`,
 		`CREATE TABLE IF NOT EXISTS traffic_monthly (
 			node_id TEXT NOT NULL REFERENCES nodes(id),
 			month TEXT NOT NULL,
@@ -207,6 +236,20 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			error TEXT,
 			PRIMARY KEY (round_id, seq)
 		);`,
+		`CREATE TABLE IF NOT EXISTS latency_history_rollups (
+			node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+			target_id TEXT NOT NULL REFERENCES probe_targets(id) ON DELETE CASCADE,
+			bucket_start INTEGER NOT NULL,
+			median_sum REAL NOT NULL,
+			median_count INTEGER NOT NULL,
+			avg_sum REAL NOT NULL,
+			avg_count INTEGER NOT NULL,
+			loss_sum REAL NOT NULL,
+			loss_count INTEGER NOT NULL,
+			PRIMARY KEY (node_id, target_id, bucket_start)
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_latency_history_rollups_target_bucket ON latency_history_rollups(target_id, bucket_start, node_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_latency_history_rollups_bucket ON latency_history_rollups(bucket_start);`,
 		`CREATE TABLE IF NOT EXISTS notification_channels (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,

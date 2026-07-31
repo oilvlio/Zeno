@@ -67,6 +67,7 @@ type handler struct {
 	notificationDrainMu       sync.Mutex
 	notificationWorkerMu      sync.Mutex
 	notificationWorker        *notificationOutboxWorker
+	performance               *runtimePerformance
 	router                    http.Handler
 }
 
@@ -128,6 +129,7 @@ func NewHandler(options ...HandlerOptions) http.Handler {
 		detailPublishPending: make(map[string]bool),
 		detailPublishGate:    make(chan struct{}, detailPublishMaxConcurrent),
 		notificationWorker:   &notificationOutboxWorker{wake: make(chan struct{}, 1)},
+		performance:          newRuntimePerformance(),
 		backgroundCtx:        backgroundCtx,
 		backgroundCancel:     backgroundCancel,
 	}
@@ -165,6 +167,7 @@ func NewHandler(options ...HandlerOptions) http.Handler {
 	mux.HandleFunc("/api/admin/v1/logout", h.handleAdminLogout)
 	mux.HandleFunc("/api/admin/v1/account", h.handleAdminAccount)
 	mux.HandleFunc("/api/admin/v1/settings", h.handleAdminSettings)
+	mux.HandleFunc("/api/admin/v1/performance", h.handleAdminPerformance)
 	mux.HandleFunc("/api/admin/v1/notification-channels", h.handleAdminNotificationChannels)
 	mux.HandleFunc("/api/admin/v1/notification-channels/", h.handleAdminNotificationChannelResource)
 	mux.HandleFunc("/api/admin/v1/notification-deliveries/", h.handleAdminNotificationDeliveryResource)

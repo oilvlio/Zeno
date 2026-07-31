@@ -467,6 +467,40 @@ X-Admin-Token: <admin-token>
 - Controller 启动时通过 `-admin-token` 或 `-admin-token-file` 配置，内部只比较 hash。
 - Admin API 也必须使用显式 DTO，不能返回 `token_hash`、token 原文或 secret 字段。
 
+### GET /api/admin/v1/performance
+
+返回只读运行时性能信号，用于判断是否真的需要继续优化。该接口不在普通后台界面展示，也不返回请求正文、凭据或节点隐私数据。
+
+```json
+{
+  "uptime_seconds": 3600,
+  "summary": {
+    "fresh_cache_hits": 1200,
+    "stale_cache_hits": 3,
+    "cache_misses": 1,
+    "builds": 401,
+    "build_failures": 0,
+    "build_total_ms": 832.4,
+    "build_max_ms": 12.7,
+    "last_bytes": 39717
+  },
+  "sqlite": {
+    "busy_retries": 0,
+    "outbox_pending": 0,
+    "outbox_leased": 0,
+    "outbox_failed": 0,
+    "latency_rollup_rows_approx": 120000,
+    "state_rollup_rows_approx": 85000,
+    "raw_probe_rounds_approx": 160000,
+    "raw_state_rows_approx": 260000,
+    "rollup_enabled_after": "2026-08-01T03:00:00Z",
+    "rollup_ready": false
+  }
+}
+```
+
+`*_approx` 使用主键/rowid 范围做常数级估算，历史清理产生间隙时可能高于实际行数；这样不会为了展示观测数据扫描数百万行活动数据库。
+
 ### GET /api/admin/v1/settings
 
 读取后台可编辑的站点配置。响应包装在 `settings` 字段下，只返回公开可展示字段，不返回任何凭据或 hash。

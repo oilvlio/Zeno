@@ -12,6 +12,7 @@ import { useDashboardRouter } from './hooks/useDashboardRouter'
 import { homeRealtimeSnapshotForNodes, useSummaryController } from './hooks/useSummaryController'
 import { HomeRegionFilter, HomeTopPanel } from './components/HomeOverviewPanel'
 import type { AdminDashboardContainerProps } from './components/admin/AdminDashboard'
+import type { DashboardRoute } from './lib/route'
 
 export { applyCustomCode, extractSafeCustomCSS } from './lib/customCode'
 export { availableHistoryRanges, coerceHistoryRange, rangeRequiresAdmin } from './lib/historyRange'
@@ -138,6 +139,10 @@ export function filterHomeNodesByRegion(nodes: HomeCardNode[], region: string): 
   return nodes.filter((node) => normalizeHomeRegion(node.countryCode) === region)
 }
 
+export function shouldPreloadAdminRoute(routeKind: DashboardRoute['kind'], summaryReady: boolean, adminToken: string): boolean {
+  return routeKind === 'home' && summaryReady && adminToken !== ''
+}
+
 export function App() {
   const { state, summaryRef, homeRealtimeSnapshot } = useSummaryController()
   const [homeRegion, setHomeRegion] = useState('ALL')
@@ -168,7 +173,7 @@ export function App() {
   }, [settings.customCode])
 
   useEffect(() => {
-    if (route.kind !== 'home' || state.kind !== 'ready') return undefined
+    if (!shouldPreloadAdminRoute(route.kind, state.kind === 'ready', adminToken)) return undefined
     let active = true
     void preloadAdminRoute()
       .then(() => {
@@ -178,7 +183,7 @@ export function App() {
       })
       .catch(() => {})
     return () => { active = false }
-  }, [route.kind, state.kind])
+  }, [route.kind, state.kind, adminToken])
 
   useEffect(() => {
     if (!settingsReady || typeof Image === 'undefined') return undefined

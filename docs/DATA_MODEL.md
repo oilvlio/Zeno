@@ -111,6 +111,8 @@ CREATE TABLE state_samples (
 CREATE INDEX idx_state_samples_node_ts ON state_samples(node_id, ts);
 ```
 
+超过 26 小时的资源样本会事务性折叠到 `state_history_rollups`：每个节点每 30 秒一行，对每项指标分别保存 `sum + count`，因此旧 Agent 缺失字段仍保持 `null` 语义。7 天和 30 天查询把 raw 与 rollup 统一再次分桶，接口精度和时间范围不变。
+
 ## traffic_monthly
 
 月流量累计。Controller 根据 state 的累计 counter delta 更新；`month` 是该节点当前计费周期开始月份（例如 `monthly_reset_day=15` 且当前周期为 2026-06-15 至 2026-07-14 时，`month=2026-06`）。
@@ -227,9 +229,9 @@ CREATE TABLE probe_samples (
 );
 ```
 
-Controller 每小时清理一次超过 30 天的 `state_samples`、`probe_rounds`，关联的
-`probe_samples` 通过外键级联删除。30 天边界数据保留；配置、当前状态、月流量和
-通知事件标记不属于原始高频历史，不随该任务删除。
+超过 26 小时的探测轮次会事务性折叠到 `latency_history_rollups`：每个节点、目标每分钟一行，分别保存 median、average、loss 的 `sum + count`。同一事务随后删除对应 `probe_rounds`，关联的 `probe_samples` 通过外键级联删除；进程中断不会留下重复汇总或先删后丢数据。
+
+Controller 首次创建 rollup schema 后保留 24 小时回滚宽限期；期间继续保留完整 30 天 raw，上一版本仍能读取全部支持范围。宽限期结束后，每小时以有界批次逐步维护 raw 与 rollup，只保留最近 30 天的汇总历史。30 天边界按各自 bucket 向下对齐后保留；配置、当前状态、月流量和通知事件标记不属于高频历史，不随该任务删除。这样 1 天视图继续使用原始精度，7 天/30 天视图保持原有 7 分钟、30 分钟以及资源 30 分钟、2 小时网格，同时显著减少长期 raw sample 与索引写放大。
 
 ## notification_channels / notification_types
 

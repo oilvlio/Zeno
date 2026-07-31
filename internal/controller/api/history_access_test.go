@@ -45,7 +45,7 @@ func TestExtendedHistoryRequiresAdminToken(t *testing.T) {
 	}
 }
 
-func TestPruneRawHistoryKeepsExactlyThirtyDayWindow(t *testing.T) {
+func TestTieredHistoryKeepsExactlyThirtyDayWindow(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {
 		t.Fatalf("open sqlite store: %v", err)
@@ -82,11 +82,14 @@ func TestPruneRawHistoryKeepsExactlyThirtyDayWindow(t *testing.T) {
 			t.Fatalf("insert probe sample: %v", err)
 		}
 	}
-
-	if err := store.PruneRawHistory(ctx, now.Add(-rawHistoryRetention)); err != nil {
-		t.Fatalf("prune raw history: %v", err)
+	if _, err := store.db.ExecContext(ctx, `UPDATE history_rollup_meta SET enabled_after = 0 WHERE id = 1`); err != nil {
+		t.Fatalf("enable tiered history in test: %v", err)
 	}
-	for table, want := range map[string]int{"state_samples": 2, "probe_rounds": 2, "probe_samples": 2} {
+
+	if err := store.MaintainHistory(ctx, now); err != nil {
+		t.Fatalf("maintain history: %v", err)
+	}
+	for table, want := range map[string]int{"state_samples": 0, "probe_rounds": 0, "probe_samples": 0, "state_history_rollups": 2, "latency_history_rollups": 2} {
 		var got int
 		if err := store.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&got); err != nil {
 			t.Fatalf("count %s: %v", table, err)
