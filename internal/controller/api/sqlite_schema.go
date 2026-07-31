@@ -11,20 +11,7 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 	// Keep schema and data invariants blocking: Ready must never expose a partly
 	// migrated store. Per-stage metrics make future regressions visible without
 	// moving today's bounded startup work into an unsafe background lifecycle.
-	runStage := func(name string, operation func() error) error {
-		_, err := s.measureSchemaStage(ctx, name, operation)
-		return err
-	}
-	ensureColumns := func(stage, table string, columns map[string]string) error {
-		return runStage(stage, func() error {
-			for column, columnType := range columns {
-				if err := s.ensureColumn(ctx, table, column, columnType); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	}
+	stage := newSchemaStageRunner(ctx, s)
 	statements := []string{
 		`PRAGMA foreign_keys = ON;`,
 		`PRAGMA journal_mode = WAL;`,
@@ -361,19 +348,15 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_admin_deletion_jobs_state_updated ON admin_deletion_jobs(state, updated_at, entity_kind, entity_id);`,
 	}
-	if err := runStage("base-ddl", func() error {
+	stage.run("base-ddl", func() error {
 		for _, statement := range statements {
 			if _, err := s.db.ExecContext(ctx, statement); err != nil {
 				return err
 			}
 		}
 		return nil
-	}); err != nil {
-		return err
-	}
-	if err := runStage("notification-channels", func() error { return s.migrateNotificationChannels(ctx) }); err != nil {
-		return err
-	}
+	})
+	stage.run("notification-channels", func() error { return s.migrateNotificationChannels(ctx) })
 	stateSampleColumns := map[string]string{
 		"sample_id":            "TEXT",
 		"payload_hash":         "TEXT NOT NULL DEFAULT ''",
@@ -387,29 +370,19 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 		"tcp_connection_count": "INTEGER",
 		"udp_connection_count": "INTEGER",
 	}
-	if err := ensureColumns("state-sample-columns", "state_samples", stateSampleColumns); err != nil {
-		return err
-	}
-	if err := runStage("state-sample-idempotency", func() error { return s.ensureStateSampleIdempotency(ctx) }); err != nil {
-		return err
-	}
-	if err := ensureColumns("traffic-lifetime-columns", "traffic_lifetime", map[string]string{
+	stage.columns("state-sample-columns", "state_samples", stateSampleColumns)
+	stage.run("state-sample-idempotency", func() error { return s.ensureStateSampleIdempotency(ctx) })
+	stage.columns("traffic-lifetime-columns", "traffic_lifetime", map[string]string{
 		"counter_source": "TEXT NOT NULL DEFAULT ''",
-	}); err != nil {
-		return err
-	}
-	if err := ensureColumns("probe-round-columns", "probe_rounds", map[string]string{
+	})
+	stage.columns("probe-round-columns", "probe_rounds", map[string]string{
 		"idempotency_key": "TEXT NOT NULL DEFAULT ''",
 		"agent_round_id":  "TEXT",
 		"payload_hash":    "TEXT NOT NULL DEFAULT ''",
-	}); err != nil {
-		return err
-	}
-	if err := runStage("probe-round-idempotency", func() error {
+	})
+	stage.run("probe-round-idempotency", func() error {
 		return s.runValidatedSchemaMigration(ctx, "20260718_probe_round_idempotency_v2", s.probeRoundIdempotencyMigrationCurrent, s.migrateProbeRoundIdempotency)
-	}); err != nil {
-		return err
-	}
+	})
 	nodeColumns := map[string]string{
 		"install_token":                "TEXT",
 		"pending_token_hash":           "TEXT",
@@ -432,29 +405,21 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 		"public_ipv6":                  "TEXT",
 		"last_seen_at":                 "INTEGER",
 	}
-	if err := ensureColumns("node-columns", "nodes", nodeColumns); err != nil {
-		return err
-	}
-	if err := runStage("exchange-rate-default", func() error {
+	stage.columns("node-columns", "nodes", nodeColumns)
+	stage.run("exchange-rate-default", func() error {
 		_, err := s.db.ExecContext(ctx, `
 			INSERT INTO exchange_rates (currency, cny_rate, source_date, updated_at)
 			VALUES ('CNY', 1, '', ?)
 			ON CONFLICT(currency) DO UPDATE SET cny_rate = 1
 		`, time.Now().UTC().Unix())
 		return err
-	}); err != nil {
-		return err
-	}
-	if err := runStage("legacy-agent-credentials", func() error { return s.migrateLegacyAgentCredentials(ctx) }); err != nil {
-		return err
-	}
+	})
+	stage.run("legacy-agent-credentials", func() error { return s.migrateLegacyAgentCredentials(ctx) })
 	notificationChannelColumns := map[string]string{
 		"delivery_version":        "INTEGER NOT NULL DEFAULT 1",
 		"destination_fingerprint": "TEXT NOT NULL DEFAULT ''",
 	}
-	if err := ensureColumns("notification-channel-columns", "notification_channels", notificationChannelColumns); err != nil {
-		return err
-	}
+	stage.columns("notification-channel-columns", "notification_channels", notificationChannelColumns)
 	notificationDeliveryColumns := map[string]string{
 		"event_id":                    "TEXT NOT NULL DEFAULT ''",
 		"node_ip":                     "TEXT NOT NULL DEFAULT ''",
@@ -466,16 +431,12 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 		"causal_predecessor_event_id": "TEXT NOT NULL DEFAULT ''",
 		"superseded_by_event_id":      "TEXT NOT NULL DEFAULT ''",
 	}
-	if err := ensureColumns("notification-delivery-columns", "notification_deliveries", notificationDeliveryColumns); err != nil {
-		return err
-	}
-	if err := runStage("notification-routing-bindings", func() error { return s.migrateNotificationRoutingBindings(ctx) }); err != nil {
-		return err
-	}
+	stage.columns("notification-delivery-columns", "notification_deliveries", notificationDeliveryColumns)
+	stage.run("notification-routing-bindings", func() error { return s.migrateNotificationRoutingBindings(ctx) })
 	// Existing databases predate the lease columns. Build the claim index only
 	// after both columns have been added; otherwise CREATE INDEX aborts startup
 	// before the migration can run.
-	if err := runStage("notification-delivery-indexes", func() error {
+	stage.run("notification-delivery-indexes", func() error {
 		for _, statement := range []string{
 			`CREATE INDEX IF NOT EXISTS idx_notification_deliveries_claim ON notification_deliveries(state, next_attempt_at, lease_until, id)`,
 			`CREATE INDEX IF NOT EXISTS idx_notification_deliveries_causal ON notification_deliveries(channel_id, node_id, event_type, id, state)`,
@@ -486,30 +447,18 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			}
 		}
 		return nil
-	}); err != nil {
-		return err
-	}
-	if err := runStage("traffic-monthly-schema", func() error { return s.migrateTrafficMonthlySchema(ctx) }); err != nil {
-		return err
-	}
-	if err := ensureColumns("traffic-monthly-columns", "traffic_monthly", map[string]string{
+	})
+	stage.run("traffic-monthly-schema", func() error { return s.migrateTrafficMonthlySchema(ctx) })
+	stage.columns("traffic-monthly-columns", "traffic_monthly", map[string]string{
 		"counter_source": "TEXT NOT NULL DEFAULT ''",
-	}); err != nil {
-		return err
-	}
-	if err := runStage("traffic-aggregate-normalize", func() error { return s.normalizeTrafficAggregateStorage(ctx) }); err != nil {
-		return err
-	}
+	})
+	stage.run("traffic-aggregate-normalize", func() error { return s.normalizeTrafficAggregateStorage(ctx) })
 	probeTargetColumns := map[string]string{
 		"display_order": "INTEGER NOT NULL DEFAULT 0",
 	}
-	if err := ensureColumns("probe-target-columns", "probe_targets", probeTargetColumns); err != nil {
-		return err
-	}
-	if err := runStage("probe-target-global-enabled", func() error { return s.migrateProbeTargetGlobalEnabled(ctx) }); err != nil {
-		return err
-	}
-	if err := runStage("traffic-last-sample-backfill", func() error {
+	stage.columns("probe-target-columns", "probe_targets", probeTargetColumns)
+	stage.run("probe-target-global-enabled", func() error { return s.migrateProbeTargetGlobalEnabled(ctx) })
+	stage.run("traffic-last-sample-backfill", func() error {
 		_, err := s.db.ExecContext(ctx, `
 			UPDATE traffic_monthly
 			SET last_sample_ts = COALESCE(
@@ -522,25 +471,15 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			WHERE last_sample_ts IS NULL
 		`)
 		return err
-	}); err != nil {
-		return err
-	}
-	if err := runStage("traffic-lifetime-backfill", func() error { return s.backfillLifetimeTraffic(ctx) }); err != nil {
-		return err
-	}
+	})
+	stage.run("traffic-lifetime-backfill", func() error { return s.backfillLifetimeTraffic(ctx) })
 	alertRuleStateColumns := map[string]string{
 		"last_value": "REAL",
 	}
-	if err := ensureColumns("alert-rule-state-columns", "alert_rule_states", alertRuleStateColumns); err != nil {
-		return err
-	}
-	if err := runStage("default-alert-rules", func() error { return s.ensureDefaultAlertRules(ctx) }); err != nil {
-		return err
-	}
-	if err := runStage("retired-notification-config-prune", func() error { return s.pruneRetiredNotificationConfig(ctx) }); err != nil {
-		return err
-	}
-	return nil
+	stage.columns("alert-rule-state-columns", "alert_rule_states", alertRuleStateColumns)
+	stage.run("default-alert-rules", func() error { return s.ensureDefaultAlertRules(ctx) })
+	stage.run("retired-notification-config-prune", func() error { return s.pruneRetiredNotificationConfig(ctx) })
+	return stage.result()
 }
 
 func (s *SQLiteStore) normalizeTrafficAggregateStorage(ctx context.Context) error {

@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"database/sql"
-	"strconv"
 	"time"
 )
 
@@ -126,11 +125,10 @@ func (s *SQLiteStore) UpdateAdminSettings(ctx context.Context, update AdminSetti
 
 func (s *SQLiteStore) siteSettings(ctx context.Context) (SiteSettings, error) {
 	settings := defaultSiteSettings()
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT key, value, updated_at
-		FROM settings
-		WHERE key IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, settingKeySiteTitle, settingKeySiteSubtitle, settingKeyLogoURL, settingKeyTheme, settingKeyAgentControllerURL, settingKeyBackgroundURL, settingKeyDesktopBackgroundURL, settingKeyMobileBackgroundURL, settingKeyAppearancePreset, settingKeyCardOpacity, settingKeyCardBlur, settingKeyCardRadius, settingKeyBorderStrength, settingKeyShadowStrength, settingKeyBackgroundOverlay, settingKeyThemeColor, settingKeyCustomCode)
+	bindings := siteSettingsBindings()
+	query, args := siteSettingsQuery(bindings)
+	decoder := newSettingsDecoder(bindings)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return SiteSettings{}, err
 	}
@@ -142,46 +140,7 @@ func (s *SQLiteStore) siteSettings(ctx context.Context) (SiteSettings, error) {
 		if err := rows.Scan(&key, &value, &updatedAt); err != nil {
 			return SiteSettings{}, err
 		}
-		switch key {
-		case settingKeySiteTitle:
-			settings.SiteTitle = value
-		case settingKeySiteSubtitle:
-			settings.SiteSubtitle = value
-		case settingKeyLogoURL:
-			settings.LogoURL = value
-		case settingKeyTheme:
-			settings.Theme = value
-		case settingKeyAgentControllerURL:
-			settings.AgentControllerURL = value
-		case settingKeyBackgroundURL:
-			settings.BackgroundURL = value
-		case settingKeyDesktopBackgroundURL:
-			settings.DesktopBackgroundURL = value
-		case settingKeyMobileBackgroundURL:
-			settings.MobileBackgroundURL = value
-		case settingKeyAppearancePreset:
-			if validAppearancePreset(value) {
-				settings.AppearancePreset = value
-			}
-		case settingKeyCardOpacity:
-			settings.CardOpacity = parseSettingsFloat(value, settings.CardOpacity)
-		case settingKeyCardBlur:
-			settings.CardBlur = parseSettingsFloat(value, settings.CardBlur)
-		case settingKeyCardRadius:
-			settings.CardRadius = parseSettingsFloat(value, settings.CardRadius)
-		case settingKeyBorderStrength:
-			settings.BorderStrength = parseSettingsFloat(value, settings.BorderStrength)
-		case settingKeyShadowStrength:
-			settings.ShadowStrength = parseSettingsFloat(value, settings.ShadowStrength)
-		case settingKeyBackgroundOverlay:
-			settings.BackgroundOverlay = parseSettingsFloat(value, settings.BackgroundOverlay)
-		case settingKeyThemeColor:
-			if settingsThemeColorPattern.MatchString(value) {
-				settings.ThemeColor = value
-			}
-		case settingKeyCustomCode:
-			settings.CustomCode = value
-		}
+		decoder.decode(&settings, key, value)
 		if updatedAt.Valid && (!latest.Valid || updatedAt.Int64 > latest.Int64) {
 			latest = updatedAt
 		}
@@ -199,16 +158,4 @@ func (s *SQLiteStore) siteSettings(ctx context.Context) (SiteSettings, error) {
 		settings.UpdatedAt = time.Unix(latest.Int64, 0).UTC().Format(time.RFC3339)
 	}
 	return settings, nil
-}
-
-func formatSettingsFloat(value float64) string {
-	return strconv.FormatFloat(value, 'f', -1, 64)
-}
-
-func parseSettingsFloat(value string, fallback float64) float64 {
-	parsed, err := strconv.ParseFloat(value, 64)
-	if err != nil {
-		return fallback
-	}
-	return parsed
 }
