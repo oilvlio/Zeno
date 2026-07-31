@@ -28,6 +28,8 @@ type sqliteAdminDomain struct {
 	*sqliteAdminAuth
 	*sqliteAdminDeletion
 	*sqliteSettings
+	agentAccess *sqliteAgentAccess
+	db          *sql.DB
 }
 
 type sqliteAgentDomain struct {
@@ -190,6 +192,7 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 }
 
 func newSQLiteStore(db *sql.DB, telemetryStorage *telemetryStorageGuard) *SQLiteStore {
+	agentAccess := &sqliteAgentAccess{db: db}
 	latencyQueries := &sqliteLatencyQueries{db: db}
 	writes := &sqliteWriteState{}
 	return &SQLiteStore{
@@ -200,9 +203,11 @@ func newSQLiteStore(db *sql.DB, telemetryStorage *telemetryStorageGuard) *SQLite
 			sqliteAdminAuth:       &sqliteAdminAuth{db: db},
 			sqliteAdminDeletion:   &sqliteAdminDeletion{db: db},
 			sqliteSettings:        &sqliteSettings{db: db},
+			agentAccess:           agentAccess,
+			db:                    db,
 		},
 		sqliteAgentDomain: &sqliteAgentDomain{
-			sqliteAgentAccess: &sqliteAgentAccess{db: db},
+			sqliteAgentAccess: agentAccess,
 			db:                db,
 			telemetryStorage:  telemetryStorage,
 			writes:            writes,

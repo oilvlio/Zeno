@@ -12,7 +12,7 @@ import (
 	"unicode"
 )
 
-func (s *SQLiteStore) CreateAdminNode(ctx context.Context, create AdminNodeCreateRequest) (AdminNode, error) {
+func (s *sqliteAdminDomain) CreateAdminNode(ctx context.Context, create AdminNodeCreateRequest) (AdminNode, error) {
 	if err := create.normalize(); err != nil {
 		return AdminNode{}, err
 	}
@@ -101,12 +101,12 @@ func (commands AgentInstallCommands) Map() map[string]string {
 	}
 }
 
-func (s *SQLiteStore) AdminNodeInstallCommand(ctx context.Context, nodeID, controllerURL, agentVersion string) (AgentInstallCommands, error) {
+func (s *sqliteAdminDomain) AdminNodeInstallCommand(ctx context.Context, nodeID, controllerURL, agentVersion string) (AgentInstallCommands, error) {
 	nodeID = strings.TrimSpace(nodeID)
 	if nodeID == "" || strings.Contains(nodeID, "/") {
 		return AgentInstallCommands{}, errNodeNotFound
 	}
-	enrollmentToken, expiresAt, err := s.issueAgentEnrollment(ctx, nodeID)
+	enrollmentToken, expiresAt, err := s.agentAccess.issueAgentEnrollment(ctx, nodeID)
 	if err != nil {
 		return AgentInstallCommands{}, err
 	}
@@ -115,7 +115,7 @@ func (s *SQLiteStore) AdminNodeInstallCommand(ctx context.Context, nodeID, contr
 	return commands, nil
 }
 
-func (s *SQLiteStore) DeleteAdminNode(ctx context.Context, nodeID string) error {
+func (s *sqliteAdminDomain) DeleteAdminNode(ctx context.Context, nodeID string) error {
 	nodeID = strings.TrimSpace(nodeID)
 	if nodeID == "" || strings.Contains(nodeID, "/") {
 		return errNodeNotFound
@@ -123,7 +123,7 @@ func (s *SQLiteStore) DeleteAdminNode(ctx context.Context, nodeID string) error 
 	return s.enqueueAdminNodeDeletion(ctx, nodeID)
 }
 
-func (s *SQLiteStore) adminNodeByID(ctx context.Context, nodeID string) (AdminNode, error) {
+func (s *sqliteAdminDomain) adminNodeByID(ctx context.Context, nodeID string) (AdminNode, error) {
 	nodes, err := s.AdminNodes(ctx)
 	if err != nil {
 		return AdminNode{}, err

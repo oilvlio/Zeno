@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func (s *SQLiteStore) AdminNodes(ctx context.Context) ([]AdminNode, error) {
+func (s *sqliteAdminDomain) AdminNodes(ctx context.Context) ([]AdminNode, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT n.id, n.display_name, n.status, n.country_code, n.region, n.disabled,
 		       n.home_probe_target_id, n.billing_mode, n.monthly_reset_day, n.expiry_date, n.expiry_permanent, n.billing_cycle, n.renewal_amount, n.renewal_currency, n.display_order, n.public_ipv4, n.public_ipv6,
@@ -111,7 +111,7 @@ func (s *SQLiteStore) AdminNodes(ctx context.Context) ([]AdminNode, error) {
 	return nodes, nil
 }
 
-func (s *SQLiteStore) AdminProbeTargets(ctx context.Context) ([]AdminProbeTarget, error) {
+func (s *sqliteAdminDomain) AdminProbeTargets(ctx context.Context) ([]AdminProbeTarget, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT pt.id, pt.name, pt.type, pt.address, pt.port, pt.count, pt.timeout_ms, pt.interval_sec, pt.display_order,
 		       n.id, n.display_name, npt.enabled
@@ -170,7 +170,7 @@ func (s *SQLiteStore) AdminProbeTargets(ctx context.Context) ([]AdminProbeTarget
 	return targets, nil
 }
 
-func (s *SQLiteStore) CreateAdminProbeTarget(ctx context.Context, create AdminProbeTargetCreateRequest) (AdminProbeTarget, error) {
+func (s *sqliteAdminDomain) CreateAdminProbeTarget(ctx context.Context, create AdminProbeTargetCreateRequest) (AdminProbeTarget, error) {
 	if err := create.normalize(); err != nil {
 		return AdminProbeTarget{}, err
 	}
@@ -246,7 +246,7 @@ func (s *SQLiteStore) CreateAdminProbeTarget(ctx context.Context, create AdminPr
 	return s.adminProbeTargetByID(ctx, targetID)
 }
 
-func (s *SQLiteStore) UpdateAdminProbeTarget(ctx context.Context, targetID string, update AdminProbeTargetUpdateRequest) (AdminProbeTarget, error) {
+func (s *sqliteAdminDomain) UpdateAdminProbeTarget(ctx context.Context, targetID string, update AdminProbeTargetUpdateRequest) (AdminProbeTarget, error) {
 	targetID = strings.TrimSpace(targetID)
 	if targetID == "" {
 		return AdminProbeTarget{}, errProbeTargetNotFound
@@ -355,7 +355,7 @@ func (s *SQLiteStore) UpdateAdminProbeTarget(ctx context.Context, targetID strin
 	return s.adminProbeTargetByID(ctx, targetID)
 }
 
-func (s *SQLiteStore) DeleteAdminProbeTarget(ctx context.Context, targetID string) error {
+func (s *sqliteAdminDomain) DeleteAdminProbeTarget(ctx context.Context, targetID string) error {
 	targetID = strings.TrimSpace(targetID)
 	if targetID == "" {
 		return errProbeTargetNotFound
@@ -409,7 +409,7 @@ func validateProbeNodeUsageTransition(before, after map[string]probeNodeUsage) e
 	return nil
 }
 
-func (s *SQLiteStore) adminProbeTargetByID(ctx context.Context, targetID string) (AdminProbeTarget, error) {
+func (s *sqliteAdminDomain) adminProbeTargetByID(ctx context.Context, targetID string) (AdminProbeTarget, error) {
 	targets, err := s.AdminProbeTargets(ctx)
 	if err != nil {
 		return AdminProbeTarget{}, err
@@ -442,7 +442,7 @@ func validAdminProbeTargetForType(targetType string, address string, port sql.Nu
 	}
 }
 
-func (s *SQLiteStore) UpdateAdminNode(ctx context.Context, nodeID string, update AdminNodeUpdateRequest) (AdminNode, error) {
+func (s *sqliteAdminDomain) UpdateAdminNode(ctx context.Context, nodeID string, update AdminNodeUpdateRequest) (AdminNode, error) {
 	nodeID = strings.TrimSpace(nodeID)
 	if nodeID == "" {
 		return AdminNode{}, errNodeNotFound
