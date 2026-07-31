@@ -151,14 +151,7 @@ func (s *sqliteMonitoringDomain) invalidateSummaryAggregates() {
 }
 
 func (s *sqliteMonitoringDomain) NodeLatency(ctx context.Context, nodeID string, window latencyWindow) (LatencyResponse, error) {
-	exists, err := s.nodeExists(ctx, nodeID)
-	if err != nil {
-		return LatencyResponse{}, err
-	}
-	if !exists {
-		return LatencyResponse{}, errNodeNotFound
-	}
-	points, err := s.latencyPoints(ctx, nodeID, window)
+	points, err := nodeWindowPoints(ctx, s, nodeID, window, s.latencyPoints)
 	if err != nil {
 		return LatencyResponse{}, err
 	}
@@ -178,18 +171,22 @@ func (s *sqliteMonitoringDomain) ServiceTargetLatency(ctx context.Context, targe
 }
 
 func (s *sqliteMonitoringDomain) NodeState(ctx context.Context, nodeID string, window latencyWindow) (StateResponse, error) {
-	exists, err := s.nodeExists(ctx, nodeID)
-	if err != nil {
-		return StateResponse{}, err
-	}
-	if !exists {
-		return StateResponse{}, errNodeNotFound
-	}
-	points, err := s.statePoints(ctx, nodeID, window)
+	points, err := nodeWindowPoints(ctx, s, nodeID, window, s.statePoints)
 	if err != nil {
 		return StateResponse{}, err
 	}
 	return StateResponse{NodeID: nodeID, Range: window.Name, Points: points}, nil
+}
+
+func nodeWindowPoints[T any](ctx context.Context, store *sqliteMonitoringDomain, nodeID string, window latencyWindow, query func(context.Context, string, latencyWindow) ([]T, error)) ([]T, error) {
+	exists, err := store.nodeExists(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, errNodeNotFound
+	}
+	return query(ctx, nodeID, window)
 }
 
 const activeAdminNodeExistsSQL = `
