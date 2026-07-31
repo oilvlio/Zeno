@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"strconv"
 	"time"
@@ -36,10 +37,15 @@ type historyRetentionStore interface {
 	MaintainHistory(ctx context.Context, now time.Time) error
 }
 
+type sqliteHistoryStore struct {
+	db     *sql.DB
+	writes *sqliteWriteState
+}
+
 // PruneRawHistory compacts raw high-frequency samples into the rollup tiers
 // once the one-day views no longer need them. Probe child samples disappear
 // through the round foreign-key cascade.
-func (s *SQLiteStore) PruneRawHistory(ctx context.Context, before time.Time) error {
+func (s *sqliteHistoryStore) PruneRawHistory(ctx context.Context, before time.Time) error {
 	latencyDone := false
 	stateDone := false
 	for cycle := 0; cycle < historyRetentionMaxBatchCycles && (!latencyDone || !stateDone); cycle++ {
@@ -66,7 +72,7 @@ func (s *SQLiteStore) PruneRawHistory(ctx context.Context, before time.Time) err
 	return nil
 }
 
-func (s *SQLiteStore) MaintainHistory(ctx context.Context, now time.Time) error {
+func (s *sqliteHistoryStore) MaintainHistory(ctx context.Context, now time.Time) error {
 	now = now.UTC()
 	cutoffs := history.CutoffsAt(now)
 	rollupReady, err := s.historyRollupReady(ctx, now)
@@ -90,7 +96,7 @@ func (s *SQLiteStore) MaintainHistory(ctx context.Context, now time.Time) error 
 // bounded no-op when auto_vacuum is NONE (every database created before the
 // INCREMENTAL default) or when nothing is on the freelist, and it never runs
 // a full VACUUM: that would hold the single writer for minutes.
-func (s *SQLiteStore) reclaimFreePages(ctx context.Context) error {
+func (s *sqliteHistoryStore) reclaimFreePages(ctx context.Context) error {
 	var autoVacuum int
 	if err := s.db.QueryRowContext(ctx, `PRAGMA auto_vacuum`).Scan(&autoVacuum); err != nil {
 		return err
@@ -105,7 +111,7 @@ func (s *SQLiteStore) reclaimFreePages(ctx context.Context) error {
 	if freelist <= 0 {
 		return nil
 	}
-	return s.withAgentWrite(ctx, historyRetentionWriteKey, func(writeCtx context.Context) error {
+	return s.writes.withAgentWrite(ctx, historyRetentionWriteKey, func(writeCtx context.Context) error {
 		_, err := s.db.ExecContext(writeCtx, `PRAGMA incremental_vacuum(`+strconv.Itoa(historyRetentionVacuumPages)+`)`)
 		return err
 	})
@@ -114,7 +120,7 @@ func (s *SQLiteStore) reclaimFreePages(ctx context.Context) error {
 // pruneRawHistoryTier either compacts raw rows into rollups or, during the
 // rollback grace period, preserves the previous release's complete 30-day raw
 // view and removes only data already outside the supported range.
-func (s *SQLiteStore) pruneRawHistoryTier(ctx context.Context, cutoffs history.Cutoffs, rollupReady bool) error {
+func (s *sqliteHistoryStore) pruneRawHistoryTier(ctx context.Context, cutoffs history.Cutoffs, rollupReady bool) error {
 	if rollupReady {
 		return s.PruneRawHistory(ctx, time.Unix(cutoffs.Raw, 0).UTC())
 	}
@@ -124,21 +130,21 @@ func (s *SQLiteStore) pruneRawHistoryTier(ctx context.Context, cutoffs history.C
 	return s.pruneRowsInBatches(ctx, history.PruneExpiredStateSamplesSQL, cutoffs.LegacyRaw)
 }
 
-func (s *SQLiteStore) pruneRollupTiers(ctx context.Context, cutoffs history.Cutoffs) error {
+func (s *sqliteHistoryStore) pruneRollupTiers(ctx context.Context, cutoffs history.Cutoffs) error {
 	if err := s.pruneRowsInBatches(ctx, history.PruneExpiredLatencyRollupsSQL, cutoffs.LatencyRollup); err != nil {
 		return err
 	}
 	return s.pruneRowsInBatches(ctx, history.PruneExpiredStateRollupsSQL, cutoffs.StateRollup)
 }
 
-func (s *SQLiteStore) pruneNotificationHistory(ctx context.Context, cutoffs history.Cutoffs) error {
+func (s *sqliteHistoryStore) pruneNotificationHistory(ctx context.Context, cutoffs history.Cutoffs) error {
 	if err := s.pruneRowsInBatches(ctx, history.PruneTerminalNotificationDeliveriesSQL, cutoffs.NotificationHistory); err != nil {
 		return err
 	}
 	return s.expirePendingNotificationDeliveriesInBatches(ctx, cutoffs.StalePendingNotification, cutoffs.Now)
 }
 
-func (s *SQLiteStore) historyRollupReady(ctx context.Context, now time.Time) (bool, error) {
+func (s *sqliteHistoryStore) historyRollupReady(ctx context.Context, now time.Time) (bool, error) {
 	var enabledAfter int64
 	if err := s.db.QueryRowContext(ctx, `SELECT enabled_after FROM history_rollup_meta WHERE id = 1`).Scan(&enabledAfter); err != nil {
 		return false, err
@@ -148,10 +154,10 @@ func (s *SQLiteStore) historyRollupReady(ctx context.Context, now time.Time) (bo
 
 // runHistoryBatches repeats a bounded write until it stops filling a batch or
 // the cycle budget runs out, leaving any remainder for the next pass.
-func (s *SQLiteStore) runHistoryBatches(ctx context.Context, exec func(context.Context) (int64, error)) error {
+func (s *sqliteHistoryStore) runHistoryBatches(ctx context.Context, exec func(context.Context) (int64, error)) error {
 	for cycle := 0; cycle < historyRetentionMaxBatchCycles; cycle++ {
 		var affected int64
-		err := s.withAgentWrite(ctx, historyRetentionWriteKey, func(writeCtx context.Context) error {
+		err := s.writes.withAgentWrite(ctx, historyRetentionWriteKey, func(writeCtx context.Context) error {
 			var execErr error
 			affected, execErr = exec(writeCtx)
 			return execErr
@@ -169,7 +175,7 @@ func (s *SQLiteStore) runHistoryBatches(ctx context.Context, exec func(context.C
 	return nil
 }
 
-func (s *SQLiteStore) pruneRowsInBatches(ctx context.Context, query string, cutoff int64) error {
+func (s *sqliteHistoryStore) pruneRowsInBatches(ctx context.Context, query string, cutoff int64) error {
 	return s.runHistoryBatches(ctx, func(writeCtx context.Context) (int64, error) {
 		result, err := s.db.ExecContext(writeCtx, query, cutoff, historyRetentionBatchSize)
 		if err != nil {
@@ -179,7 +185,7 @@ func (s *SQLiteStore) pruneRowsInBatches(ctx context.Context, query string, cuto
 	})
 }
 
-func (s *SQLiteStore) expirePendingNotificationDeliveriesInBatches(ctx context.Context, stalePendingCutoff, now int64) error {
+func (s *sqliteHistoryStore) expirePendingNotificationDeliveriesInBatches(ctx context.Context, stalePendingCutoff, now int64) error {
 	return s.runHistoryBatches(ctx, func(writeCtx context.Context) (int64, error) {
 		result, err := s.db.ExecContext(writeCtx, history.ExpirePendingNotificationDeliveriesSQL,
 			now, stalePendingCutoff, historyRetentionBatchSize)

@@ -36,6 +36,7 @@ type sqliteAgentDomain struct {
 }
 
 type sqliteMonitoringDomain struct {
+	*sqliteHistoryStore
 	*sqliteLatencyQueries
 	*sqliteReadQueries
 	summaryCache sqliteSummaryCache
@@ -186,9 +187,10 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 
 func newSQLiteStore(db *sql.DB, telemetryStorage *telemetryStorageGuard) *SQLiteStore {
 	latencyQueries := &sqliteLatencyQueries{db: db}
+	writes := &sqliteWriteState{}
 	return &SQLiteStore{
 		db:               db,
-		sqliteWriteState: &sqliteWriteState{},
+		sqliteWriteState: writes,
 		sqliteAdminDomain: &sqliteAdminDomain{
 			sqliteAdminAlertRules: &sqliteAdminAlertRules{db: db},
 			sqliteAdminAuth:       &sqliteAdminAuth{db: db},
@@ -200,6 +202,7 @@ func newSQLiteStore(db *sql.DB, telemetryStorage *telemetryStorageGuard) *SQLite
 			telemetryStorage:  telemetryStorage,
 		},
 		sqliteMonitoringDomain: &sqliteMonitoringDomain{
+			sqliteHistoryStore:   &sqliteHistoryStore{db: db, writes: writes},
 			sqliteLatencyQueries: latencyQueries,
 			sqliteReadQueries:    &sqliteReadQueries{db: db, latency: latencyQueries},
 		},

@@ -18,7 +18,7 @@ var (
 	stateHistoryAverageSelect = history.StateAverageSelect
 )
 
-func (s *SQLiteStore) compactStateHistoryBatch(ctx context.Context, before time.Time) (int64, error) {
+func (s *sqliteHistoryStore) compactStateHistoryBatch(ctx context.Context, before time.Time) (int64, error) {
 	stepSeconds := history.StepSeconds(history.StateRollupStep)
 	return s.compactHistoryBatch(ctx, history.StateRollupInsertQuery,
 		[]any{before.UTC().Unix(), historyRetentionBatchSize, stepSeconds, stepSeconds},
@@ -27,7 +27,7 @@ func (s *SQLiteStore) compactStateHistoryBatch(ctx context.Context, before time.
 	)
 }
 
-func (s *SQLiteStore) compactLatencyHistoryBatch(ctx context.Context, before time.Time) (int64, error) {
+func (s *sqliteHistoryStore) compactLatencyHistoryBatch(ctx context.Context, before time.Time) (int64, error) {
 	stepSeconds := history.StepSeconds(history.LatencyRollupStep)
 	return s.compactHistoryBatch(ctx, history.LatencyRollupInsertSQL,
 		[]any{before.UTC().Unix(), historyRetentionBatchSize, stepSeconds, stepSeconds},
@@ -39,9 +39,9 @@ func (s *SQLiteStore) compactLatencyHistoryBatch(ctx context.Context, before tim
 // compactHistoryBatch folds one batch of raw rows into its rollup tier and
 // deletes exactly those rows in the same transaction, so a crash can never
 // drop raw data that was not aggregated.
-func (s *SQLiteStore) compactHistoryBatch(ctx context.Context, insertSQL string, insertArgs []any, deleteSQL string, before time.Time) (int64, error) {
+func (s *sqliteHistoryStore) compactHistoryBatch(ctx context.Context, insertSQL string, insertArgs []any, deleteSQL string, before time.Time) (int64, error) {
 	var removed int64
-	err := s.withAgentWrite(ctx, historyRetentionWriteKey, func(writeCtx context.Context) error {
+	err := s.writes.withAgentWrite(ctx, historyRetentionWriteKey, func(writeCtx context.Context) error {
 		tx, err := s.db.BeginTx(writeCtx, nil)
 		if err != nil {
 			return err
