@@ -4,21 +4,18 @@
 # reviewer must hold in their head; past roughly 25 the admin update and agent
 # ingest paths became hard to review, which is how partial-update bugs hid.
 #
-# The threshold is a ratchet, not an aspiration: lower it when the remaining
-# offenders are fixed, never raise it to make a new function pass.
+# This started as a ratchet with an allowlist of pre-existing offenders. The
+# allowlist is now empty: every function is under the threshold, so any new
+# violation is a regression introduced by the change under review. Split the
+# function rather than reintroducing an exception.
+#
+# The threshold may be lowered, never raised to make a new function pass.
 set -euo pipefail
 
 GOCYCLO_VERSION="v0.6.0"
 THRESHOLD="${COMPLEXITY_THRESHOLD:-25}"
 
 cd "$(dirname "$0")/.."
-
-# Known offenders predating the guard. Each entry must be removed, never added
-# to, as these functions are split up.
-ALLOWED_OVER_THRESHOLD=(
-  "(*SQLiteStore).insertAgentProbeResultsOnce"
-  "(*handler).handleAgentPresenceWebSocket"
-)
 
 # gocyclo exits non-zero whenever it reports a function, so `go run` prints an
 # "exit status 1" line to stderr. The report itself is the signal, so stderr is
@@ -31,34 +28,8 @@ if [ -z "${report}" ]; then
   exit 0
 fi
 
-violations=0
-while IFS= read -r line; do
-  [ -n "${line}" ] || continue
-  # gocyclo output: "<complexity> <package> <function> <file>:<line>:<col>"
-  complexity="$(printf '%s' "${line}" | awk '{print $1}')"
-  function_name="$(printf '%s' "${line}" | awk '{print $3}')"
-  allowed=0
-  for entry in "${ALLOWED_OVER_THRESHOLD[@]}"; do
-    if [ "${function_name}" = "${entry}" ]; then
-      allowed=1
-      break
-    fi
-  done
-  if [ "${allowed}" -eq 1 ]; then
-    echo "complexity check: known offender ${function_name} (${complexity})"
-    continue
-  fi
-  echo "complexity check: FAIL ${line}" >&2
-  violations=$((violations + 1))
-done <<EOF
-${report}
-EOF
-
-if [ "${violations}" -gt 0 ]; then
-  echo "" >&2
-  echo "${violations} function(s) exceed complexity ${THRESHOLD} and are not in the allowlist." >&2
-  echo "Split the function instead of extending ALLOWED_OVER_THRESHOLD." >&2
-  exit 1
-fi
-
-echo "complexity check: only known offenders exceed ${THRESHOLD}"
+echo "complexity check: FAIL -- these functions exceed ${THRESHOLD}:" >&2
+printf '%s\n' "${report}" >&2
+echo "" >&2
+echo "Split the function. The allowlist was emptied deliberately; do not add one back." >&2
+exit 1

@@ -3,8 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -323,42 +321,7 @@ func (h *handler) handleAgentPresenceWebSocket(w http.ResponseWriter, r *http.Re
 	readDone := make(chan struct{})
 	go func() {
 		defer close(readDone)
-		conn.SetReadLimit(4 << 10)
-		for {
-			_, reader, err := conn.NextReader()
-			if err != nil {
-				return
-			}
-			if err := refreshReadDeadline(); err != nil {
-				return
-			}
-			var message agentPresenceClientMessage
-			if err := json.NewDecoder(reader).Decode(&message); err != nil {
-				continue
-			}
-			if message.Type != "config_applied" {
-				continue
-			}
-			ackStore, ok := store.(probeConfigAppliedStore)
-			if !ok {
-				continue
-			}
-			releaseWrite, _, accepted := h.agentQuotas.admitWrite(nodeID, 1)
-			if !accepted {
-				// HTTP 429 is no longer available after the WebSocket upgrade. Close
-				// an abusive per-node stream instead of allowing it to amplify SQLite
-				// writes or affecting another node.
-				return
-			}
-			err = ackStore.RecordProbeConfigApplied(r.Context(), nodeID, message.Version, time.Now().UTC())
-			releaseWrite()
-			if err != nil {
-				if !errors.Is(err, errProbeConfigAckInvalid) {
-					log.Printf("agent_presence_ack_error endpoint=presence node_id=%s stage=config_applied error=%s", safeLogToken(nodeID), sanitizeAgentAPIError(err))
-				}
-				continue
-			}
-		}
+		h.readAgentPresenceMessages(r.Context(), conn, store, nodeID, refreshReadDeadline)
 	}()
 
 	ping := time.NewTicker(25 * time.Second)

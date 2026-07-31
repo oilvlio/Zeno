@@ -129,26 +129,9 @@ func (s *SQLiteStore) insertAgentProbeResultsOnce(ctx context.Context, nodeID st
 		return agentProbeInsertResult{}, err
 	}
 
-	// A committed Agent round is the durable acknowledgement. Classify every
-	// node-wide round id before consulting mutable config/target/timestamp state,
-	// so a lost HTTP response can be retried after the original snapshot ages.
-	existing, err := loadAgentProbeRoundsByIDTx(ctx, tx, nodeID, rounds)
+	pending, result, err := classifyAgentProbeRounds(ctx, tx, nodeID, rounds)
 	if err != nil {
 		return agentProbeInsertResult{}, err
-	}
-	pending := make([]preparedAgentProbeRound, 0, len(rounds))
-	result := agentProbeInsertResult{}
-	for _, round := range rounds {
-		round.payloadHash = agentProbeRoundPayloadHash(round)
-		roundID := strings.TrimSpace(round.agentRoundID)
-		if found, ok := existing[roundID]; roundID != "" && ok {
-			if !found.matches(round) {
-				return agentProbeInsertResult{}, errAgentProbeRoundConflict
-			}
-			result.idempotent++
-			continue
-		}
-		pending = append(pending, round)
 	}
 	if len(pending) == 0 {
 		// The writer reservation and indexed read are sufficient to classify the
@@ -161,53 +144,25 @@ func (s *SQLiteStore) insertAgentProbeResultsOnce(ctx context.Context, nodeID st
 	if err := s.ensureTelemetryStorage(); err != nil {
 		return agentProbeInsertResult{}, err
 	}
-	// configVersion == 0 is the legacy/unknown snapshot value used by older
-	// Agents. It intentionally skips stale-version comparison, but the current
-	// enabled target set below still validates the whole batch atomically.
-	if configVersion > 0 {
-		var currentVersion int64
-		if err := tx.QueryRowContext(ctx, `SELECT version FROM probe_config_meta WHERE id = 1`).Scan(&currentVersion); err != nil {
-			return agentProbeInsertResult{}, err
-		}
-		if currentVersion != configVersion {
-			return agentProbeInsertResult{}, errAgentProbeConfigStale
-		}
+	if err := checkAgentProbeConfigVersion(ctx, tx, configVersion); err != nil {
+		return agentProbeInsertResult{}, err
 	}
 
-	targets, err := enabledProbeTargetsTx(ctx, tx, nodeID)
+	targetsByID, err := loadEnabledProbeTargetsByID(ctx, tx, nodeID)
 	if err != nil {
 		return agentProbeInsertResult{}, err
 	}
-	targetsByID := make(map[string]ProbeTarget, len(targets))
-	for _, target := range targets {
-		targetsByID[target.ID] = target
-	}
 	receivedAt := time.Now().UTC()
 	for _, round := range pending {
-		target, ok := targetsByID[round.targetID]
-		if !ok {
-			return agentProbeInsertResult{}, errInvalidAgentProbeResults
+		resolved, err := resolveAgentProbeRound(round, targetsByID, receivedAt)
+		if err != nil {
+			return agentProbeInsertResult{}, err
 		}
-		if round.targetType != "" && round.targetType != target.Type {
-			return agentProbeInsertResult{}, errInvalidAgentProbeResults
-		}
-		if len(round.samples) == 0 || len(round.samples) > target.Count || len(round.samples) > maxAgentProbeSamplesPerRound {
-			return agentProbeInsertResult{}, errInvalidAgentProbeResults
-		}
-		if !agentProbeTimestampWithinSkew(round.ts, receivedAt) {
-			return agentProbeInsertResult{}, errInvalidAgentProbeResults
-		}
-		round.target = target
-		round.samples = agentProbeSamplesForTarget(round.samples, target)
-		round.idempotencyKey = "legacy:" + probeRoundIdempotencyKey(round.samples)
-		if strings.TrimSpace(round.agentRoundID) != "" {
-			round.idempotencyKey = "agent:" + strings.TrimSpace(round.agentRoundID)
-		}
-		if err := insertProbeRoundTx(ctx, tx, nodeID, round); err != nil {
+		if err := insertProbeRoundTx(ctx, tx, nodeID, resolved); err != nil {
 			return agentProbeInsertResult{}, err
 		}
 		result.inserted++
-		result.insertedTargetIDs = append(result.insertedTargetIDs, target.ID)
+		result.insertedTargetIDs = append(result.insertedTargetIDs, resolved.target.ID)
 	}
 	if err := tx.Commit(); err != nil {
 		return agentProbeInsertResult{}, err
