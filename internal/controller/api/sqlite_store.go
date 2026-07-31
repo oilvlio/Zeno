@@ -20,6 +20,7 @@ type SQLiteStore struct {
 	*sqliteAdminAlertRules
 	*sqliteAdminAuth
 	*sqliteAdminDeletion
+	*sqliteNotificationAuthority
 	*sqliteRenewalNotifications
 	*sqliteSettings
 	telemetryStorage        *telemetryStorageGuard
@@ -152,14 +153,15 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 		return nil, err
 	}
 	store := &SQLiteStore{
-		db:                         db,
-		sqliteAgentAccess:          &sqliteAgentAccess{db: db},
-		sqliteAdminAlertRules:      &sqliteAdminAlertRules{db: db},
-		sqliteAdminAuth:            &sqliteAdminAuth{db: db},
-		sqliteAdminDeletion:        &sqliteAdminDeletion{db: db},
-		sqliteRenewalNotifications: &sqliteRenewalNotifications{db: db},
-		sqliteSettings:             &sqliteSettings{db: db},
-		telemetryStorage:           newTelemetryStorageGuard(path),
+		db:                          db,
+		sqliteAgentAccess:           &sqliteAgentAccess{db: db},
+		sqliteAdminAlertRules:       &sqliteAdminAlertRules{db: db},
+		sqliteAdminAuth:             &sqliteAdminAuth{db: db},
+		sqliteAdminDeletion:         &sqliteAdminDeletion{db: db},
+		sqliteNotificationAuthority: &sqliteNotificationAuthority{db: db},
+		sqliteRenewalNotifications:  &sqliteRenewalNotifications{db: db},
+		sqliteSettings:              &sqliteSettings{db: db},
+		telemetryStorage:            newTelemetryStorageGuard(path),
 	}
 	if err := store.ensureSchema(context.Background()); err != nil {
 		_ = db.Close()

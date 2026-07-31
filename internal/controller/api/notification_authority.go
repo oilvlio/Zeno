@@ -16,9 +16,13 @@ const (
 	settingKeyNotificationAuthorityKeyID       = "internal.notification_authority_key_id"
 )
 
+type sqliteNotificationAuthority struct {
+	db *sql.DB
+}
+
 // AuthorizeNotificationAuthority preserves the original single-key API while
 // using a deterministic key id in the persisted authority binding.
-func (s *SQLiteStore) AuthorizeNotificationAuthority(ctx context.Context, authorityKey string) (bool, error) {
+func (s *sqliteNotificationAuthority) AuthorizeNotificationAuthority(ctx context.Context, authorityKey string) (bool, error) {
 	authorityKey = strings.TrimSpace(authorityKey)
 	if authorityKey == "" {
 		return false, nil
@@ -31,7 +35,7 @@ func (s *SQLiteStore) AuthorizeNotificationAuthority(ctx context.Context, author
 // external key ring without storing any key in SQLite. If the stored binding
 // matches any supplied old key, it is atomically advanced to activeKeyID; a
 // subsequent restart can safely remove the old key from the ring.
-func (s *SQLiteStore) AuthorizeNotificationAuthorityKeyring(ctx context.Context, activeKeyID string, keys map[string]string) (bool, error) {
+func (s *sqliteNotificationAuthority) AuthorizeNotificationAuthorityKeyring(ctx context.Context, activeKeyID string, keys map[string]string) (bool, error) {
 	keyring, configured, err := notifycrypto.NewAuthorityKeyring(activeKeyID, keys)
 	if err != nil {
 		return false, translateNotificationAuthorityError(err)
