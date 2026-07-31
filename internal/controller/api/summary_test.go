@@ -520,7 +520,7 @@ func openCountingSummaryStore(t *testing.T) (*SQLiteStore, *summaryQueryCounter)
 		db.Close()
 		t.Fatalf("enable foreign keys: %v", err)
 	}
-	store := &SQLiteStore{db: db}
+	store := newSQLiteStore(db, nil)
 	if err := store.ensureSchema(context.Background()); err != nil {
 		db.Close()
 		t.Fatalf("ensure schema: %v", err)

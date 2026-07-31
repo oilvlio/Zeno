@@ -7,7 +7,12 @@ import (
 	"time"
 )
 
-func (s *SQLiteStore) nodes(ctx context.Context) ([]Node, error) {
+type sqliteReadQueries struct {
+	db      *sql.DB
+	latency *sqliteLatencyQueries
+}
+
+func (s *sqliteReadQueries) nodes(ctx context.Context) ([]Node, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT n.id, n.display_name, n.status, n.country_code, n.expiry_date, n.expiry_permanent, n.billing_cycle, n.renewal_amount, n.renewal_currency, fx.cny_rate, n.billing_mode, n.monthly_reset_day, n.last_seen_at,
 		       h.os_name, h.os_version, h.kernel, h.arch, h.virtualization, h.cpu_model, h.cpu_cores, h.memory_total_bytes, h.disk_total_bytes, h.boot_time,
@@ -119,7 +124,7 @@ func (s *SQLiteStore) nodes(ctx context.Context) ([]Node, error) {
 	return nodes, nil
 }
 
-func (s *SQLiteStore) nodeExists(ctx context.Context, nodeID string) (bool, error) {
+func (s *sqliteReadQueries) nodeExists(ctx context.Context, nodeID string) (bool, error) {
 	var exists int
 	if err := s.db.QueryRowContext(ctx, `SELECT 1 FROM nodes WHERE id = ? AND disabled = 0`, nodeID).Scan(&exists); err != nil {
 		if err == sql.ErrNoRows {
@@ -130,7 +135,7 @@ func (s *SQLiteStore) nodeExists(ctx context.Context, nodeID string) (bool, erro
 	return true, nil
 }
 
-func (s *SQLiteStore) latestLatencySummary(ctx context.Context, nodeID string) (*LatencySummary, error) {
+func (s *sqliteReadQueries) latestLatencySummary(ctx context.Context, nodeID string) (*LatencySummary, error) {
 	var preferredTarget sql.NullString
 	if err := s.db.QueryRowContext(ctx, `SELECT home_probe_target_id FROM nodes WHERE id = ?`, nodeID).Scan(&preferredTarget); err != nil && err != sql.ErrNoRows {
 		return nil, err
@@ -141,7 +146,7 @@ func (s *SQLiteStore) latestLatencySummary(ctx context.Context, nodeID string) (
 	return nil, nil
 }
 
-func (s *SQLiteStore) latestLatencySummaryForTarget(ctx context.Context, nodeID, preferredTargetID string) (*LatencySummary, error) {
+func (s *sqliteReadQueries) latestLatencySummaryForTarget(ctx context.Context, nodeID, preferredTargetID string) (*LatencySummary, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT pr.target_id, pt.name, pr.median_ms, pr.avg_ms, pr.loss_percent, pr.ts
 		FROM probe_rounds pr
@@ -205,7 +210,7 @@ func (s *SQLiteStore) latestLatencySummaryForTarget(ctx context.Context, nodeID,
 
 }
 
-func (s *SQLiteStore) latestLatencySummaries(ctx context.Context, nodeID string) ([]LatencySummary, error) {
+func (s *sqliteReadQueries) latestLatencySummaries(ctx context.Context, nodeID string) ([]LatencySummary, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT pt.id, pt.name, pr.median_ms, pr.avg_ms, pr.loss_percent, pr.ts
 		FROM node_probe_targets npt
@@ -252,7 +257,7 @@ func (s *SQLiteStore) latestLatencySummaries(ctx context.Context, nodeID string)
 	return summaries, nil
 }
 
-func (s *SQLiteStore) latestHomeLatencySummaries(ctx context.Context) (map[string]*LatencySummary, error) {
+func (s *sqliteReadQueries) latestHomeLatencySummaries(ctx context.Context) (map[string]*LatencySummary, error) {
 	now := time.Now().UTC()
 	since := now.Add(-24 * time.Hour).Unix()
 	rows, err := s.db.QueryContext(ctx, `
@@ -350,7 +355,7 @@ func emptyHourlyLatencyHistory(now time.Time) []HourlyLatencyPoint {
 	return history
 }
 
-func (s *SQLiteStore) homeLatencyHourlyHistory(ctx context.Context, now time.Time) (map[string][]HourlyLatencyPoint, error) {
+func (s *sqliteReadQueries) homeLatencyHourlyHistory(ctx context.Context, now time.Time) (map[string][]HourlyLatencyPoint, error) {
 	start, end := homeLatencyHistoryBounds(now)
 	const stepSeconds int64 = int64(time.Hour / time.Second)
 	rows, err := s.db.QueryContext(ctx, `
@@ -414,7 +419,7 @@ func (s *SQLiteStore) homeLatencyHourlyHistory(ctx context.Context, now time.Tim
 	return historyByNode, nil
 }
 
-func (s *SQLiteStore) latestLatencySummariesByNode(ctx context.Context) (map[string][]LatencySummary, error) {
+func (s *sqliteReadQueries) latestLatencySummariesByNode(ctx context.Context) (map[string][]LatencySummary, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT npt.node_id, pt.id AS target_id, pt.name AS target_name,
 		       pr.median_ms, pr.avg_ms, pr.loss_percent, pr.ts
@@ -461,7 +466,7 @@ func (s *SQLiteStore) latestLatencySummariesByNode(ctx context.Context) (map[str
 	return summaries, nil
 }
 
-func (s *SQLiteStore) serviceTargets(ctx context.Context) ([]ServiceTarget, error) {
+func (s *sqliteReadQueries) serviceTargets(ctx context.Context) ([]ServiceTarget, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT pt.id, pt.name, pt.type,
 		       COUNT(DISTINCT CASE WHEN n.id IS NOT NULL AND COALESCE(npt.enabled, 0) = 1 AND n.disabled = 0 THEN n.id END) AS assigned_nodes
@@ -499,7 +504,7 @@ func (s *SQLiteStore) serviceTargets(ctx context.Context) ([]ServiceTarget, erro
 	return targets, nil
 }
 
-func (s *SQLiteStore) serviceTargetByID(ctx context.Context, targetID string) (ServiceTarget, error) {
+func (s *sqliteReadQueries) serviceTargetByID(ctx context.Context, targetID string) (ServiceTarget, error) {
 	var target ServiceTarget
 	var assigned int
 	err := s.db.QueryRowContext(ctx, `
@@ -530,7 +535,7 @@ func (s *SQLiteStore) serviceTargetByID(ctx context.Context, targetID string) (S
 	return target, nil
 }
 
-func (s *SQLiteStore) populateServiceTargetLatencySummaries(ctx context.Context, targets []ServiceTarget) error {
+func (s *sqliteReadQueries) populateServiceTargetLatencySummaries(ctx context.Context, targets []ServiceTarget) error {
 	if len(targets) == 0 {
 		return nil
 	}
@@ -602,7 +607,7 @@ func (s *SQLiteStore) populateServiceTargetLatencySummaries(ctx context.Context,
 	return rows.Err()
 }
 
-func (s *SQLiteStore) populateServiceTargetLatencySummary(ctx context.Context, target *ServiceTarget) error {
+func (s *sqliteReadQueries) populateServiceTargetLatencySummary(ctx context.Context, target *ServiceTarget) error {
 	since := time.Now().UTC().Add(-24 * time.Hour).Unix()
 	if err := s.db.QueryRowContext(ctx, `
 		SELECT COUNT(DISTINCT pr.node_id)
@@ -645,9 +650,9 @@ func (s *SQLiteStore) populateServiceTargetLatencySummary(ctx context.Context, t
 	return nil
 }
 
-func (s *SQLiteStore) serviceLatencyPoints(ctx context.Context, targetID string, window latencyWindow) ([]ServiceLatencyPoint, error) {
+func (s *sqliteReadQueries) serviceLatencyPoints(ctx context.Context, targetID string, window latencyWindow) ([]ServiceLatencyPoint, error) {
 	if useLatencyGrid(window) {
-		return s.serviceLatencyGridPoints(ctx, targetID, window)
+		return s.latency.serviceLatencyGridPoints(ctx, targetID, window)
 	}
 	since := time.Now().UTC().Add(-time.Duration(window.Samples) * window.Step).Unix()
 	rows, err := s.db.QueryContext(ctx, `

@@ -22,6 +22,7 @@ type SQLiteStore struct {
 	*sqliteAdminDeletion
 	*sqliteLatencyQueries
 	*sqliteNotificationAuthority
+	*sqliteReadQueries
 	*sqliteRenewalNotifications
 	*sqliteSettings
 	telemetryStorage        *telemetryStorageGuard
@@ -153,18 +154,7 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	store := &SQLiteStore{
-		db:                          db,
-		sqliteAgentAccess:           &sqliteAgentAccess{db: db},
-		sqliteAdminAlertRules:       &sqliteAdminAlertRules{db: db},
-		sqliteAdminAuth:             &sqliteAdminAuth{db: db},
-		sqliteAdminDeletion:         &sqliteAdminDeletion{db: db},
-		sqliteLatencyQueries:        &sqliteLatencyQueries{db: db},
-		sqliteNotificationAuthority: &sqliteNotificationAuthority{db: db},
-		sqliteRenewalNotifications:  &sqliteRenewalNotifications{db: db},
-		sqliteSettings:              &sqliteSettings{db: db},
-		telemetryStorage:            newTelemetryStorageGuard(path),
-	}
+	store := newSQLiteStore(db, newTelemetryStorageGuard(path))
 	if err := store.ensureSchema(context.Background()); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -176,6 +166,23 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 	db.SetMaxIdleConns(4)
 	store.startAdminDeletionWorker()
 	return store, nil
+}
+
+func newSQLiteStore(db *sql.DB, telemetryStorage *telemetryStorageGuard) *SQLiteStore {
+	latencyQueries := &sqliteLatencyQueries{db: db}
+	return &SQLiteStore{
+		db:                          db,
+		sqliteAgentAccess:           &sqliteAgentAccess{db: db},
+		sqliteAdminAlertRules:       &sqliteAdminAlertRules{db: db},
+		sqliteAdminAuth:             &sqliteAdminAuth{db: db},
+		sqliteAdminDeletion:         &sqliteAdminDeletion{db: db},
+		sqliteLatencyQueries:        latencyQueries,
+		sqliteNotificationAuthority: &sqliteNotificationAuthority{db: db},
+		sqliteReadQueries:           &sqliteReadQueries{db: db, latency: latencyQueries},
+		sqliteRenewalNotifications:  &sqliteRenewalNotifications{db: db},
+		sqliteSettings:              &sqliteSettings{db: db},
+		telemetryStorage:            telemetryStorage,
+	}
 }
 
 func sqliteDSN(path string) (string, error) {
