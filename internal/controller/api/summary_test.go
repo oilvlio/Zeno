@@ -157,9 +157,9 @@ func TestSummaryQueryCountDoesNotGrowWithNodesOrServices(t *testing.T) {
 		t.Fatalf("cached summary query count = %d, want fresh node state and exchange rates", cachedQueries)
 	}
 
-	largeStore.summaryAggregateMu.Lock()
-	largeStore.summaryAggregateUpdated = time.Now().Add(-summaryAggregateFreshFor)
-	largeStore.summaryAggregateMu.Unlock()
+	largeStore.summaryCache.mu.Lock()
+	largeStore.summaryCache.updated = time.Now().Add(-summaryAggregateFreshFor)
+	largeStore.summaryCache.mu.Unlock()
 	largeCounter.reset()
 	if _, err := largeStore.Summary(ctx); err != nil {
 		t.Fatalf("expired large summary: %v", err)

@@ -2,8 +2,28 @@ package api
 
 import (
 	"context"
+	"sync"
 	"time"
 )
+
+type summaryAggregateFlight struct {
+	generation  uint64
+	done        chan struct{}
+	home        map[string]*LatencySummary
+	services    []ServiceTarget
+	nodeLatency map[string][]LatencySummary
+	err         error
+}
+
+type sqliteSummaryCache struct {
+	mu          sync.Mutex
+	updated     time.Time
+	home        map[string]*LatencySummary
+	services    []ServiceTarget
+	nodeLatency map[string][]LatencySummary
+	generation  uint64
+	flight      *summaryAggregateFlight
+}
 
 func (s *SQLiteStore) Summary(ctx context.Context) (SummaryResponse, error) {
 	nodes, err := s.nodes(ctx)
@@ -42,25 +62,25 @@ func (s *SQLiteStore) summaryAggregates(ctx context.Context) (map[string]*Latenc
 			return nil, nil, nil, err
 		}
 		now := time.Now()
-		s.summaryAggregateMu.Lock()
-		if !s.summaryAggregateUpdated.IsZero() && now.Sub(s.summaryAggregateUpdated) < summaryAggregateFreshFor {
-			home := s.summaryAggregateHome
-			services := s.summaryAggregateServices
-			nodeLatency := s.summaryAggregateNodeLatency
-			s.summaryAggregateMu.Unlock()
+		s.summaryCache.mu.Lock()
+		if !s.summaryCache.updated.IsZero() && now.Sub(s.summaryCache.updated) < summaryAggregateFreshFor {
+			home := s.summaryCache.home
+			services := s.summaryCache.services
+			nodeLatency := s.summaryCache.nodeLatency
+			s.summaryCache.mu.Unlock()
 			return home, services, nodeLatency, nil
 		}
-		generation := s.summaryAggregateGeneration
-		if flight := s.summaryAggregateFlight; flight != nil {
-			s.summaryAggregateMu.Unlock()
+		generation := s.summaryCache.generation
+		if flight := s.summaryCache.flight; flight != nil {
+			s.summaryCache.mu.Unlock()
 			select {
 			case <-ctx.Done():
 				return nil, nil, nil, ctx.Err()
 			case <-flight.done:
 			}
-			s.summaryAggregateMu.Lock()
-			currentGeneration := s.summaryAggregateGeneration
-			s.summaryAggregateMu.Unlock()
+			s.summaryCache.mu.Lock()
+			currentGeneration := s.summaryCache.generation
+			s.summaryCache.mu.Unlock()
 			if currentGeneration != flight.generation {
 				if retries < summaryGenerationMaxRetries {
 					retries++
@@ -71,11 +91,11 @@ func (s *SQLiteStore) summaryAggregates(ctx context.Context) (map[string]*Latenc
 			return flight.home, flight.services, flight.nodeLatency, flight.err
 		}
 		flight := &summaryAggregateFlight{generation: generation, done: make(chan struct{})}
-		s.summaryAggregateFlight = flight
-		s.summaryAggregateMu.Unlock()
+		s.summaryCache.flight = flight
+		s.summaryCache.mu.Unlock()
 
 		// These are the expensive rolling queries. They intentionally run outside
-		// summaryAggregateMu so Agent probe writes can return 202 without waiting
+		// the summary cache mutex so Agent probe writes can return 202 without waiting
 		// for a 24-hour scan.
 		homeSummaries, err := s.latestHomeLatencySummaries(ctx)
 		var services []ServiceTarget
@@ -87,23 +107,23 @@ func (s *SQLiteStore) summaryAggregates(ctx context.Context) (map[string]*Latenc
 			latencySummaries, err = s.latestLatencySummariesByNode(ctx)
 		}
 
-		s.summaryAggregateMu.Lock()
-		currentGeneration := s.summaryAggregateGeneration
+		s.summaryCache.mu.Lock()
+		currentGeneration := s.summaryCache.generation
 		if err == nil && currentGeneration == generation {
-			s.summaryAggregateHome = homeSummaries
-			s.summaryAggregateServices = services
-			s.summaryAggregateNodeLatency = latencySummaries
-			s.summaryAggregateUpdated = time.Now()
+			s.summaryCache.home = homeSummaries
+			s.summaryCache.services = services
+			s.summaryCache.nodeLatency = latencySummaries
+			s.summaryCache.updated = time.Now()
 		}
 		flight.home = homeSummaries
 		flight.services = services
 		flight.nodeLatency = latencySummaries
 		flight.err = err
-		if s.summaryAggregateFlight == flight {
-			s.summaryAggregateFlight = nil
+		if s.summaryCache.flight == flight {
+			s.summaryCache.flight = nil
 		}
 		close(flight.done)
-		s.summaryAggregateMu.Unlock()
+		s.summaryCache.mu.Unlock()
 
 		if currentGeneration != generation {
 			// Invalidation raced this snapshot. Do not let it repopulate the cache;
@@ -121,13 +141,13 @@ func (s *SQLiteStore) summaryAggregates(ctx context.Context) (map[string]*Latenc
 }
 
 func (s *SQLiteStore) invalidateSummaryAggregates() {
-	s.summaryAggregateMu.Lock()
-	s.summaryAggregateGeneration++
-	s.summaryAggregateUpdated = time.Time{}
-	s.summaryAggregateHome = nil
-	s.summaryAggregateServices = nil
-	s.summaryAggregateNodeLatency = nil
-	s.summaryAggregateMu.Unlock()
+	s.summaryCache.mu.Lock()
+	s.summaryCache.generation++
+	s.summaryCache.updated = time.Time{}
+	s.summaryCache.home = nil
+	s.summaryCache.services = nil
+	s.summaryCache.nodeLatency = nil
+	s.summaryCache.mu.Unlock()
 }
 
 func (s *SQLiteStore) NodeLatency(ctx context.Context, nodeID string, window latencyWindow) (LatencyResponse, error) {

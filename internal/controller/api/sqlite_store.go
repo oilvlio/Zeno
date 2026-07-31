@@ -17,15 +17,6 @@ import (
 	"github.com/shui1iao/zeno/internal/controller/notifycrypto"
 )
 
-type summaryAggregateFlight struct {
-	generation  uint64
-	done        chan struct{}
-	home        map[string]*LatencySummary
-	services    []ServiceTarget
-	nodeLatency map[string][]LatencySummary
-	err         error
-}
-
 type SQLiteStore struct {
 	db *sql.DB
 	*sqliteAdminAuth
@@ -35,13 +26,7 @@ type SQLiteStore struct {
 	telemetryStorage              *telemetryStorageGuard
 	notificationCredentialMu      sync.RWMutex
 	notificationCredentialKeyring *notifycrypto.Keyring
-	summaryAggregateMu            sync.Mutex
-	summaryAggregateUpdated       time.Time
-	summaryAggregateHome          map[string]*LatencySummary
-	summaryAggregateServices      []ServiceTarget
-	summaryAggregateNodeLatency   map[string][]LatencySummary
-	summaryAggregateGeneration    uint64
-	summaryAggregateFlight        *summaryAggregateFlight
+	summaryCache                  sqliteSummaryCache
 	sqliteBusyRetries             atomic.Uint64
 }
 
@@ -198,7 +183,9 @@ func sqliteDSN(path string) (string, error) {
 }
 
 func (s *SQLiteStore) Close() error {
-	s.stopAdminDeletionWorker()
+	if s.sqliteAdminDeletion != nil {
+		s.stopAdminDeletionWorker()
+	}
 	return s.db.Close()
 }
 
