@@ -24,6 +24,22 @@ type ServiceLatencySeries struct {
 	LossPercent []float64  `json:"loss_percent,omitempty"`
 }
 
+type latencyResponseDecode struct {
+	NodeID          string          `json:"node_id"`
+	Range           string          `json:"range"`
+	SharedCreatedAt []int64         `json:"created_at"`
+	Points          []LatencyPoint  `json:"points"`
+	Series          []LatencySeries `json:"series"`
+}
+
+type serviceLatencyResponseDecode struct {
+	Target          ServiceTarget          `json:"target"`
+	Range           string                 `json:"range"`
+	SharedCreatedAt []int64                `json:"created_at"`
+	Points          []ServiceLatencyPoint  `json:"points"`
+	Series          []ServiceLatencySeries `json:"series"`
+}
+
 func (response LatencyResponse) MarshalJSON() ([]byte, error) {
 	type latencyResponseJSON struct {
 		NodeID          string          `json:"node_id"`
@@ -41,25 +57,14 @@ func (response LatencyResponse) MarshalJSON() ([]byte, error) {
 }
 
 func (response *LatencyResponse) UnmarshalJSON(data []byte) error {
-	type latencyResponseJSON struct {
-		NodeID          string          `json:"node_id"`
-		Range           string          `json:"range"`
-		SharedCreatedAt []int64         `json:"created_at"`
-		Points          []LatencyPoint  `json:"points"`
-		Series          []LatencySeries `json:"series"`
-	}
-	var raw latencyResponseJSON
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	response.NodeID = raw.NodeID
-	response.Range = raw.Range
-	if len(raw.Points) > 0 || raw.Series == nil {
-		response.Points = raw.Points
-		return nil
-	}
-	response.Points = latencyPointsFromSeries(raw.Series, raw.SharedCreatedAt)
-	return nil
+	return decodeLatencyResponse(data, func(raw latencyResponseDecode) {
+		response.NodeID = raw.NodeID
+		response.Range = raw.Range
+		response.Points = latencyPointsFromPayload(
+			raw.Points, raw.Series, raw.SharedCreatedAt,
+			func(series LatencySeries) []int64 { return series.CreatedAt }, latencyPointFromSeries,
+		)
+	})
 }
 
 func (response ServiceTargetLatencyResponse) MarshalJSON() ([]byte, error) {
@@ -79,25 +84,53 @@ func (response ServiceTargetLatencyResponse) MarshalJSON() ([]byte, error) {
 }
 
 func (response *ServiceTargetLatencyResponse) UnmarshalJSON(data []byte) error {
-	type serviceLatencyResponseJSON struct {
-		Target          ServiceTarget          `json:"target"`
-		Range           string                 `json:"range"`
-		SharedCreatedAt []int64                `json:"created_at"`
-		Points          []ServiceLatencyPoint  `json:"points"`
-		Series          []ServiceLatencySeries `json:"series"`
-	}
-	var raw serviceLatencyResponseJSON
+	return decodeLatencyResponse(data, func(raw serviceLatencyResponseDecode) {
+		response.Target = raw.Target
+		response.Range = raw.Range
+		response.Points = latencyPointsFromPayload(
+			raw.Points, raw.Series, raw.SharedCreatedAt,
+			func(series ServiceLatencySeries) []int64 { return series.CreatedAt }, serviceLatencyPointFromSeries,
+		)
+	})
+}
+
+func decodeLatencyResponse[R any](data []byte, assign func(R)) error {
+	var raw R
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	response.Target = raw.Target
-	response.Range = raw.Range
-	if len(raw.Points) > 0 || raw.Series == nil {
-		response.Points = raw.Points
-		return nil
-	}
-	response.Points = serviceLatencyPointsFromSeries(raw.Series, raw.SharedCreatedAt)
+	assign(raw)
 	return nil
+}
+
+func latencyPointsFromPayload[P, S any](
+	points []P, seriesList []S, sharedCreatedAt []int64,
+	createdAtFor func(S) []int64, pointAt func(S, int64, int) P,
+) []P {
+	if len(points) > 0 || seriesList == nil {
+		return points
+	}
+	points = make([]P, 0)
+	for _, series := range seriesList {
+		createdAtValues := createdAtFor(series)
+		if len(createdAtValues) == 0 {
+			createdAtValues = sharedCreatedAt
+		}
+		for index, createdAt := range createdAtValues {
+			points = append(points, pointAt(series, createdAt, index))
+		}
+	}
+	return points
+}
+
+func latencyPointFromSeries(series LatencySeries, createdAt int64, index int) LatencyPoint {
+	return LatencyPoint{TS: latencyTimestampString(createdAt), TargetID: series.TargetID, TargetName: series.TargetName,
+		MedianMS: floatSliceValue(series.MedianMS, index), AvgMS: floatSliceValue(series.AvgMS, index), LossPercent: floatValue(series.LossPercent, index)}
+}
+
+func serviceLatencyPointFromSeries(series ServiceLatencySeries, createdAt int64, index int) ServiceLatencyPoint {
+	return ServiceLatencyPoint{TS: latencyTimestampString(createdAt), NodeID: series.NodeID, NodeName: series.NodeName,
+		MedianMS: floatSliceValue(series.MedianMS, index), AvgMS: floatSliceValue(series.AvgMS, index), LossPercent: floatValue(series.LossPercent, index)}
 }
 
 func latencySeriesPayloadFromPoints(points []LatencyPoint) ([]int64, []LatencySeries) {
@@ -112,45 +145,7 @@ func latencySeriesPayloadFromPoints(points []LatencyPoint) ([]int64, []LatencySe
 }
 
 func latencySeriesFromPoints(points []LatencyPoint) []LatencySeries {
-	order := make([]string, 0)
-	byTarget := make(map[string]*LatencySeries)
-	for _, point := range points {
-		series := byTarget[point.TargetID]
-		if series == nil {
-			series = &LatencySeries{TargetID: point.TargetID, TargetName: point.TargetName}
-			byTarget[point.TargetID] = series
-			order = append(order, point.TargetID)
-		}
-		series.CreatedAt = append(series.CreatedAt, latencyTimestampMillis(point.TS))
-		series.AvgMS = append(series.AvgMS, compactLatencyValue(point.AvgMS))
-		series.LossPercent = append(series.LossPercent, compactLatencyNumber(point.LossPercent))
-	}
-	seriesList := make([]LatencySeries, 0, len(order))
-	for _, targetID := range order {
-		seriesList = append(seriesList, *byTarget[targetID])
-	}
-	return seriesList
-}
-
-func latencyPointsFromSeries(seriesList []LatencySeries, sharedCreatedAt []int64) []LatencyPoint {
-	points := make([]LatencyPoint, 0)
-	for _, series := range seriesList {
-		createdAtValues := series.CreatedAt
-		if len(createdAtValues) == 0 {
-			createdAtValues = sharedCreatedAt
-		}
-		for index, createdAt := range createdAtValues {
-			points = append(points, LatencyPoint{
-				TS:          latencyTimestampString(createdAt),
-				TargetID:    series.TargetID,
-				TargetName:  series.TargetName,
-				MedianMS:    floatSliceValue(series.MedianMS, index),
-				AvgMS:       floatSliceValue(series.AvgMS, index),
-				LossPercent: floatValue(series.LossPercent, index),
-			})
-		}
-	}
-	return points
+	return groupLatencySeries(points, latencySeriesIdentity, appendLatencySeriesPoint)
 }
 
 func serviceLatencySeriesPayloadFromPoints(points []ServiceLatencyPoint) ([]int64, []ServiceLatencySeries) {
@@ -165,45 +160,47 @@ func serviceLatencySeriesPayloadFromPoints(points []ServiceLatencyPoint) ([]int6
 }
 
 func serviceLatencySeriesFromPoints(points []ServiceLatencyPoint) []ServiceLatencySeries {
-	order := make([]string, 0)
-	byNode := make(map[string]*ServiceLatencySeries)
-	for _, point := range points {
-		series := byNode[point.NodeID]
-		if series == nil {
-			series = &ServiceLatencySeries{NodeID: point.NodeID, NodeName: point.NodeName}
-			byNode[point.NodeID] = series
-			order = append(order, point.NodeID)
-		}
-		series.CreatedAt = append(series.CreatedAt, latencyTimestampMillis(point.TS))
-		series.AvgMS = append(series.AvgMS, compactLatencyValue(point.AvgMS))
-		series.LossPercent = append(series.LossPercent, compactLatencyNumber(point.LossPercent))
-	}
-	seriesList := make([]ServiceLatencySeries, 0, len(order))
-	for _, nodeID := range order {
-		seriesList = append(seriesList, *byNode[nodeID])
-	}
-	return seriesList
+	return groupLatencySeries(points, serviceLatencySeriesIdentity, appendServiceLatencySeriesPoint)
 }
 
-func serviceLatencyPointsFromSeries(seriesList []ServiceLatencySeries, sharedCreatedAt []int64) []ServiceLatencyPoint {
-	points := make([]ServiceLatencyPoint, 0)
-	for _, series := range seriesList {
-		createdAtValues := series.CreatedAt
-		if len(createdAtValues) == 0 {
-			createdAtValues = sharedCreatedAt
+func latencySeriesIdentity(point LatencyPoint) (string, LatencySeries) {
+	return point.TargetID, LatencySeries{TargetID: point.TargetID, TargetName: point.TargetName}
+}
+
+func serviceLatencySeriesIdentity(point ServiceLatencyPoint) (string, ServiceLatencySeries) {
+	return point.NodeID, ServiceLatencySeries{NodeID: point.NodeID, NodeName: point.NodeName}
+}
+
+func appendLatencySeriesPoint(series *LatencySeries, point LatencyPoint) {
+	series.CreatedAt = append(series.CreatedAt, latencyTimestampMillis(point.TS))
+	series.AvgMS = append(series.AvgMS, compactLatencyValue(point.AvgMS))
+	series.LossPercent = append(series.LossPercent, compactLatencyNumber(point.LossPercent))
+}
+
+func appendServiceLatencySeriesPoint(series *ServiceLatencySeries, point ServiceLatencyPoint) {
+	series.CreatedAt = append(series.CreatedAt, latencyTimestampMillis(point.TS))
+	series.AvgMS = append(series.AvgMS, compactLatencyValue(point.AvgMS))
+	series.LossPercent = append(series.LossPercent, compactLatencyNumber(point.LossPercent))
+}
+
+func groupLatencySeries[P, S any](points []P, newSeries func(P) (string, S), appendPoint func(*S, P)) []S {
+	order := make([]string, 0)
+	byID := make(map[string]*S)
+	for _, point := range points {
+		id, initial := newSeries(point)
+		series := byID[id]
+		if series == nil {
+			series = &initial
+			byID[id] = series
+			order = append(order, id)
 		}
-		for index, createdAt := range createdAtValues {
-			points = append(points, ServiceLatencyPoint{
-				TS:          latencyTimestampString(createdAt),
-				NodeID:      series.NodeID,
-				NodeName:    series.NodeName,
-				MedianMS:    floatSliceValue(series.MedianMS, index),
-				AvgMS:       floatSliceValue(series.AvgMS, index),
-				LossPercent: floatValue(series.LossPercent, index),
-			})
-		}
+		appendPoint(series, point)
 	}
-	return points
+	seriesList := make([]S, 0, len(order))
+	for _, id := range order {
+		seriesList = append(seriesList, *byID[id])
+	}
+	return seriesList
 }
 
 func sharedLatencyCreatedAt(seriesList []LatencySeries) []int64 {
