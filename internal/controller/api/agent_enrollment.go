@@ -42,7 +42,7 @@ func validRuntimeToken(token string) bool {
 	return true
 }
 
-func (s *SQLiteStore) issueAgentEnrollment(ctx context.Context, nodeID string) (string, time.Time, error) {
+func (s *sqliteAgentAccess) issueAgentEnrollment(ctx context.Context, nodeID string) (string, time.Time, error) {
 	enrollmentToken, err := randomAdminCredential()
 	if err != nil {
 		return "", time.Time{}, err
@@ -101,7 +101,7 @@ func (s *SQLiteStore) issueAgentEnrollment(ctx context.Context, nodeID string) (
 	return enrollmentToken, expiresAt, nil
 }
 
-func (s *SQLiteStore) RedeemAgentEnrollment(ctx context.Context, nodeID, enrollmentToken, runtimeToken string) error {
+func (s *sqliteAgentAccess) RedeemAgentEnrollment(ctx context.Context, nodeID, enrollmentToken, runtimeToken string) error {
 	nodeID = strings.TrimSpace(nodeID)
 	enrollmentToken = strings.TrimSpace(enrollmentToken)
 	runtimeToken = strings.TrimSpace(runtimeToken)

@@ -36,6 +36,10 @@ var (
 	adminArgon2Admissions = make(chan struct{}, adminPasswordArgonMaxQueued)
 )
 
+type sqliteAgentAccess struct {
+	db *sql.DB
+}
+
 const dummyAdminPasswordHash = "argon2id:v=19:m=65536:t=3:p=2:emVuby1kdW1teS1zYWx0:MfaHhKQHaOt+QsALfIOerW4EtUmf5zKMiHhxvflHstY"
 
 func hashAgentToken(token string) string {
@@ -180,7 +184,7 @@ func adminPasswordMatches(storedHash, fallbackHash, password string) bool {
 	return matched
 }
 
-func (s *SQLiteStore) AuthorizeAgent(ctx context.Context, nodeID, token string) (bool, error) {
+func (s *sqliteAgentAccess) AuthorizeAgent(ctx context.Context, nodeID, token string) (bool, error) {
 	if nodeID == "" || token == "" {
 		return false, nil
 	}

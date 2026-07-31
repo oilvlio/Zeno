@@ -16,6 +16,7 @@ import (
 
 type SQLiteStore struct {
 	db *sql.DB
+	*sqliteAgentAccess
 	*sqliteAdminAlertRules
 	*sqliteAdminAuth
 	*sqliteAdminDeletion
@@ -152,6 +153,7 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 	}
 	store := &SQLiteStore{
 		db:                         db,
+		sqliteAgentAccess:          &sqliteAgentAccess{db: db},
 		sqliteAdminAlertRules:      &sqliteAdminAlertRules{db: db},
 		sqliteAdminAuth:            &sqliteAdminAuth{db: db},
 		sqliteAdminDeletion:        &sqliteAdminDeletion{db: db},
