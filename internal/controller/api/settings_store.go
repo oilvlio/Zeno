@@ -44,67 +44,7 @@ func (s *SQLiteStore) UpdateAdminSettings(ctx context.Context, update AdminSetti
 		return SiteSettings{}, err
 	}
 	defer func() { rollbackUnlessCommitted(tx) }()
-	// PATCH is deliberately sparse: persisting a read/modify/write snapshot of
-	// every setting lets two disjoint concurrent requests overwrite each other
-	// with stale values. Only keys represented by this request are upserted.
-	values := make(map[string]string)
-	if update.SiteTitle != nil {
-		values[settingKeySiteTitle] = *update.SiteTitle
-	}
-	if update.SiteSubtitle != nil {
-		values[settingKeySiteSubtitle] = *update.SiteSubtitle
-	}
-	if update.LogoURL != nil {
-		values[settingKeyLogoURL] = *update.LogoURL
-	}
-	if update.Theme != nil {
-		values[settingKeyTheme] = *update.Theme
-	}
-	if update.AgentControllerURL != nil {
-		values[settingKeyAgentControllerURL] = *update.AgentControllerURL
-	}
-	if update.BackgroundURL != nil {
-		values[settingKeyBackgroundURL] = *update.BackgroundURL
-		if update.DesktopBackgroundURL == nil {
-			values[settingKeyDesktopBackgroundURL] = *update.BackgroundURL
-		}
-	}
-	if update.DesktopBackgroundURL != nil {
-		// background_url is the legacy desktop alias and must remain in sync,
-		// but no unrelated setting is touched.
-		values[settingKeyDesktopBackgroundURL] = *update.DesktopBackgroundURL
-		values[settingKeyBackgroundURL] = *update.DesktopBackgroundURL
-	}
-	if update.MobileBackgroundURL != nil {
-		values[settingKeyMobileBackgroundURL] = *update.MobileBackgroundURL
-	}
-	if update.AppearancePreset != nil {
-		values[settingKeyAppearancePreset] = *update.AppearancePreset
-	}
-	if update.CardOpacity != nil {
-		values[settingKeyCardOpacity] = formatSettingsFloat(*update.CardOpacity)
-	}
-	if update.CardBlur != nil {
-		values[settingKeyCardBlur] = formatSettingsFloat(*update.CardBlur)
-	}
-	if update.CardRadius != nil {
-		values[settingKeyCardRadius] = formatSettingsFloat(*update.CardRadius)
-	}
-	if update.BorderStrength != nil {
-		values[settingKeyBorderStrength] = formatSettingsFloat(*update.BorderStrength)
-	}
-	if update.ShadowStrength != nil {
-		values[settingKeyShadowStrength] = formatSettingsFloat(*update.ShadowStrength)
-	}
-	if update.BackgroundOverlay != nil {
-		values[settingKeyBackgroundOverlay] = formatSettingsFloat(*update.BackgroundOverlay)
-	}
-	if update.ThemeColor != nil {
-		values[settingKeyThemeColor] = *update.ThemeColor
-	}
-	if update.CustomCode != nil {
-		values[settingKeyCustomCode] = *update.CustomCode
-	}
+	values := adminSettingsUpdateValues(update)
 	for key, value := range values {
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO settings (key, value, updated_at)

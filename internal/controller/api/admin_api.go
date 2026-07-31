@@ -610,30 +610,52 @@ func adminLoginRateLimitKey(r *http.Request, username string) string {
 	return (&handler{}).adminLoginRateLimitKey(r, username)
 }
 
+// adminErrorResponses maps admin store errors onto their HTTP response.
+//
+// This is a lookup table rather than a chain of conditionals because it is pure
+// data: adding an error means adding a row, and the whole admin error contract
+// can be read in one place. Order matters -- the first matching group wins --
+// so more specific errors must precede any broader group that would also match.
+var adminErrorResponses = []struct {
+	status  int
+	message string
+	errs    []error
+}{
+	// A type managed by alert rules is deliberately distinguished from a missing
+	// one: the client asked for something that existed and was taken over, and
+	// 404 would send it looking for a typo instead.
+	{http.StatusGone, "notification type is managed by alert rules", []error{errNotificationTypeGone}},
+	{http.StatusNotFound, "not found", []error{
+		errNodeNotFound, errProbeTargetNotFound, errNotificationChannelNotFound,
+		errNotificationDeliveryNotFound, errNotificationTypeNotFound, errAlertRuleNotFound,
+	}},
+	// Validation failures collapse to a single opaque message on purpose: the
+	// admin UI validates client-side, so a detailed server message would only
+	// help someone probing the API.
+	{http.StatusBadRequest, "bad request", []error{
+		errInvalidAdminSettingsUpdate, errInvalidAdminNodeUpdate, errInvalidAdminNodeCreate,
+		errInvalidAdminTargetWrite, errInvalidAdminNotificationChannelWrite,
+		errInvalidAdminNotificationTypeWrite, errInvalidAdminAlertRuleUpdate,
+		errInvalidAdminPasswordUpdate,
+	}},
+	{http.StatusConflict, "notification key unavailable", []error{errNotificationCredentialKeyRequired}},
+	{http.StatusConflict, "notification delivery is not failed", []error{errNotificationDeliveryNotFailed}},
+	{http.StatusConflict, "already exists", []error{
+		errNodeAlreadyExists, errProbeTargetAlreadyExists, errNotificationChannelAlreadyExists,
+	}},
+}
+
+// writeAdminError translates a store error into its admin API response,
+// defaulting to 500 so an unrecognised error is never reported as the client's
+// fault.
 func writeAdminError(w http.ResponseWriter, err error) {
-	if errors.Is(err, errNotificationTypeGone) {
-		writeError(w, http.StatusGone, "notification type is managed by alert rules")
-		return
-	}
-	if errors.Is(err, errNodeNotFound) || errors.Is(err, errProbeTargetNotFound) || errors.Is(err, errNotificationChannelNotFound) || errors.Is(err, errNotificationDeliveryNotFound) || errors.Is(err, errNotificationTypeNotFound) || errors.Is(err, errAlertRuleNotFound) {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	if errors.Is(err, errInvalidAdminSettingsUpdate) || errors.Is(err, errInvalidAdminNodeUpdate) || errors.Is(err, errInvalidAdminNodeCreate) || errors.Is(err, errInvalidAdminTargetWrite) || errors.Is(err, errInvalidAdminNotificationChannelWrite) || errors.Is(err, errInvalidAdminNotificationTypeWrite) || errors.Is(err, errInvalidAdminAlertRuleUpdate) || errors.Is(err, errInvalidAdminPasswordUpdate) {
-		writeError(w, http.StatusBadRequest, "bad request")
-		return
-	}
-	if errors.Is(err, errNotificationCredentialKeyRequired) {
-		writeError(w, http.StatusConflict, "notification key unavailable")
-		return
-	}
-	if errors.Is(err, errNotificationDeliveryNotFailed) {
-		writeError(w, http.StatusConflict, "notification delivery is not failed")
-		return
-	}
-	if errors.Is(err, errNodeAlreadyExists) || errors.Is(err, errProbeTargetAlreadyExists) || errors.Is(err, errNotificationChannelAlreadyExists) {
-		writeError(w, http.StatusConflict, "already exists")
-		return
+	for _, response := range adminErrorResponses {
+		for _, candidate := range response.errs {
+			if errors.Is(err, candidate) {
+				writeError(w, response.status, response.message)
+				return
+			}
+		}
 	}
 	writeError(w, http.StatusInternalServerError, "internal error")
 }
