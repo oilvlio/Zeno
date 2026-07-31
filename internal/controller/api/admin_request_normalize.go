@@ -54,33 +54,25 @@ func (n *patchNormalizer) active() bool {
 
 // text normalizes an optional string field in place.
 func (n *patchNormalizer) text(field **string, transform func(string) (string, bool)) {
-	if *field == nil {
-		return
-	}
-	n.changed = true
-	if !n.active() {
-		return
-	}
-	value, ok := transform(**field)
-	if !ok {
-		n.fail()
-		return
-	}
-	*field = &value
+	normalizePatchField(n, field, transform)
 }
 
 // number normalizes an optional int field in place.
 func (n *patchNormalizer) number(field **int, transform func(int) (int, bool)) {
+	normalizePatchField(n, field, transform)
+}
+
+func normalizePatchField[T any](normalizer *patchNormalizer, field **T, transform func(T) (T, bool)) {
 	if *field == nil {
 		return
 	}
-	n.changed = true
-	if !n.active() {
+	normalizer.changed = true
+	if !normalizer.active() {
 		return
 	}
 	value, ok := transform(**field)
 	if !ok {
-		n.fail()
+		normalizer.fail()
 		return
 	}
 	*field = &value
