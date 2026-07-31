@@ -78,7 +78,7 @@ func TestAdminAlertRulesListAndPatchWithoutSensitiveLeak(t *testing.T) {
 	if rulesByID["node_offline"].Name != "离线通知" || rulesByID["node_offline"].NotificationEventType != "node_offline" {
 		t.Fatalf("offline rule should be the only liveness notification: %+v", rulesByID["node_offline"])
 	}
-	defaultDurations := map[string]int{"cpu_high": 300, "memory_high": 300, "disk_high": 300, "node_offline": 30}
+	defaultDurations := map[string]int{"cpu_high": 300, "memory_high": 300, "disk_high": 300, "node_offline": 60}
 	for ruleID, wantDuration := range defaultDurations {
 		if rulesByID[ruleID].DurationSec != wantDuration {
 			t.Fatalf("%s duration = %d, want default %ds", ruleID, rulesByID[ruleID].DurationSec, wantDuration)

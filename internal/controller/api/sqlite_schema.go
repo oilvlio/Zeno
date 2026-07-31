@@ -14,6 +14,14 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 	stage := newSchemaStageRunner(ctx, s)
 	statements := []string{
 		`PRAGMA foreign_keys = ON;`,
+		// Incremental auto-vacuum lets retention return freed pages to the OS
+		// through PRAGMA incremental_vacuum instead of growing the file forever.
+		// This must precede journal_mode: setting WAL writes the database header,
+		// after which auto_vacuum can no longer change. SQLite also only honours
+		// it while the database still has no tables, so existing deployments stay
+		// at auto_vacuum=NONE until an operator runs a full offline VACUUM. The
+		// statement is a harmless no-op in both of those cases.
+		`PRAGMA auto_vacuum = INCREMENTAL;`,
 		`PRAGMA journal_mode = WAL;`,
 		`PRAGMA busy_timeout = 1000;`,
 		`CREATE TABLE IF NOT EXISTS schema_migrations (

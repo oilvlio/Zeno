@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/shui1iao/zeno/internal/controller/history"
@@ -20,7 +21,11 @@ const (
 	historyRetentionBatchPause            = history.BatchPause
 	historyRetentionMaxBatchCycles        = history.MaxBatchCycles
 	historyRetentionScheduleOffset        = history.ScheduleOffset
+	historyRetentionVacuumPages           = history.VacuumPagesPerPass
 )
+
+// sqliteAutoVacuumIncremental is the PRAGMA auto_vacuum value for INCREMENTAL.
+const sqliteAutoVacuumIncremental = 2
 
 const (
 	pruneExpiredProbeRoundsSQL  = history.PruneExpiredProbeRoundsSQL
@@ -74,7 +79,36 @@ func (s *SQLiteStore) MaintainHistory(ctx context.Context, now time.Time) error 
 	if err := s.pruneRollupTiers(ctx, cutoffs); err != nil {
 		return err
 	}
-	return s.pruneNotificationHistory(ctx, cutoffs)
+	if err := s.pruneNotificationHistory(ctx, cutoffs); err != nil {
+		return err
+	}
+	return s.reclaimFreePages(ctx)
+}
+
+// reclaimFreePages returns pages freed by this pass to the filesystem so a
+// database that just shed millions of rows also shrinks on disk. It is a
+// bounded no-op when auto_vacuum is NONE (every database created before the
+// INCREMENTAL default) or when nothing is on the freelist, and it never runs
+// a full VACUUM: that would hold the single writer for minutes.
+func (s *SQLiteStore) reclaimFreePages(ctx context.Context) error {
+	var autoVacuum int
+	if err := s.db.QueryRowContext(ctx, `PRAGMA auto_vacuum`).Scan(&autoVacuum); err != nil {
+		return err
+	}
+	if autoVacuum != sqliteAutoVacuumIncremental {
+		return nil
+	}
+	var freelist int64
+	if err := s.db.QueryRowContext(ctx, `PRAGMA freelist_count`).Scan(&freelist); err != nil {
+		return err
+	}
+	if freelist <= 0 {
+		return nil
+	}
+	return s.withAgentWrite(ctx, historyRetentionWriteKey, func(writeCtx context.Context) error {
+		_, err := s.db.ExecContext(writeCtx, `PRAGMA incremental_vacuum(`+strconv.Itoa(historyRetentionVacuumPages)+`)`)
+		return err
+	})
 }
 
 // pruneRawHistoryTier either compacts raw rows into rollups or, during the

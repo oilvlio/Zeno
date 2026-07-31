@@ -33,11 +33,23 @@ const (
 	// MaxBatchCycles bounds each hourly maintenance slice so a first
 	// deployment can progressively compact a large database without
 	// monopolizing SQLite's single writer. Leftover work resumes next hour.
-	MaxBatchCycles = 24
+	//
+	// The budget must exceed one hour of ingest or the backlog grows forever:
+	// a deployment writing ~13k state rows and ~9k probe rounds per hour needs
+	// more than 22 cycles just to break even. 300 cycles drain roughly 300k
+	// rows per table per hour, clearing a multi-million row backlog in days
+	// instead of weeks, while BatchPause keeps the writer responsive.
+	MaxBatchCycles = 300
 
 	// ScheduleOffset staggers retention away from other hourly jobs that
 	// would otherwise contend for the writer at the same instant.
 	ScheduleOffset = 5 * time.Minute
+
+	// VacuumPagesPerPass bounds how many freed pages one maintenance pass
+	// returns to the filesystem. At the 4KiB default page size this releases
+	// up to 80MiB per hour, enough to keep pace with retention without
+	// holding SQLite's single writer for long.
+	VacuumPagesPerPass = 20000
 
 	// LatencyRollupStep is the latency rollup bucket width.
 	LatencyRollupStep = time.Minute

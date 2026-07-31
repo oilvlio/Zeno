@@ -212,3 +212,40 @@ func TestPrebuiltQueriesMatchGenerators(t *testing.T) {
 		t.Fatal("prebuilt average projection drifted from its generator")
 	}
 }
+
+// A maintenance slice must be able to delete more rows than one hour of
+// ingest creates, or the backlog grows without bound and raw tables keep
+// millions of rows past their retention window. This regression pins the
+// drain budget against the observed production ingest rate that first
+// exposed the shortfall (~13k state rows and ~9k probe rounds per hour).
+func TestMaxBatchCyclesOutpacesHourlyIngest(t *testing.T) {
+	const observedHourlyRowsPerTable = 13166
+
+	drainPerTablePerPass := MaxBatchCycles * BatchSize
+	if drainPerTablePerPass <= observedHourlyRowsPerTable {
+		t.Fatalf("drain budget %d rows/pass does not outpace %d rows/hour of ingest",
+			drainPerTablePerPass, observedHourlyRowsPerTable)
+	}
+	// Require real headroom, not a marginal win, so a backlog actually shrinks.
+	if drainPerTablePerPass < observedHourlyRowsPerTable*5 {
+		t.Fatalf("drain budget %d rows/pass leaves too little headroom over %d rows/hour",
+			drainPerTablePerPass, observedHourlyRowsPerTable)
+	}
+	// The slice must still be bounded: batches pause between writes, so an
+	// unbounded budget would hold SQLite's single writer for too long.
+	if busy := time.Duration(MaxBatchCycles) * BatchPause; busy > 10*time.Second {
+		t.Fatalf("batch pauses alone total %s per pass, too long for the single writer", busy)
+	}
+}
+
+// Freed pages only return to the filesystem when a pass reclaims them, so the
+// budget must be positive and bounded.
+func TestVacuumPagesPerPassIsBounded(t *testing.T) {
+	if VacuumPagesPerPass <= 0 {
+		t.Fatalf("vacuum budget = %d, want a positive page count", VacuumPagesPerPass)
+	}
+	const maxBytesPerPass = 256 << 20
+	if bytes := VacuumPagesPerPass * 4096; bytes > maxBytesPerPass {
+		t.Fatalf("vacuum budget reclaims %d bytes per pass, want at most %d", bytes, maxBytesPerPass)
+	}
+}

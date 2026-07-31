@@ -48,7 +48,7 @@ type SQLiteStore struct {
 }
 
 const (
-	nodeHeartbeatOfflineAfter = 30 * time.Second
+	nodeHeartbeatOfflineAfter = 60 * time.Second
 	// Node state remains live at the Agent cadence, while the expensive rolling
 	// 24-hour loss/reporting aggregates are reused for this bounded interval.
 	// Management writes still hard-invalidate incompatible aggregate snapshots.
