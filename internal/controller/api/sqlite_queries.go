@@ -672,19 +672,7 @@ func (s *sqliteReadQueries) serviceLatencyPoints(ctx context.Context, targetID s
 	}
 	defer rows.Close()
 
-	points := []ServiceLatencyPoint{}
-	for rows.Next() {
-		var ts int64
-		var nodeID, nodeName string
-		var median, avg sql.NullFloat64
-		var loss float64
-		if err := rows.Scan(&ts, &nodeID, &nodeName, &median, &avg, &loss); err != nil {
-			return nil, err
-		}
-		points = append(points, ServiceLatencyPoint{TS: time.Unix(ts, 0).UTC().Format(time.RFC3339), NodeID: nodeID, NodeName: nodeName, MedianMS: floatPtr(median), AvgMS: floatPtr(avg), LossPercent: loss})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return points, nil
+	return scanLatencyRows(rows, []ServiceLatencyPoint{}, func(ts, nodeID, nodeName string, median, avg *float64, loss float64) ServiceLatencyPoint {
+		return ServiceLatencyPoint{TS: ts, NodeID: nodeID, NodeName: nodeName, MedianMS: median, AvgMS: avg, LossPercent: loss}
+	})
 }

@@ -30,23 +30,21 @@ func (s *sqliteLatencyQueries) latencyPoints(ctx context.Context, nodeID string,
 	}
 	defer rows.Close()
 
-	var points []LatencyPoint
+	return scanLatencyRows(rows, []LatencyPoint(nil), func(ts, targetID, targetName string, median, avg *float64, loss float64) LatencyPoint {
+		return LatencyPoint{TS: ts, TargetID: targetID, TargetName: targetName, MedianMS: median, AvgMS: avg, LossPercent: loss}
+	})
+}
+
+func scanLatencyRows[T any](rows *sql.Rows, points []T, point func(ts, dimensionID, dimensionName string, median, avg *float64, loss float64) T) ([]T, error) {
 	for rows.Next() {
 		var ts int64
-		var targetID, targetName string
+		var dimensionID, dimensionName string
 		var median, avg sql.NullFloat64
 		var loss float64
-		if err := rows.Scan(&ts, &targetID, &targetName, &median, &avg, &loss); err != nil {
+		if err := rows.Scan(&ts, &dimensionID, &dimensionName, &median, &avg, &loss); err != nil {
 			return nil, err
 		}
-		points = append(points, LatencyPoint{
-			TS:          time.Unix(ts, 0).UTC().Format(time.RFC3339),
-			TargetID:    targetID,
-			TargetName:  targetName,
-			MedianMS:    floatPtr(median),
-			AvgMS:       floatPtr(avg),
-			LossPercent: loss,
-		})
+		points = append(points, point(time.Unix(ts, 0).UTC().Format(time.RFC3339), dimensionID, dimensionName, floatPtr(median), floatPtr(avg), loss))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
