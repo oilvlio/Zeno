@@ -92,91 +92,62 @@ type AdminProbeTargetAssignmentUpdate struct {
 }
 
 func (request *AdminProbeTargetUpdateRequest) normalize() error {
-	changed := false
-	if request.Name != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.Name)
-		if trimmed == "" {
-			return errInvalidAdminTargetWrite
-		}
-		request.Name = &trimmed
-	}
-	if request.Type != nil {
-		changed = true
-		normalizedType, ok := normalizeAdminProbeTargetType(*request.Type)
+	normalizer := newPatchNormalizer(errInvalidAdminTargetWrite)
+	normalizer.text(&request.Name, trimRequired)
+	// Changing the type can force the port field: portless types must clear a
+	// stored port, and supplying both a portless type and a port is a conflict
+	// rather than a silent override.
+	normalizer.text(&request.Type, func(value string) (string, bool) {
+		normalizedType, ok := normalizeAdminProbeTargetType(value)
 		if !ok {
-			return errInvalidAdminTargetWrite
+			return "", false
 		}
-		request.Type = &normalizedType
 		if normalizedType == "ping" || normalizedType == "http_get" {
 			if request.Port.Set && request.Port.Valid {
-				return errInvalidAdminTargetWrite
+				return "", false
 			}
-			request.Port.Set = true
-			request.Port.Valid = false
-			request.Port.Value = 0
+			request.Port = adminOptionalInt64{Set: true, Valid: false, Value: 0}
 		}
+		return normalizedType, true
+	})
+	normalizer.text(&request.Address, trimRequired)
+	normalizer.optionalInt64(&request.Port, validPort)
+	normalizer.number(&request.Count, boundedInt(1, maxProbeTargetCount))
+	normalizer.number(&request.TimeoutMS, boundedInt(minProbeTargetTimeoutMS, maxProbeTargetTimeoutMS))
+	normalizer.number(&request.IntervalSec, boundedInt(minProbeTargetIntervalSec, maxProbeTargetIntervalSec))
+	normalizer.number(&request.DisplayOrder, nonNegativeInt)
+	normalizeProbeTargetAssignments(normalizer, request)
+	return normalizer.result()
+}
+
+// normalizeProbeTargetAssignments trims node ids and rejects an empty or
+// duplicated list, so one request cannot assign the same node twice.
+func normalizeProbeTargetAssignments(normalizer *patchNormalizer, request *AdminProbeTargetUpdateRequest) {
+	if request.Assignments == nil {
+		return
 	}
-	if request.Address != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.Address)
+	normalizer.present(true)
+	if !normalizer.active() {
+		return
+	}
+	if len(request.Assignments) == 0 {
+		normalizer.fail()
+		return
+	}
+	seen := make(map[string]struct{}, len(request.Assignments))
+	for index := range request.Assignments {
+		trimmed := strings.TrimSpace(request.Assignments[index].NodeID)
 		if trimmed == "" {
-			return errInvalidAdminTargetWrite
+			normalizer.fail()
+			return
 		}
-		request.Address = &trimmed
-	}
-	if request.Port.Set {
-		changed = true
-		if request.Port.Valid && !validPort(request.Port.Value) {
-			return errInvalidAdminTargetWrite
+		if _, exists := seen[trimmed]; exists {
+			normalizer.fail()
+			return
 		}
+		seen[trimmed] = struct{}{}
+		request.Assignments[index].NodeID = trimmed
 	}
-	if request.Count != nil {
-		changed = true
-		if *request.Count < 1 || *request.Count > maxProbeTargetCount {
-			return errInvalidAdminTargetWrite
-		}
-	}
-	if request.TimeoutMS != nil {
-		changed = true
-		if *request.TimeoutMS < minProbeTargetTimeoutMS || *request.TimeoutMS > maxProbeTargetTimeoutMS {
-			return errInvalidAdminTargetWrite
-		}
-	}
-	if request.IntervalSec != nil {
-		changed = true
-		if *request.IntervalSec < minProbeTargetIntervalSec || *request.IntervalSec > maxProbeTargetIntervalSec {
-			return errInvalidAdminTargetWrite
-		}
-	}
-	if request.DisplayOrder != nil {
-		changed = true
-		if *request.DisplayOrder < 0 {
-			return errInvalidAdminTargetWrite
-		}
-	}
-	if request.Assignments != nil {
-		changed = true
-		if len(request.Assignments) == 0 {
-			return errInvalidAdminTargetWrite
-		}
-		seen := map[string]struct{}{}
-		for index := range request.Assignments {
-			trimmed := strings.TrimSpace(request.Assignments[index].NodeID)
-			if trimmed == "" {
-				return errInvalidAdminTargetWrite
-			}
-			if _, exists := seen[trimmed]; exists {
-				return errInvalidAdminTargetWrite
-			}
-			seen[trimmed] = struct{}{}
-			request.Assignments[index].NodeID = trimmed
-		}
-	}
-	if !changed {
-		return errInvalidAdminTargetWrite
-	}
-	return nil
 }
 
 func normalizeAdminProbeTargetType(value string) (string, bool) {

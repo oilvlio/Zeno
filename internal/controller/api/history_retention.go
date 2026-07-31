@@ -4,55 +4,36 @@ import (
 	"context"
 	"log"
 	"time"
+
+	"github.com/shui1iao/zeno/internal/controller/history"
 )
 
-const rawHistoryRetention = 26 * time.Hour
+// Retention policy and SQL live in internal/controller/history. This file
+// keeps the store-facing execution: batching against the agent write
+// scheduler, the rollback grace decision, and the background loop.
 
-const historyRollupRetention = 30 * 24 * time.Hour
+const (
+	rawHistoryRetention                   = history.RawRetention
+	historyRollupRetention                = history.RollupRetention
+	stalePendingNotificationDeliveryAfter = history.StalePendingNotificationDeliveryAfter
+	historyRetentionBatchSize             = history.BatchSize
+	historyRetentionBatchPause            = history.BatchPause
+	historyRetentionMaxBatchCycles        = history.MaxBatchCycles
+	historyRetentionScheduleOffset        = history.ScheduleOffset
+)
 
-const stalePendingNotificationDeliveryAfter = 7 * 24 * time.Hour
-
-const historyRetentionBatchSize = 1000
-
-const historyRetentionBatchPause = 10 * time.Millisecond
-
-// Bound each hourly maintenance slice so a first deployment can progressively
-// compact a large database without monopolizing SQLite's single writer.
-const historyRetentionMaxBatchCycles = 24
-
-const historyRetentionScheduleOffset = 5 * time.Minute
-
-const pruneExpiredProbeRoundsSQL = `
-	DELETE FROM probe_rounds
-	WHERE id IN (
-		SELECT id FROM probe_rounds INDEXED BY idx_probe_rounds_ts_target_node
-		WHERE ts < ?
-		ORDER BY ts, target_id, node_id, id
-		LIMIT ?
-	)
-`
-
-const pruneExpiredStateSamplesSQL = `
-	DELETE FROM state_samples
-	WHERE id IN (
-		SELECT samples.id
-		FROM nodes
-		CROSS JOIN state_samples AS samples INDEXED BY idx_state_samples_node_ts
-		WHERE samples.node_id = nodes.id AND samples.ts < ?
-		ORDER BY samples.node_id, samples.ts, samples.id
-		LIMIT ?
-	)
-`
+const (
+	pruneExpiredProbeRoundsSQL  = history.PruneExpiredProbeRoundsSQL
+	pruneExpiredStateSamplesSQL = history.PruneExpiredStateSamplesSQL
+)
 
 type historyRetentionStore interface {
 	MaintainHistory(ctx context.Context, now time.Time) error
 }
 
-// PruneRawHistory compacts raw high-frequency samples once the one-day views no
-// longer need them. Latency keeps exact one-minute weighted aggregates and
-// state keeps exact thirty-second weighted aggregates, which are finer than the
-// public 7d/30d chart grids. Probe child samples disappear through the round
-// foreign-key cascade.
+// PruneRawHistory compacts raw high-frequency samples into the rollup tiers
+// once the one-day views no longer need them. Probe child samples disappear
+// through the round foreign-key cascade.
 func (s *SQLiteStore) PruneRawHistory(ctx context.Context, before time.Time) error {
 	latencyDone := false
 	stateDone := false
@@ -82,42 +63,45 @@ func (s *SQLiteStore) PruneRawHistory(ctx context.Context, before time.Time) err
 
 func (s *SQLiteStore) MaintainHistory(ctx context.Context, now time.Time) error {
 	now = now.UTC()
+	cutoffs := history.CutoffsAt(now)
 	rollupReady, err := s.historyRollupReady(ctx, now)
 	if err != nil {
 		return err
 	}
+	if err := s.pruneRawHistoryTier(ctx, cutoffs, rollupReady); err != nil {
+		return err
+	}
+	if err := s.pruneRollupTiers(ctx, cutoffs); err != nil {
+		return err
+	}
+	return s.pruneNotificationHistory(ctx, cutoffs)
+}
+
+// pruneRawHistoryTier either compacts raw rows into rollups or, during the
+// rollback grace period, preserves the previous release's complete 30-day raw
+// view and removes only data already outside the supported range.
+func (s *SQLiteStore) pruneRawHistoryTier(ctx context.Context, cutoffs history.Cutoffs, rollupReady bool) error {
 	if rollupReady {
-		if err := s.PruneRawHistory(ctx, now.Add(-rawHistoryRetention)); err != nil {
-			return err
-		}
-	} else {
-		// Preserve the previous release's complete 30-day raw-history view during
-		// the rollback grace period. Only data already outside the supported range
-		// is removed before tiered compaction becomes destructive.
-		legacyCutoff := now.Add(-historyRollupRetention).Unix()
-		if err := s.pruneRowsInBatches(ctx, pruneExpiredProbeRoundsSQL, legacyCutoff); err != nil {
-			return err
-		}
-		if err := s.pruneRowsInBatches(ctx, pruneExpiredStateSamplesSQL, legacyCutoff); err != nil {
-			return err
-		}
+		return s.PruneRawHistory(ctx, time.Unix(cutoffs.Raw, 0).UTC())
 	}
-	retentionCutoff := now.Add(-historyRollupRetention).Unix()
-	latencyStepSeconds := int64(latencyHistoryRollupStep / time.Second)
-	latencyRollupCutoff := (retentionCutoff / latencyStepSeconds) * latencyStepSeconds
-	stateStepSeconds := int64(stateHistoryRollupStep / time.Second)
-	stateRollupCutoff := (retentionCutoff / stateStepSeconds) * stateStepSeconds
-	if err := s.pruneRowsInBatches(ctx, `DELETE FROM latency_history_rollups WHERE rowid IN (SELECT rowid FROM latency_history_rollups WHERE bucket_start < ? ORDER BY bucket_start LIMIT ?)`, latencyRollupCutoff); err != nil {
+	if err := s.pruneRowsInBatches(ctx, history.PruneExpiredProbeRoundsSQL, cutoffs.LegacyRaw); err != nil {
 		return err
 	}
-	if err := s.pruneRowsInBatches(ctx, `DELETE FROM state_history_rollups WHERE rowid IN (SELECT rowid FROM state_history_rollups WHERE bucket_start < ? ORDER BY bucket_start LIMIT ?)`, stateRollupCutoff); err != nil {
+	return s.pruneRowsInBatches(ctx, history.PruneExpiredStateSamplesSQL, cutoffs.LegacyRaw)
+}
+
+func (s *SQLiteStore) pruneRollupTiers(ctx context.Context, cutoffs history.Cutoffs) error {
+	if err := s.pruneRowsInBatches(ctx, history.PruneExpiredLatencyRollupsSQL, cutoffs.LatencyRollup); err != nil {
 		return err
 	}
-	if err := s.pruneRowsInBatches(ctx, `DELETE FROM notification_deliveries WHERE id IN (SELECT id FROM notification_deliveries WHERE state IN ('delivered', 'failed', 'canceled') AND updated_at < ? ORDER BY id LIMIT ?)`, retentionCutoff); err != nil {
+	return s.pruneRowsInBatches(ctx, history.PruneExpiredStateRollupsSQL, cutoffs.StateRollup)
+}
+
+func (s *SQLiteStore) pruneNotificationHistory(ctx context.Context, cutoffs history.Cutoffs) error {
+	if err := s.pruneRowsInBatches(ctx, history.PruneTerminalNotificationDeliveriesSQL, cutoffs.NotificationHistory); err != nil {
 		return err
 	}
-	stalePendingCutoff := now.Add(-stalePendingNotificationDeliveryAfter).Unix()
-	return s.expirePendingNotificationDeliveriesInBatches(ctx, stalePendingCutoff, now.Unix())
+	return s.expirePendingNotificationDeliveriesInBatches(ctx, cutoffs.StalePendingNotification, cutoffs.Now)
 }
 
 func (s *SQLiteStore) historyRollupReady(ctx context.Context, now time.Time) (bool, error) {
@@ -128,21 +112,20 @@ func (s *SQLiteStore) historyRollupReady(ctx context.Context, now time.Time) (bo
 	return !now.Before(time.Unix(enabledAfter, 0).UTC()), nil
 }
 
-func (s *SQLiteStore) pruneRowsInBatches(ctx context.Context, query string, cutoff int64) error {
+// runHistoryBatches repeats a bounded write until it stops filling a batch or
+// the cycle budget runs out, leaving any remainder for the next pass.
+func (s *SQLiteStore) runHistoryBatches(ctx context.Context, exec func(context.Context) (int64, error)) error {
 	for cycle := 0; cycle < historyRetentionMaxBatchCycles; cycle++ {
-		var removed int64
+		var affected int64
 		err := s.withAgentWrite(ctx, historyRetentionWriteKey, func(writeCtx context.Context) error {
-			result, err := s.db.ExecContext(writeCtx, query, cutoff, historyRetentionBatchSize)
-			if err != nil {
-				return err
-			}
-			removed, err = result.RowsAffected()
-			return err
+			var execErr error
+			affected, execErr = exec(writeCtx)
+			return execErr
 		})
 		if err != nil {
 			return err
 		}
-		if removed < historyRetentionBatchSize {
+		if affected < historyRetentionBatchSize {
 			return nil
 		}
 		if err := pauseHistoryRetentionBatch(ctx); err != nil {
@@ -152,37 +135,25 @@ func (s *SQLiteStore) pruneRowsInBatches(ctx context.Context, query string, cuto
 	return nil
 }
 
-func (s *SQLiteStore) expirePendingNotificationDeliveriesInBatches(ctx context.Context, stalePendingCutoff, now int64) error {
-	for cycle := 0; cycle < historyRetentionMaxBatchCycles; cycle++ {
-		var updated int64
-		err := s.withAgentWrite(ctx, historyRetentionWriteKey, func(writeCtx context.Context) error {
-			result, err := s.db.ExecContext(writeCtx, `
-				UPDATE notification_deliveries
-				SET state = 'failed', last_error = 'expired before delivery', lease_until = 0, claim_token = '', updated_at = ?
-				WHERE id IN (
-					SELECT id FROM notification_deliveries
-					WHERE state IN ('pending', 'leased') AND created_at < ?
-					ORDER BY id
-					LIMIT ?
-				)
-			`, now, stalePendingCutoff, historyRetentionBatchSize)
-			if err != nil {
-				return err
-			}
-			updated, err = result.RowsAffected()
-			return err
-		})
+func (s *SQLiteStore) pruneRowsInBatches(ctx context.Context, query string, cutoff int64) error {
+	return s.runHistoryBatches(ctx, func(writeCtx context.Context) (int64, error) {
+		result, err := s.db.ExecContext(writeCtx, query, cutoff, historyRetentionBatchSize)
 		if err != nil {
-			return err
+			return 0, err
 		}
-		if updated < historyRetentionBatchSize {
-			return nil
+		return result.RowsAffected()
+	})
+}
+
+func (s *SQLiteStore) expirePendingNotificationDeliveriesInBatches(ctx context.Context, stalePendingCutoff, now int64) error {
+	return s.runHistoryBatches(ctx, func(writeCtx context.Context) (int64, error) {
+		result, err := s.db.ExecContext(writeCtx, history.ExpirePendingNotificationDeliveriesSQL,
+			now, stalePendingCutoff, historyRetentionBatchSize)
+		if err != nil {
+			return 0, err
 		}
-		if err := pauseHistoryRetentionBatch(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
+		return result.RowsAffected()
+	})
 }
 
 func pauseHistoryRetentionBatch(ctx context.Context) error {
@@ -234,8 +205,5 @@ func (h *handler) runHistoryRetention(ctx context.Context, interval time.Duratio
 }
 
 func historyRetentionFirstDelay(interval time.Duration) time.Duration {
-	if interval >= time.Hour {
-		return interval + historyRetentionScheduleOffset
-	}
-	return interval
+	return history.FirstDelay(interval)
 }

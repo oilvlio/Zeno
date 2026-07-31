@@ -273,79 +273,18 @@ func (s *SQLiteStore) UpdateAdminProbeTarget(ctx context.Context, targetID strin
 		}
 		return AdminProbeTarget{}, err
 	}
-	finalType := currentType
-	if update.Type != nil {
-		finalType = *update.Type
+	current := adminProbeTargetConfig{
+		targetType:  currentType,
+		address:     currentAddress,
+		port:        currentPort,
+		count:       currentCount,
+		timeoutMS:   currentTimeoutMS,
+		intervalSec: currentIntervalSec,
 	}
-	finalAddress := currentAddress
-	if update.Address != nil {
-		finalAddress = *update.Address
+	if err := validateAdminProbeTargetUpdate(current, update); err != nil {
+		return AdminProbeTarget{}, err
 	}
-	finalPort := currentPort
-	if update.Port.Set {
-		finalPort = sql.NullInt64{Valid: update.Port.Valid, Int64: update.Port.Value}
-	}
-	if !validAdminProbeTargetForType(finalType, finalAddress, finalPort) {
-		return AdminProbeTarget{}, errInvalidAdminTargetWrite
-	}
-	finalCount := currentCount
-	if update.Count != nil {
-		finalCount = *update.Count
-	}
-	finalTimeoutMS := currentTimeoutMS
-	if update.TimeoutMS != nil {
-		finalTimeoutMS = *update.TimeoutMS
-	}
-	finalIntervalSec := currentIntervalSec
-	if update.IntervalSec != nil {
-		finalIntervalSec = *update.IntervalSec
-	}
-	validateResourceConfig := update.Count != nil || update.TimeoutMS != nil || update.IntervalSec != nil
-	if !validateResourceConfig && update.Assignments != nil {
-		for _, assignment := range update.Assignments {
-			if assignment.Enabled {
-				validateResourceConfig = true
-				break
-			}
-		}
-	}
-	if validateResourceConfig && !validProbeTargetResourceConfig(finalCount, finalTimeoutMS, finalIntervalSec) {
-		return AdminProbeTarget{}, errInvalidAdminTargetWrite
-	}
-	sets := make([]string, 0, 8)
-	args := make([]any, 0, 9)
-	if update.Name != nil {
-		sets = append(sets, "name = ?")
-		args = append(args, *update.Name)
-	}
-	if update.Type != nil {
-		sets = append(sets, "type = ?")
-		args = append(args, *update.Type)
-	}
-	if update.Address != nil {
-		sets = append(sets, "address = ?")
-		args = append(args, *update.Address)
-	}
-	if update.Port.Set {
-		sets = append(sets, "port = ?")
-		args = append(args, adminOptionalInt64SQLValue(update.Port))
-	}
-	if update.Count != nil {
-		sets = append(sets, "count = ?")
-		args = append(args, *update.Count)
-	}
-	if update.TimeoutMS != nil {
-		sets = append(sets, "timeout_ms = ?")
-		args = append(args, *update.TimeoutMS)
-	}
-	if update.IntervalSec != nil {
-		sets = append(sets, "interval_sec = ?")
-		args = append(args, *update.IntervalSec)
-	}
-	if update.DisplayOrder != nil {
-		sets = append(sets, "display_order = ?")
-		args = append(args, *update.DisplayOrder)
-	}
+	patch := buildAdminProbeTargetPatch(update)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return AdminProbeTarget{}, err
@@ -365,10 +304,10 @@ func (s *SQLiteStore) UpdateAdminProbeTarget(ctx context.Context, targetID strin
 	if err != nil {
 		return AdminProbeTarget{}, err
 	}
-	if len(sets) > 0 {
-		sets = append(sets, "updated_at = ?")
-		args = append(args, time.Now().UTC().Unix(), targetID)
-		if _, err := tx.ExecContext(ctx, "UPDATE probe_targets SET "+strings.Join(sets, ", ")+" WHERE id = ?", args...); err != nil {
+	if !patch.empty() {
+		patch.set("updated_at", time.Now().UTC().Unix())
+		statement, args := patch.updateStatement("probe_targets", "id = ?", targetID)
+		if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
 			return AdminProbeTarget{}, err
 		}
 	}
@@ -529,122 +468,11 @@ func (s *SQLiteStore) UpdateAdminNode(ctx context.Context, nodeID string, update
 		return AdminNode{}, err
 	}
 
-	selectedTargetIDs := make(map[string]struct{}, len(update.ProbeTargetIDs))
-	if update.ProbeTargetIDs != nil {
-		for _, targetID := range update.ProbeTargetIDs {
-			var targetExists int
-			if err := tx.QueryRowContext(ctx, activeAdminProbeTargetExistsSQL, targetID).Scan(&targetExists); err != nil {
-				if err == sql.ErrNoRows {
-					return AdminNode{}, errInvalidAdminNodeUpdate
-				}
-				return AdminNode{}, err
-			}
-			selectedTargetIDs[targetID] = struct{}{}
-		}
-	}
-	if update.HomeProbeTargetID != nil && *update.HomeProbeTargetID != "" {
-		var targetExists int
-		if err := tx.QueryRowContext(ctx, activeAdminProbeTargetExistsSQL, *update.HomeProbeTargetID).Scan(&targetExists); err != nil {
-			if err == sql.ErrNoRows {
-				return AdminNode{}, errInvalidAdminNodeUpdate
-			}
-			return AdminNode{}, err
-		}
-		if update.ProbeTargetIDs != nil {
-			if _, selected := selectedTargetIDs[*update.HomeProbeTargetID]; !selected {
-				return AdminNode{}, errInvalidAdminNodeUpdate
-			}
-		}
+	if err := verifyAdminNodeProbeSelectionTx(ctx, tx, update); err != nil {
+		return AdminNode{}, err
 	}
 
-	sets := make([]string, 0, 15)
-	args := make([]any, 0, 16)
-	billingRebaseConditions := make([]string, 0, 2)
-	billingRebaseArgs := make([]any, 0, 2)
-	if update.DisplayName != nil {
-		sets = append(sets, "display_name = ?")
-		args = append(args, *update.DisplayName)
-	}
-	if update.CountryCode != nil {
-		sets = append(sets, "country_code = ?")
-		args = append(args, nullIfEmpty(*update.CountryCode))
-	}
-	if update.Region != nil {
-		sets = append(sets, "region = ?")
-		args = append(args, nullIfEmpty(*update.Region))
-	}
-	if update.HomeProbeTargetID != nil {
-		sets = append(sets, "home_probe_target_id = ?")
-		args = append(args, nullIfEmpty(*update.HomeProbeTargetID))
-	}
-	if update.ExpiryDate != nil {
-		sets = append(sets, "expiry_date = ?")
-		args = append(args, nullIfEmpty(*update.ExpiryDate))
-	}
-	if update.ExpiryPermanent != nil {
-		sets = append(sets, "expiry_permanent = ?")
-		args = append(args, sqliteBoolInt(*update.ExpiryPermanent))
-	}
-	if update.BillingCycle != nil {
-		sets = append(sets, "billing_cycle = ?")
-		args = append(args, nullIfEmpty(*update.BillingCycle))
-	}
-	if update.RenewalAmount.Set {
-		sets = append(sets, "renewal_amount = ?")
-		if update.RenewalAmount.Valid {
-			args = append(args, update.RenewalAmount.Value)
-		} else {
-			args = append(args, nil)
-		}
-	}
-	if update.RenewalCurrency != nil {
-		sets = append(sets, "renewal_currency = ?")
-		args = append(args, *update.RenewalCurrency)
-	}
-	if update.BillingMode != nil {
-		sets = append(sets, "billing_mode = ?")
-		args = append(args, *update.BillingMode)
-		billingRebaseConditions = append(billingRebaseConditions, "COALESCE(billing_mode, '') <> ?")
-		billingRebaseArgs = append(billingRebaseArgs, *update.BillingMode)
-	}
-	if update.MonthlyResetDay != nil {
-		sets = append(sets, "monthly_reset_day = ?")
-		args = append(args, *update.MonthlyResetDay)
-		billingRebaseConditions = append(billingRebaseConditions, "COALESCE(monthly_reset_day, 1) <> ?")
-		billingRebaseArgs = append(billingRebaseArgs, *update.MonthlyResetDay)
-	}
-	if update.DisplayOrder != nil {
-		sets = append(sets, "display_order = ?")
-		args = append(args, *update.DisplayOrder)
-	}
-	if update.PublicIPv4 != nil {
-		sets = append(sets, "public_ipv4 = ?")
-		args = append(args, nullIfEmpty(*update.PublicIPv4))
-	}
-	if update.PublicIPv6 != nil {
-		sets = append(sets, "public_ipv6 = ?")
-		args = append(args, nullIfEmpty(*update.PublicIPv6))
-	}
-	if update.MonthlyQuotaBytes.Set {
-		sets = append(sets, "monthly_quota_bytes = ?")
-		if update.MonthlyQuotaBytes.Valid {
-			args = append(args, update.MonthlyQuotaBytes.Value)
-		} else {
-			args = append(args, nil)
-		}
-	}
-	if update.Disabled != nil {
-		sets = append(sets, "disabled = ?")
-		if *update.Disabled {
-			args = append(args, 1)
-		} else {
-			args = append(args, 0)
-		}
-	}
-	if len(billingRebaseConditions) > 0 {
-		sets = append(sets, "billing_traffic_epoch = billing_traffic_epoch + CASE WHEN "+strings.Join(billingRebaseConditions, " OR ")+" THEN 1 ELSE 0 END")
-		args = append(args, billingRebaseArgs...)
-	}
+	patch := buildAdminNodePatch(update)
 
 	var usageBefore map[string]probeNodeUsage
 	if update.ProbeTargetIDs != nil {
@@ -654,44 +482,21 @@ func (s *SQLiteStore) UpdateAdminNode(ctx context.Context, nodeID string, update
 		}
 	}
 
-	if len(sets) > 0 || update.ProbeTargetIDs != nil {
-		sets = append(sets, "updated_at = ?")
-		args = append(args, time.Now().UTC().Unix(), nodeID)
-		if _, err := tx.ExecContext(ctx, "UPDATE nodes SET "+strings.Join(sets, ", ")+" WHERE id = ?", args...); err != nil {
+	if !patch.empty() || update.ProbeTargetIDs != nil {
+		patch.set("updated_at", time.Now().UTC().Unix())
+		statement, args := patch.updateStatement("nodes", "id = ?", nodeID)
+		if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
 			return AdminNode{}, err
 		}
 	}
 
 	if update.ProbeTargetIDs != nil {
-		if _, err := tx.ExecContext(ctx, `UPDATE node_probe_targets SET enabled = 0 WHERE node_id = ?`, nodeID); err != nil {
+		if err := replaceAdminNodeProbeAssignmentsTx(ctx, tx, nodeID, update.ProbeTargetIDs); err != nil {
 			return AdminNode{}, err
 		}
-		for _, targetID := range update.ProbeTargetIDs {
-			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO node_probe_targets (node_id, target_id, enabled)
-				VALUES (?, ?, 1)
-				ON CONFLICT(node_id, target_id) DO UPDATE SET enabled = 1
-			`, nodeID, targetID); err != nil {
-				return AdminNode{}, err
-			}
-		}
 		if update.HomeProbeTargetID == nil {
-			if len(update.ProbeTargetIDs) == 0 {
-				if _, err := tx.ExecContext(ctx, `UPDATE nodes SET home_probe_target_id = NULL WHERE id = ?`, nodeID); err != nil {
-					return AdminNode{}, err
-				}
-			} else {
-				placeholders := make([]string, len(update.ProbeTargetIDs))
-				homeArgs := make([]any, 0, len(update.ProbeTargetIDs)+1)
-				homeArgs = append(homeArgs, nodeID)
-				for index, targetID := range update.ProbeTargetIDs {
-					placeholders[index] = "?"
-					homeArgs = append(homeArgs, targetID)
-				}
-				query := `UPDATE nodes SET home_probe_target_id = NULL WHERE id = ? AND home_probe_target_id IS NOT NULL AND home_probe_target_id NOT IN (` + strings.Join(placeholders, ",") + `)`
-				if _, err := tx.ExecContext(ctx, query, homeArgs...); err != nil {
-					return AdminNode{}, err
-				}
+			if err := clearUnselectedHomeProbeTargetTx(ctx, tx, nodeID, update.ProbeTargetIDs); err != nil {
+				return AdminNode{}, err
 			}
 		}
 		usageAfter, err := probeNodeUsagesTx(ctx, tx)

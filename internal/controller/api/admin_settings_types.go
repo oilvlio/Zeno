@@ -100,135 +100,33 @@ func defaultSiteSettings() SiteSettings {
 }
 
 func (request *AdminSettingsUpdateRequest) normalize() error {
-	changed := false
-	if request.SiteTitle != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.SiteTitle)
-		if trimmed == "" || len([]rune(trimmed)) > 64 {
-			return errInvalidAdminSettingsUpdate
-		}
-		request.SiteTitle = &trimmed
-	}
-	if request.SiteSubtitle != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.SiteSubtitle)
-		if len([]rune(trimmed)) > 140 {
-			return errInvalidAdminSettingsUpdate
-		}
-		request.SiteSubtitle = &trimmed
-	}
-	if request.LogoURL != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.LogoURL)
-		if trimmed != "" && !validSettingsAssetURL(trimmed) {
-			return errInvalidAdminSettingsUpdate
-		}
-		request.LogoURL = &trimmed
-	}
-	if request.Theme != nil {
-		changed = true
-		trimmed := strings.ToLower(strings.TrimSpace(*request.Theme))
-		if !validSettingsTheme(trimmed) {
-			return errInvalidAdminSettingsUpdate
-		}
-		request.Theme = &trimmed
-	}
-	if request.AgentControllerURL != nil {
-		changed = true
-		trimmed := strings.TrimRight(strings.TrimSpace(*request.AgentControllerURL), "/")
-		if trimmed != "" && !validAgentControllerURL(trimmed) {
-			return errInvalidAdminSettingsUpdate
-		}
-		request.AgentControllerURL = &trimmed
-	}
-	if request.BackgroundURL != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.BackgroundURL)
-		if trimmed != "" && !validSettingsAssetURL(trimmed) {
-			return errInvalidAdminSettingsUpdate
-		}
-		request.BackgroundURL = &trimmed
-	}
-	if request.DesktopBackgroundURL != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.DesktopBackgroundURL)
-		if trimmed != "" && !validSettingsAssetURL(trimmed) {
-			return errInvalidAdminSettingsUpdate
-		}
-		request.DesktopBackgroundURL = &trimmed
-	}
-	if request.MobileBackgroundURL != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.MobileBackgroundURL)
-		if trimmed != "" && !validSettingsAssetURL(trimmed) {
-			return errInvalidAdminSettingsUpdate
-		}
-		request.MobileBackgroundURL = &trimmed
-	}
-	if request.AppearancePreset != nil {
-		changed = true
-		trimmed := strings.ToLower(strings.TrimSpace(*request.AppearancePreset))
-		if !validAppearancePreset(trimmed) {
-			return errInvalidAdminSettingsUpdate
-		}
-		request.AppearancePreset = &trimmed
-	}
-	if request.CardOpacity != nil {
-		changed = true
-		if !validSettingsFloat(*request.CardOpacity, 0.2, 1) {
-			return errInvalidAdminSettingsUpdate
-		}
-	}
-	if request.CardBlur != nil {
-		changed = true
-		if !validSettingsFloat(*request.CardBlur, 0, 40) {
-			return errInvalidAdminSettingsUpdate
-		}
-	}
-	if request.CardRadius != nil {
-		changed = true
-		if !validSettingsFloat(*request.CardRadius, 8, 36) {
-			return errInvalidAdminSettingsUpdate
-		}
-	}
-	if request.BorderStrength != nil {
-		changed = true
-		if !validSettingsFloat(*request.BorderStrength, 0, 1) {
-			return errInvalidAdminSettingsUpdate
-		}
-	}
-	if request.ShadowStrength != nil {
-		changed = true
-		if !validSettingsFloat(*request.ShadowStrength, 0, 1) {
-			return errInvalidAdminSettingsUpdate
-		}
-	}
-	if request.BackgroundOverlay != nil {
-		changed = true
-		if !validSettingsFloat(*request.BackgroundOverlay, 0, 0.8) {
-			return errInvalidAdminSettingsUpdate
-		}
-	}
-	if request.ThemeColor != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.ThemeColor)
-		if !settingsThemeColorPattern.MatchString(trimmed) {
-			return errInvalidAdminSettingsUpdate
-		}
-		request.ThemeColor = &trimmed
-	}
-	if request.CustomCode != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.CustomCode)
-		if len([]rune(trimmed)) > maxSettingsCustomCodeRunes {
-			return errInvalidAdminSettingsUpdate
-		}
-		request.CustomCode = &trimmed
-	}
-	if !changed {
-		return errInvalidAdminSettingsUpdate
-	}
-	return nil
+	normalizer := newPatchNormalizer(errInvalidAdminSettingsUpdate)
+	normalizer.text(&request.SiteTitle, trimRequiredMaxRunes(64))
+	normalizer.text(&request.SiteSubtitle, trimMaxRunes(140))
+	normalizer.text(&request.LogoURL, trimOptionalValid(validSettingsAssetURL))
+	normalizer.text(&request.Theme, trimLowerValid(validSettingsTheme))
+	// A trailing slash would make the stored controller URL differ from the
+	// value agents build request paths from.
+	normalizer.text(&request.AgentControllerURL, func(value string) (string, bool) {
+		trimmed := strings.TrimRight(strings.TrimSpace(value), "/")
+		return trimmed, trimmed == "" || validAgentControllerURL(trimmed)
+	})
+	normalizer.text(&request.BackgroundURL, trimOptionalValid(validSettingsAssetURL))
+	normalizer.text(&request.DesktopBackgroundURL, trimOptionalValid(validSettingsAssetURL))
+	normalizer.text(&request.MobileBackgroundURL, trimOptionalValid(validSettingsAssetURL))
+	normalizer.text(&request.AppearancePreset, trimLowerValid(validAppearancePreset))
+	normalizer.float(&request.CardOpacity, settingsFloatRange(0.2, 1))
+	normalizer.float(&request.CardBlur, settingsFloatRange(0, 40))
+	normalizer.float(&request.CardRadius, settingsFloatRange(8, 36))
+	normalizer.float(&request.BorderStrength, settingsFloatRange(0, 1))
+	normalizer.float(&request.ShadowStrength, settingsFloatRange(0, 1))
+	normalizer.float(&request.BackgroundOverlay, settingsFloatRange(0, 0.8))
+	normalizer.text(&request.ThemeColor, func(value string) (string, bool) {
+		trimmed := strings.TrimSpace(value)
+		return trimmed, settingsThemeColorPattern.MatchString(trimmed)
+	})
+	normalizer.text(&request.CustomCode, trimMaxRunes(maxSettingsCustomCodeRunes))
+	return normalizer.result()
 }
 
 func validAppearancePreset(value string) bool {

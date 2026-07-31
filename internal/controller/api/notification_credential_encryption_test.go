@@ -109,11 +109,11 @@ func TestNotificationCredentialAADBindsChannelIDAndType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new cipher: %v", err)
 	}
-	stored, err := cipher.encrypt("ops-a", "telegram", "type-bound-secret")
+	stored, err := cipher.Encrypt("ops-a", "telegram", "type-bound-secret")
 	if err != nil {
 		t.Fatalf("encrypt: %v", err)
 	}
-	if _, err := cipher.decrypt("ops-a", "email", stored); !errors.Is(err, errNotificationCredentialCiphertextInvalid) {
+	if _, err := cipher.Decrypt("ops-a", "email", stored); !errors.Is(err, errNotificationCredentialCiphertextInvalid) {
 		t.Fatalf("decrypt with different type error = %v, want invalid ciphertext", err)
 	}
 }

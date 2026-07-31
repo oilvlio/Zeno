@@ -13,6 +13,8 @@ import (
 	"time"
 
 	moderncsqlite "modernc.org/sqlite"
+
+	"github.com/shui1iao/zeno/internal/controller/notifycrypto"
 )
 
 type summaryAggregateFlight struct {
@@ -34,7 +36,7 @@ type SQLiteStore struct {
 	adminDeletionCancel           context.CancelFunc
 	adminDeletionWG               sync.WaitGroup
 	notificationCredentialMu      sync.RWMutex
-	notificationCredentialKeyring *notificationCredentialKeyring
+	notificationCredentialKeyring *notifycrypto.Keyring
 	summaryAggregateMu            sync.Mutex
 	summaryAggregateUpdated       time.Time
 	summaryAggregateHome          map[string]*LatencySummary

@@ -217,141 +217,38 @@ type AdminNodeUpdateRequest struct {
 }
 
 func (request *AdminNodeUpdateRequest) normalize() error {
-	changed := false
-	if request.DisplayName != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.DisplayName)
-		if trimmed == "" {
-			return errInvalidAdminNodeUpdate
+	normalizer := newPatchNormalizer(errInvalidAdminNodeUpdate)
+	normalizer.text(&request.DisplayName, trimRequired)
+	normalizer.text(&request.CountryCode, trimUpperMax(8))
+	normalizer.text(&request.Region, trimOptional)
+	normalizer.text(&request.HomeProbeTargetID, trimOptional)
+	normalizer.text(&request.ExpiryDate, fromError(normalizeAdminNodeDate))
+	normalizer.present(request.ExpiryPermanent != nil)
+	normalizer.text(&request.BillingCycle, fromError(func(value string) (string, error) {
+		return normalizeAdminNodeShortText(value, 64)
+	}))
+	normalizer.optionalFloat(&request.RenewalAmount, normalizeAdminNodeRenewalAmount)
+	normalizer.text(&request.RenewalCurrency, normalizeAdminNodeRenewalCurrency)
+	normalizer.text(&request.BillingMode, normalizeAdminNodeBillingMode)
+	// A reset day of zero is rejected outright: on update it means the client
+	// sent an explicit zero rather than omitting the field.
+	normalizer.number(&request.MonthlyResetDay, func(value int) (int, bool) {
+		if value == 0 {
+			return value, false
 		}
-		request.DisplayName = &trimmed
-	}
-	if request.CountryCode != nil {
-		changed = true
-		trimmed := strings.ToUpper(strings.TrimSpace(*request.CountryCode))
-		if len(trimmed) > 8 {
-			return errInvalidAdminNodeUpdate
-		}
-		request.CountryCode = &trimmed
-	}
-	if request.Region != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.Region)
-		request.Region = &trimmed
-	}
-	if request.HomeProbeTargetID != nil {
-		changed = true
-		trimmed := strings.TrimSpace(*request.HomeProbeTargetID)
-		request.HomeProbeTargetID = &trimmed
-	}
-	if request.ExpiryDate != nil {
-		changed = true
-		trimmed, err := normalizeAdminNodeDate(*request.ExpiryDate)
-		if err != nil {
-			return errInvalidAdminNodeUpdate
-		}
-		request.ExpiryDate = &trimmed
-	}
-	if request.ExpiryPermanent != nil {
-		changed = true
-	}
-	if request.BillingCycle != nil {
-		changed = true
-		trimmed, err := normalizeAdminNodeShortText(*request.BillingCycle, 64)
-		if err != nil {
-			return errInvalidAdminNodeUpdate
-		}
-		request.BillingCycle = &trimmed
-	}
-	if request.RenewalAmount.Set {
-		changed = true
-		if request.RenewalAmount.Valid {
-			amount, ok := normalizeAdminNodeRenewalAmount(request.RenewalAmount.Value)
-			if !ok {
-				return errInvalidAdminNodeUpdate
-			}
-			request.RenewalAmount.Value = amount
-		}
-	}
-	if request.RenewalCurrency != nil {
-		changed = true
-		currency, ok := normalizeAdminNodeRenewalCurrency(*request.RenewalCurrency)
-		if !ok {
-			return errInvalidAdminNodeUpdate
-		}
-		request.RenewalCurrency = &currency
-	}
-	if request.BillingMode != nil {
-		changed = true
-		mode, ok := normalizeAdminNodeBillingMode(*request.BillingMode)
-		if !ok {
-			return errInvalidAdminNodeUpdate
-		}
-		request.BillingMode = &mode
-	}
-	if request.MonthlyResetDay != nil {
-		changed = true
-		if *request.MonthlyResetDay == 0 {
-			return errInvalidAdminNodeUpdate
-		}
-		resetDay, ok := normalizeAdminNodeMonthlyResetDay(*request.MonthlyResetDay)
-		if !ok {
-			return errInvalidAdminNodeUpdate
-		}
-		request.MonthlyResetDay = &resetDay
-	}
-	if request.DisplayOrder != nil {
-		changed = true
-		if *request.DisplayOrder < 0 {
-			return errInvalidAdminNodeUpdate
-		}
-	}
-	if request.PublicIPv4 != nil {
-		changed = true
-		trimmed, err := normalizeAdminNodeIP(*request.PublicIPv4, 4)
-		if err != nil {
-			return errInvalidAdminNodeUpdate
-		}
-		request.PublicIPv4 = &trimmed
-	}
-	if request.PublicIPv6 != nil {
-		changed = true
-		trimmed, err := normalizeAdminNodeIP(*request.PublicIPv6, 6)
-		if err != nil {
-			return errInvalidAdminNodeUpdate
-		}
-		request.PublicIPv6 = &trimmed
-	}
-	if request.MonthlyQuotaBytes.Set {
-		changed = true
-		if request.MonthlyQuotaBytes.Valid && request.MonthlyQuotaBytes.Value < 0 {
-			return errInvalidAdminNodeUpdate
-		}
-	}
-	if request.Disabled != nil {
-		changed = true
-	}
-	if request.ProbeTargetIDs != nil {
-		changed = true
-		seen := make(map[string]struct{}, len(request.ProbeTargetIDs))
-		normalized := make([]string, 0, len(request.ProbeTargetIDs))
-		for _, targetID := range request.ProbeTargetIDs {
-			targetID = strings.TrimSpace(targetID)
-			if targetID == "" {
-				return errInvalidAdminNodeUpdate
-			}
-			if _, exists := seen[targetID]; exists {
-				return errInvalidAdminNodeUpdate
-			}
-			seen[targetID] = struct{}{}
-			normalized = append(normalized, targetID)
-		}
-		request.ProbeTargetIDs = normalized
-	}
-	if !changed {
-		return errInvalidAdminNodeUpdate
-	}
-	return nil
+		return normalizeAdminNodeMonthlyResetDay(value)
+	})
+	normalizer.number(&request.DisplayOrder, nonNegativeInt)
+	normalizer.text(&request.PublicIPv4, fromError(func(value string) (string, error) {
+		return normalizeAdminNodeIP(value, 4)
+	}))
+	normalizer.text(&request.PublicIPv6, fromError(func(value string) (string, error) {
+		return normalizeAdminNodeIP(value, 6)
+	}))
+	normalizer.optionalInt64(&request.MonthlyQuotaBytes, nonNegativeInt64)
+	normalizer.present(request.Disabled != nil)
+	normalizer.identifiers(&request.ProbeTargetIDs)
+	return normalizer.result()
 }
 
 type adminOptionalInt64 struct {
