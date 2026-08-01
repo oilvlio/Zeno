@@ -12,15 +12,6 @@ import (
 )
 
 func TestLiveDetailInitialPayloadMatchesV191Bytes(t *testing.T) {
-	stateWindow, ok := resolveStateWindow("1d")
-	if !ok {
-		t.Fatal("resolve state window")
-	}
-	latencyWindow, ok := resolveLatencyWindow("1h")
-	if !ok {
-		t.Fatal("resolve latency window")
-	}
-
 	tests := []struct {
 		name       string
 		path       string
@@ -28,15 +19,9 @@ func TestLiveDetailInitialPayloadMatchesV191Bytes(t *testing.T) {
 		wantSHA256 string
 		handle     func(*handler, http.ResponseWriter, *http.Request)
 	}{
-		{name: "node-state", path: "/node-state", wantBytes: 468859, wantSHA256: "e9b01e10276ba317d02db5f4f230fc66fe460dfa3995952c6e73ca695eb9998b", handle: func(h *handler, w http.ResponseWriter, r *http.Request) {
-			h.handleNodeStateWebSocket(w, r, "example-node-a", stateWindow)
-		}},
-		{name: "node-latency", path: "/node-latency", wantBytes: 4012, wantSHA256: "4cc415dd224a5ad71776e1f6a435874067ad19ba05d8a81de24f7a32d11baecb", handle: func(h *handler, w http.ResponseWriter, r *http.Request) {
-			h.handleNodeLatencyWebSocket(w, r, "example-node-a", latencyWindow)
-		}},
-		{name: "service-latency", path: "/service-latency", wantBytes: 3363, wantSHA256: "dcf481720a46f9fe5e6ab61bf90d307b0148c3b85f131f64f4b021ac56413839", handle: func(h *handler, w http.ResponseWriter, r *http.Request) {
-			h.handleServiceLatencyWebSocket(w, r, "google", latencyWindow)
-		}},
+		{name: "node-state", path: "/api/public/v1/nodes/example-node-a/state/ws?range=1d", wantBytes: 468859, wantSHA256: "e9b01e10276ba317d02db5f4f230fc66fe460dfa3995952c6e73ca695eb9998b", handle: (*handler).handlePublicNodeResource},
+		{name: "node-latency", path: "/api/public/v1/nodes/example-node-a/latency/ws?range=1h", wantBytes: 4012, wantSHA256: "4cc415dd224a5ad71776e1f6a435874067ad19ba05d8a81de24f7a32d11baecb", handle: (*handler).handlePublicNodeResource},
+		{name: "service-latency", path: "/api/public/v1/services/google/latency/ws?range=1h", wantBytes: 3363, wantSHA256: "dcf481720a46f9fe5e6ab61bf90d307b0148c3b85f131f64f4b021ac56413839", handle: (*handler).handlePublicServiceResource},
 	}
 
 	for _, test := range tests {

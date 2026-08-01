@@ -32,7 +32,9 @@ func (h *handler) handlePublicServiceResource(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if len(parts) == 3 {
-		h.handleServiceLatencyWebSocket(w, r, parts[0], window)
+		h.handleDetailLiveJSONWebSocket(w, r, serviceLatencyLiveTopic(parts[0], window.Name), func(ctx context.Context) ([]byte, error) {
+			return h.serviceLatencyJSON(ctx, parts[0], window)
+		})
 		return
 	}
 	payload, err := h.serviceLatencyJSON(r.Context(), parts[0], window)
@@ -183,16 +185,16 @@ func (h *handler) handlePublicNodeResource(w http.ResponseWriter, r *http.Reques
 	nodeID := parts[0]
 	rangeName := r.URL.Query().Get("range")
 	var resolveWindow func(string) (latencyWindow, bool)
-	var handleWebSocket func(http.ResponseWriter, *http.Request, string, latencyWindow)
+	var topicFor func(string, string) string
 	var detailJSON func(context.Context, string, latencyWindow) ([]byte, error)
 	switch parts[1] {
 	case "latency":
 		resolveWindow = resolveLatencyWindow
-		handleWebSocket = h.handleNodeLatencyWebSocket
+		topicFor = nodeLatencyLiveTopic
 		detailJSON = h.nodeLatencyJSON
 	case "state":
 		resolveWindow = resolveStateWindow
-		handleWebSocket = h.handleNodeStateWebSocket
+		topicFor = nodeStateLiveTopic
 		detailJSON = h.nodeStateJSON
 	default:
 		writeError(w, http.StatusNotFound, "not found")
@@ -207,7 +209,9 @@ func (h *handler) handlePublicNodeResource(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if len(parts) == 3 {
-		handleWebSocket(w, r, nodeID, window)
+		h.handleDetailLiveJSONWebSocket(w, r, topicFor(nodeID, window.Name), func(ctx context.Context) ([]byte, error) {
+			return detailJSON(ctx, nodeID, window)
+		})
 		return
 	}
 	payload, err := detailJSON(r.Context(), nodeID, window)

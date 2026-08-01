@@ -164,24 +164,6 @@ func (h *handler) handleSummaryWebSocket(w http.ResponseWriter, r *http.Request)
 	h.handleLiveJSONWebSocket(w, r, initial, updates, unsubscribe)
 }
 
-func (h *handler) handleNodeStateWebSocket(w http.ResponseWriter, r *http.Request, nodeID string, window latencyWindow) {
-	h.handleDetailLiveJSONWebSocket(w, r, nodeStateLiveTopic(nodeID, window.Name), func(ctx context.Context) ([]byte, error) {
-		return h.nodeStateJSON(ctx, nodeID, window)
-	})
-}
-
-func (h *handler) handleNodeLatencyWebSocket(w http.ResponseWriter, r *http.Request, nodeID string, window latencyWindow) {
-	h.handleDetailLiveJSONWebSocket(w, r, nodeLatencyLiveTopic(nodeID, window.Name), func(ctx context.Context) ([]byte, error) {
-		return h.nodeLatencyJSON(ctx, nodeID, window)
-	})
-}
-
-func (h *handler) handleServiceLatencyWebSocket(w http.ResponseWriter, r *http.Request, targetID string, window latencyWindow) {
-	h.handleDetailLiveJSONWebSocket(w, r, serviceLatencyLiveTopic(targetID, window.Name), func(ctx context.Context) ([]byte, error) {
-		return h.serviceLatencyJSON(ctx, targetID, window)
-	})
-}
-
 func (h *handler) handleDetailLiveJSONWebSocket(w http.ResponseWriter, r *http.Request, topic string, load func(context.Context) ([]byte, error)) {
 	release, ok := h.acquirePublicWebSocket(r)
 	if !ok {
@@ -388,9 +370,9 @@ func (h *handler) loadSummaryJSON(ctx context.Context, maxAge time.Duration, all
 	}
 }
 
-func (h *handler) detailJSON(ctx context.Context, key string, load func(context.Context) (any, error)) ([]byte, error) {
+func cachedDetailJSON[T any](h *handler, ctx context.Context, key, subjectID string, window latencyWindow, load func(context.Context, string, latencyWindow) (T, error)) ([]byte, error) {
 	return h.detailCache.get(ctx, key, detailCacheFreshFor, func() ([]byte, error) {
-		value, err := load(ctx)
+		value, err := load(ctx, subjectID, window)
 		if err != nil {
 			return nil, err
 		}
@@ -399,21 +381,15 @@ func (h *handler) detailJSON(ctx context.Context, key string, load func(context.
 }
 
 func (h *handler) nodeStateJSON(ctx context.Context, nodeID string, window latencyWindow) ([]byte, error) {
-	return h.detailJSON(ctx, nodeStateLiveTopic(nodeID, window.Name), func(ctx context.Context) (any, error) {
-		return h.store.NodeState(ctx, nodeID, window)
-	})
+	return cachedDetailJSON(h, ctx, nodeStateLiveTopic(nodeID, window.Name), nodeID, window, h.store.NodeState)
 }
 
 func (h *handler) nodeLatencyJSON(ctx context.Context, nodeID string, window latencyWindow) ([]byte, error) {
-	return h.detailJSON(ctx, nodeLatencyLiveTopic(nodeID, window.Name), func(ctx context.Context) (any, error) {
-		return h.store.NodeLatency(ctx, nodeID, window)
-	})
+	return cachedDetailJSON(h, ctx, nodeLatencyLiveTopic(nodeID, window.Name), nodeID, window, h.store.NodeLatency)
 }
 
 func (h *handler) serviceLatencyJSON(ctx context.Context, targetID string, window latencyWindow) ([]byte, error) {
-	return h.detailJSON(ctx, serviceLatencyLiveTopic(targetID, window.Name), func(ctx context.Context) (any, error) {
-		return h.store.ServiceTargetLatency(ctx, targetID, window)
-	})
+	return cachedDetailJSON(h, ctx, serviceLatencyLiveTopic(targetID, window.Name), targetID, window, h.store.ServiceTargetLatency)
 }
 
 func (h *handler) scheduleNodeStatePublish(nodeID string) {

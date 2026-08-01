@@ -19,21 +19,16 @@ var (
 )
 
 func (s *sqliteHistoryStore) compactStateHistoryBatch(ctx context.Context, before time.Time) (int64, error) {
-	stepSeconds := history.StepSeconds(history.StateRollupStep)
-	return s.compactHistoryBatch(ctx, history.StateRollupInsertQuery,
-		[]any{before.UTC().Unix(), historyRetentionBatchSize, stepSeconds, stepSeconds},
-		history.PruneExpiredStateSamplesSQL,
-		before,
-	)
+	return s.compactHistoryTier(ctx, before, history.StateRollupStep, history.StateRollupInsertQuery, history.PruneExpiredStateSamplesSQL)
 }
 
 func (s *sqliteHistoryStore) compactLatencyHistoryBatch(ctx context.Context, before time.Time) (int64, error) {
-	stepSeconds := history.StepSeconds(history.LatencyRollupStep)
-	return s.compactHistoryBatch(ctx, history.LatencyRollupInsertSQL,
-		[]any{before.UTC().Unix(), historyRetentionBatchSize, stepSeconds, stepSeconds},
-		history.PruneExpiredProbeRoundsSQL,
-		before,
-	)
+	return s.compactHistoryTier(ctx, before, history.LatencyRollupStep, history.LatencyRollupInsertSQL, history.PruneExpiredProbeRoundsSQL)
+}
+
+func (s *sqliteHistoryStore) compactHistoryTier(ctx context.Context, before time.Time, step time.Duration, insertSQL, deleteSQL string) (int64, error) {
+	stepSeconds := history.StepSeconds(step)
+	return s.compactHistoryBatch(ctx, insertSQL, []any{before.UTC().Unix(), historyRetentionBatchSize, stepSeconds, stepSeconds}, deleteSQL, before)
 }
 
 // compactHistoryBatch folds one batch of raw rows into its rollup tier and
