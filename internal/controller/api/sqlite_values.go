@@ -134,14 +134,18 @@ func nextBillingCycleDate(rawDate string, cycleMonths int, now time.Time) (time.
 		offsetMonths = (monthsApart / cycleMonths) * cycleMonths
 	}
 	nextDate := addMonthsFromAnchorClampedUTC(anchorDate, offsetMonths)
-	for nextDate.Before(today) {
+	// A recurring billing date is the start of the renewed period, not the
+	// final day of the old one. At local midnight on the billing date, advance
+	// to the following cycle so the public countdown always points to the next
+	// future renewal.
+	for !nextDate.After(today) {
 		offsetMonths += cycleMonths
 		nextDate = addMonthsFromAnchorClampedUTC(anchorDate, offsetMonths)
 	}
 	for {
 		previousOffset := offsetMonths - cycleMonths
 		previous := addMonthsFromAnchorClampedUTC(anchorDate, previousOffset)
-		if previous.Before(today) {
+		if !previous.After(today) {
 			break
 		}
 		offsetMonths = previousOffset
@@ -158,7 +162,7 @@ func formatExpiryDaysLabel(date, now time.Time) string {
 		return "已过期"
 	}
 	if days == 0 {
-		return "今天到期"
+		return "余 0 天"
 	}
 	return fmt.Sprintf("余 %d 天", days)
 }

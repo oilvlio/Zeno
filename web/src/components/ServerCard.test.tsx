@@ -170,6 +170,14 @@ describe('ServerCard', () => {
     expect(html).toContain('>3 天</strong>')
   })
 
+  it('shows a due-today remaining value as zero days', () => {
+    const html = renderToStaticMarkup(<ServerCard node={{ ...baseNode, expiryLabel: '今天到期' }} onOpen={vi.fn()} />)
+
+    expect(html).toContain('metric-expiry is-urgent')
+    expect(html).toContain('>0 天</strong>')
+    expect(html).not.toContain('>今天到期</strong>')
+  })
+
   it('updates the renewal amount when a non-default display currency is selected', () => {
     const html = renderToStaticMarkup(
       <ServerCard node={{ ...baseNode, renewalAmount: 20, renewalCurrency: 'USD', billingCycle: '年' }} displayCurrency="EUR" exchangeRates={{ CNY: 1, USD: 8, EUR: 10 }} onOpen={vi.fn()} />,

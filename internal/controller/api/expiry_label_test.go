@@ -37,6 +37,30 @@ func TestExpiredRecurringDateRollsForwardForSummaryAndNotifications(t *testing.T
 	}
 }
 
+func TestRecurringBillingDateRollsForwardAtStartOfDueDay(t *testing.T) {
+	shanghai := time.FixedZone("Asia/Shanghai", 8*60*60)
+	now := time.Date(2026, 8, 1, 0, 0, 0, 0, shanghai)
+	expiryDate := sql.NullString{String: "2026-08-01", Valid: true}
+	billingCycle := sql.NullString{String: "月", Valid: true}
+
+	label := expiryLabelValue(expiryDate, billingCycle, false, now)
+	if label != "余 31 天" {
+		t.Fatalf("expiry label = %q, want due-day recurring billing to roll forward as 余 31 天", label)
+	}
+
+	dueDate, ok := renewalNotificationDueDate(expiryDate.String, billingCycle, now)
+	if !ok || dueDate.Format("2006-01-02") != "2026-09-01" {
+		t.Fatalf("renewal due date = %s, ok = %v, want 2026-09-01", dueDate.Format("2006-01-02"), ok)
+	}
+}
+
+func TestFormatExpiryDaysLabelUsesZeroDaysInsteadOfToday(t *testing.T) {
+	now := time.Date(2026, 8, 1, 13, 0, 0, 0, time.FixedZone("Asia/Shanghai", 8*60*60))
+	if label := formatExpiryDaysLabel(now, now); label != "余 0 天" {
+		t.Fatalf("expiry label = %q, want 余 0 天", label)
+	}
+}
+
 func TestPendingRenewalNotificationsSkipsPermanentNode(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {

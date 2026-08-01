@@ -140,7 +140,7 @@ function expiryBadge(expiryLabel: string | null | undefined): { text: string; to
   const trimmed = (expiryLabel ?? '').trim()
   if (trimmed === '') return null
   if (trimmed === '已过期') return { text: trimmed, tone: 'expired' }
-  if (trimmed === '今天到期') return { text: trimmed, tone: 'urgent' }
+  if (trimmed === '今天到期') return { text: '余 0 天', tone: 'urgent' }
   const relativeMatch = /^余\s*(\d+)\s*天$/.exec(trimmed)
   if (relativeMatch) {
     const days = Number(relativeMatch[1])
@@ -155,7 +155,7 @@ function expiryBadge(expiryLabel: string | null | undefined): { text: string; to
   const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
   const days = Math.ceil((expiry - today) / 86400000)
   if (days < 0) return { text: '已过期', tone: 'expired' }
-  if (days === 0) return { text: '今天到期', tone: 'urgent' }
+  if (days === 0) return { text: '余 0 天', tone: 'urgent' }
   if (days <= 7) return { text: `余 ${days} 天`, tone: 'urgent' }
   if (days <= 30) return { text: `余 ${days} 天`, tone: 'soon' }
   return { text: `余 ${days} 天`, tone: 'safe' }
