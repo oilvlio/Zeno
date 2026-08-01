@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func TestRenewalNotificationScannerDispatchesDueNotificationOncePerDay(t *testing.T) {
+func TestRenewalNotificationScannerDispatchesOnlyOnConfiguredLeadDay(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {
 		t.Fatalf("open sqlite store: %v", err)
@@ -68,22 +68,22 @@ func TestRenewalNotificationScannerDispatchesDueNotificationOncePerDay(t *testin
 		t.Fatalf("telegram calls after duplicate scan paths=%+v forms=%+v, want still one renewal notification", paths, forms)
 	}
 
-	if queued := h.queueDueRenewalNotifications(ctx, now.Add(24*time.Hour)); queued != 1 {
-		t.Fatalf("next-day renewal scan queued %d deliveries, want 1", queued)
+	if queued := h.queueDueRenewalNotifications(ctx, now.Add(24*time.Hour)); queued != 0 {
+		t.Fatalf("day after configured reminder queued %d deliveries, want 0", queued)
 	}
 	var deliveryCount int
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM notification_deliveries WHERE event_type = 'renewal_due'`).Scan(&deliveryCount); err != nil {
-		t.Fatalf("count renewal deliveries after next-day scan: %v", err)
+		t.Fatalf("count renewal deliveries after configured reminder day: %v", err)
 	}
-	if deliveryCount != 2 {
-		t.Fatalf("renewal delivery count after next-day scan = %d, want 2 daily deliveries", deliveryCount)
+	if deliveryCount != 1 {
+		t.Fatalf("renewal delivery count after configured reminder day = %d, want 1", deliveryCount)
 	}
 	var markCount int
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM notification_event_marks WHERE event_type = 'renewal_due'`).Scan(&markCount); err != nil {
-		t.Fatalf("count renewal marks after next-day scan: %v", err)
+		t.Fatalf("count renewal marks after configured reminder day: %v", err)
 	}
-	if markCount != 2 {
-		t.Fatalf("renewal mark count after next-day scan = %d, want 2 daily marks", markCount)
+	if markCount != 1 {
+		t.Fatalf("renewal mark count after configured reminder day = %d, want 1", markCount)
 	}
 }
 func TestRenewalNotificationScannerDispatchesRecurringBillingCycle(t *testing.T) {
@@ -133,6 +133,16 @@ func TestRenewalNotificationScannerDispatchesRecurringBillingCycle(t *testing.T)
 	}
 	if strings.Contains(messageText, finalExpiryDate) || strings.Contains(messageText, formatRenewalMessageDate(finalExpiryDate)) {
 		t.Fatalf("telegram text %q used final expiry date %s, want recurring billing date %s", messageText, finalExpiryDate, cycleDueText)
+	}
+	if queued := h.queueDueRenewalNotifications(ctx, cycleDueDate.Add(12*time.Hour)); queued != 0 {
+		t.Fatalf("recurring renewal scan on due day queued %d deliveries after 1-day reminder, want 0", queued)
+	}
+	var deliveryCount int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM notification_deliveries WHERE event_type = 'renewal_due'`).Scan(&deliveryCount); err != nil {
+		t.Fatalf("count recurring renewal deliveries: %v", err)
+	}
+	if deliveryCount != 1 {
+		t.Fatalf("recurring renewal delivery count = %d, want one configured 1-day reminder", deliveryCount)
 	}
 }
 func TestAgentHeartbeatHostAndStateDoNotDispatchRenewalDueNotification(t *testing.T) {

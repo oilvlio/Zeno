@@ -228,7 +228,10 @@ func renewalRulesMatch(rules []AdminAlertRule, daysRemaining float64) bool {
 		if rule.NotificationEventType != "renewal_due" || rule.Metric != "expiry_days" || !rule.Enabled {
 			continue
 		}
-		if compareAlertRuleValue(daysRemaining, rule.Comparator, rule.Threshold) {
+		// The configured lead time is one reminder day, not a range that stays
+		// active through the due date. Selecting 1 day therefore sends once at
+		// T-1 and does not send another reminder at T-0.
+		if daysRemaining == rule.Threshold {
 			return true
 		}
 	}
