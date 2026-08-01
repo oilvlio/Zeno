@@ -1208,7 +1208,7 @@ svg { display: block; }
   .home-summary__metric { min-height: 34px; gap: 5px; padding: 0 12px; }
   .home-summary__metric--rate { gap: 5px; }
   .home-summary__metric-label { gap: 4px; }
-  .home-summary__metric--rate > .home-summary__metric-label { width: calc(4em + 16px); }
+  .home-summary__metric--rate > .home-summary__metric-label { width: calc(2em + 16px); }
   .home-summary__status-dot { width: 6px; height: 6px; box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--green) 11%, transparent); }
   .home-summary__metric-icon,
   .home-summary__metric-icon svg { width: 12px; height: 12px; }
@@ -1255,7 +1255,7 @@ svg { display: block; }
   .home-summary__metric-value > span { font-size: 10px; }
   .home-summary__metric--rate { gap: 4px; padding-inline: 3px; }
   .home-summary__metric-label { gap: 3px; }
-  .home-summary__metric--rate > .home-summary__metric-label { width: calc(4em + 13px); }
+  .home-summary__metric--rate > .home-summary__metric-label { width: calc(2em + 13px); }
   .home-summary__metric--rate .home-summary__metric-value { gap: 3px; }
   .home-summary__metric-icon,
   .home-summary__metric-icon svg { width: 10px; height: 10px; }

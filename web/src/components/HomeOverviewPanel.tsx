@@ -126,7 +126,7 @@ function HomeTrafficSummary({ direction, kind, rate, total }: HomeTrafficSummary
       <div className={`home-summary__metric home-summary__metric--rate home-summary__metric--${direction}`} aria-label={isUpload ? 'upload rate' : 'download rate'}>
         <div className="home-summary__metric-label">
           <span className="home-summary__metric-icon"><HomeTrafficDirectionIcon direction={direction} /></span>
-          <span>{isUpload ? '上传速率' : '下载速率'}</span>
+          <span>{isUpload ? '上传' : '下载'}</span>
         </div>
         <div className="home-summary__metric-value home-summary__metric-value--rate">
           <strong>{rate.value}</strong>
