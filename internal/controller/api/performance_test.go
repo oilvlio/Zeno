@@ -18,7 +18,7 @@ func TestAdminPerformanceReportsSummaryAndSQLiteSignals(t *testing.T) {
 	}
 	defer store.Close()
 	const adminToken = "performance-admin"
-	h := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken(adminToken)})
+	h := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash(adminToken)})
 
 	for index := 0; index < 2; index++ {
 		recorder := httptest.NewRecorder()

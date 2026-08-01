@@ -286,7 +286,7 @@ func TestAgentEnrollmentRejectsSimpleCrossSiteRequestsAndRateLimitsFailures(t *t
 }
 
 func TestAdminLoginRequiresJSONAndRejectsCrossSite(t *testing.T) {
-	handler := NewHandler(HandlerOptions{AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 	plain := httptest.NewRequest(http.MethodPost, "/api/admin/v1/login", strings.NewReader(`{"username":"admin","password":"admin-pass"}`))
 	plain.Header.Set("Content-Type", "text/plain")
 	plainRecorder := httptest.NewRecorder()

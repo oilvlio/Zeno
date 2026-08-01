@@ -17,7 +17,7 @@ func TestAdminAlertRulesListAndPatchWithoutSensitiveLeak(t *testing.T) {
 		t.Fatalf("open sqlite store: %v", err)
 	}
 	defer store.Close()
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	listRecorder := httptest.NewRecorder()
 	listRequest := httptest.NewRequest(http.MethodGet, "/api/admin/v1/alert-rules", nil)
@@ -317,7 +317,7 @@ func TestAdminAlertRulesRejectUnauthorizedUnknownAndInvalidRequests(t *testing.T
 		t.Fatalf("open sqlite store: %v", err)
 	}
 	defer store.Close()
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	cases := []struct {
 		name       string
@@ -436,7 +436,7 @@ func TestAdminAlertRuleScopeCanLimitAndClearServers(t *testing.T) {
 	if _, err := store.CreateAdminNode(ctx, AdminNodeCreateRequest{ID: "backup", DisplayName: "Backup", CountryCode: "US", DisplayOrder: 9}); err != nil {
 		t.Fatalf("create backup node: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	patchRecorder := httptest.NewRecorder()
 	patchRequest := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/alert-rules/cpu_high", bytes.NewBufferString(`{"scope_node_ids":["backup"]}`))

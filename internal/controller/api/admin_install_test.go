@@ -32,7 +32,7 @@ func TestAdminNodeInstallCommandIssuesOneTimeEnrollmentWithoutRotatingActiveAgen
 	request.Host = "probe.example.com"
 	request.Header.Set("X-Forwarded-Proto", "https")
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass"), AgentVersion: "testsha"}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass"), AgentVersion: "testsha"}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -83,7 +83,7 @@ func TestAdminNodeInstallCommandIssuesOneTimeEnrollmentWithoutRotatingActiveAgen
 	secondRequest.Host = "probe.example.com"
 	secondRequest.Header.Set("X-Forwarded-Proto", "https")
 	secondRequest.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass"), AgentVersion: "testsha"}).ServeHTTP(secondRecorder, secondRequest)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass"), AgentVersion: "testsha"}).ServeHTTP(secondRecorder, secondRequest)
 	if secondRecorder.Code != http.StatusOK {
 		t.Fatalf("second status = %d, want 200; body=%s", secondRecorder.Code, secondRecorder.Body.String())
 	}
@@ -126,7 +126,7 @@ func TestAdminNodeInstallCommandRejectsUnconfiguredRemoteHost(t *testing.T) {
 	request.Host = "attacker.example"
 	request.Header.Set("X-Forwarded-Proto", "https")
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409; body=%s", recorder.Code, recorder.Body.String())
@@ -155,7 +155,7 @@ func TestAdminNodeInstallCommandPrefersConfiguredAgentControllerURL(t *testing.T
 	request.Host = "admin.localhost:18980"
 	request.Header.Set("X-Forwarded-Proto", "http")
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -192,7 +192,7 @@ func TestAdminNodeInstallCommandFallsBackToDirectIPAddressAndPort(t *testing.T) 
 	request.Host = "203.0.113.10:18980"
 	request.Header.Set("X-Forwarded-Proto", "http")
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -219,7 +219,7 @@ func TestAdminNodeInstallCommandUsesAuthenticatedBrowserOriginWhenSettingIsEmpty
 	request.Host = "attacker.example"
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -240,7 +240,7 @@ func TestAdminNodeInstallCommandRequiresAdminTokenAndKnownNode(t *testing.T) {
 	if err := store.SeedPreviewData(context.Background(), PreviewSeedOptions{NodeID: "example-node-a", DisplayName: "Example Node A", CountryCode: "HK", AgentToken: "test-agent-token"}); err != nil {
 		t.Fatalf("seed preview data: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	cases := []struct {
 		name       string

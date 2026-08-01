@@ -54,7 +54,12 @@ func buildController(config handlerConfig) (*controllerRuntime, error) {
 		TrustedProxies:       trustedProxies,
 	}
 	if strings.TrimSpace(config.AdminToken) != "" {
-		options.AdminTokenHash = api.HashAdminToken(config.AdminToken)
+		adminPasswordHash, err := api.HashAdminPassword(config.AdminToken)
+		if err != nil {
+			backgroundCancel()
+			return nil, fmt.Errorf("hash admin password: %w", err)
+		}
+		options.AdminPasswordHash = adminPasswordHash
 	}
 	var store *api.SQLiteStore
 	if config.DBPath != "" {

@@ -430,7 +430,7 @@ function formatStateAxisTime(timestamp: number, timestamps: number[]): string {
   const spanHours = (end - start) / 3_600_000
   const time = date.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
   if (spanHours > 12) {
-    const day = date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }).replace(/\//g, '/')
+    const day = date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
     return `${day} ${time}`
   }
   return time

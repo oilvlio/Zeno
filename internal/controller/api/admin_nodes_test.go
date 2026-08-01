@@ -37,7 +37,7 @@ func TestAdminNodesListsEnabledAndDisabledNodesWithoutTokenHashes(t *testing.T) 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/nodes", nil)
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -93,7 +93,7 @@ func TestAdminNodePatchUpdatesEditableFieldsAndReturnsSafeDTO(t *testing.T) {
 		"disabled": true
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -159,7 +159,7 @@ func TestAdminNodePatchReplacesProbeAssignmentsInOneRequest(t *testing.T) {
 		"probe_target_ids":["batch-target-b"]
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 	}
@@ -205,7 +205,7 @@ func TestAdminNodePatchRejectsHomeTargetOutsideBatchSelection(t *testing.T) {
 		"probe_target_ids":["batch-target-b"]
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400; body=%s", recorder.Code, recorder.Body.String())
 	}
@@ -227,7 +227,7 @@ func TestAdminNodeBillingIPAndDisplayOrderFieldsFlowThroughAdminAndPublicSummary
 	if err := store.SeedPreviewData(ctx, PreviewSeedOptions{NodeID: "example-node-a", DisplayName: "Example Node A", CountryCode: "HK", AgentToken: "test-agent-token"}); err != nil {
 		t.Fatalf("seed preview data: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	createRecorder := httptest.NewRecorder()
 	createRequest := httptest.NewRequest(http.MethodPost, "/api/admin/v1/nodes", bytes.NewBufferString(`{
@@ -336,7 +336,7 @@ func TestAdminNodePatchRefreshesCachedPublicSummaryImmediately(t *testing.T) {
 	if err := store.SeedPreviewData(context.Background(), PreviewSeedOptions{NodeID: "example-node-a", DisplayName: "Example Node A", CountryCode: "HK", AgentToken: "test-agent-token"}); err != nil {
 		t.Fatalf("seed preview data: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	initialRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(initialRecorder, httptest.NewRequest(http.MethodGet, "/api/public/v1/summary", nil))
@@ -381,7 +381,7 @@ func TestAdminNodePatchRejectsUnauthorizedUnknownAndInvalidRequests(t *testing.T
 	if err := store.SeedPreviewData(ctx, PreviewSeedOptions{NodeID: "example-node-a", DisplayName: "Example Node A", CountryCode: "HK", AgentToken: "test-agent-token"}); err != nil {
 		t.Fatalf("seed preview data: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	cases := []struct {
 		name       string
@@ -488,7 +488,7 @@ func TestAdminNodeDeleteRemovesNodeAndDependentData(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodDelete, "/api/admin/v1/nodes/backup", nil)
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204; body=%s", recorder.Code, recorder.Body.String())
@@ -562,7 +562,7 @@ func TestAdminNodeCreateAddsEditableNodeWithoutReturningSecrets(t *testing.T) {
 		"monthly_quota_bytes": 1099511627776
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201; body=%s", recorder.Code, recorder.Body.String())

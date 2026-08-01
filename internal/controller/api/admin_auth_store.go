@@ -252,7 +252,26 @@ func (s *sqliteAdminAuth) adminPasswordMatches(ctx context.Context, password, fa
 	if err == sql.ErrNoRows {
 		storedHash = ""
 	}
-	return adminPasswordMatches(storedHash, fallbackHash, password)
+	if !adminPasswordMatches(storedHash, fallbackHash, password) {
+		return false
+	}
+	if storedHash == "" || strings.HasPrefix(storedHash, "argon2id:") {
+		return true
+	}
+	upgradedHash, err := hashAdminPassword(password)
+	if err != nil {
+		return false
+	}
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE settings
+		SET value = ?, updated_at = ?
+		WHERE key = ? AND value = ?
+	`, upgradedHash, time.Now().UTC().Unix(), settingKeyAdminPasswordHash, storedHash)
+	if err != nil {
+		return false
+	}
+	updated, err := result.RowsAffected()
+	return err == nil && updated == 1
 }
 
 func (s *sqliteAdminAuth) createAdminSession(ctx context.Context, token string) error {

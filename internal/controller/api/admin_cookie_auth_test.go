@@ -27,7 +27,7 @@ func TestBrowserAdminSessionUsesSecureHttpOnlyCookieAndCSRF(t *testing.T) {
 	if err := store.SeedPreviewData(context.Background(), PreviewSeedOptions{NodeID: "node-1", DisplayName: "Node 1", AgentToken: "agent-token"}); err != nil {
 		t.Fatalf("seed preview data: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	insecureLogin := httptest.NewRequest(http.MethodPost, "http://zeno.example.com/api/admin/v1/login", strings.NewReader(`{"username":"admin","password":"admin-pass"}`))
 	insecureLogin.Header.Set("Content-Type", "application/json")
@@ -119,7 +119,7 @@ func TestAdminHeaderTokenRemainsCLICompatibleWithoutBrowserCSRF(t *testing.T) {
 		t.Fatalf("open sqlite store: %v", err)
 	}
 	defer store.Close()
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	login := httptest.NewRequest(http.MethodPost, "/api/admin/v1/login", strings.NewReader(`{"username":"admin","password":"admin-pass"}`))
 	login.Header.Set("Content-Type", "application/json")

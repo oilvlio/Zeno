@@ -65,7 +65,7 @@ func TestNotificationCredentialEncryptionRoundTripRandomNonceAndNoEcho(t *testin
 		t.Fatalf("listed channels = %+v, want credential_set without credential", channels)
 	}
 
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/notification-channels", nil)
 	request.Header.Set("X-Admin-Token", "admin-pass")

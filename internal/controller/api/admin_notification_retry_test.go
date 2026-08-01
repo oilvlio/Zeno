@@ -50,7 +50,7 @@ func TestAdminCanRetryOneFailedNotificationDelivery(t *testing.T) {
 	rows.Close()
 
 	handler := NewHandler(HandlerOptions{
-		Store: store, AdminTokenHash: HashAdminToken("admin-pass"), DisableNotifications: true,
+		Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass"), DisableNotifications: true,
 	})
 
 	unauthorized := httptest.NewRecorder()

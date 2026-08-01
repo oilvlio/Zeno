@@ -2,9 +2,23 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 )
+
+func testAdminPasswordHash(password string) string {
+	const (
+		timeCost = 1
+		memoryKB = 8
+		threads  = 1
+		keyLen   = 32
+	)
+	salt := []byte("zeno-test-admin-salt")
+	hash := deriveAdminArgon2ID([]byte(strings.TrimSpace(password)), salt, timeCost, memoryKB, threads, keyLen)
+	return fmt.Sprintf("argon2id:v=19:m=%d:t=%d:p=%d:%s:%s", memoryKB, timeCost, threads, base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(hash))
+}
 
 func extractQuotedInstallCredential(t *testing.T, command string) string {
 	t.Helper()

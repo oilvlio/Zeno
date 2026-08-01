@@ -26,7 +26,7 @@ func TestAdminProbeTargetsListsTargetsAndAssignmentsWithoutSecrets(t *testing.T)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/probe-targets", nil)
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -134,7 +134,7 @@ func TestAdminProbeTargetsReturnsEmptyAssignmentArrayForUnassignedTargets(t *tes
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/probe-targets", nil)
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -180,7 +180,7 @@ func TestAdminProbeTargetCreateDefaultsToNoAssignedServersWithoutSecrets(t *test
 		"interval_sec": 90
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201; body=%s", recorder.Code, recorder.Body.String())
@@ -247,7 +247,7 @@ func TestAdminProbeTargetCreateAcceptsExplicitServerAssignments(t *testing.T) {
 		"assignments": [{"node_id":"example-node-a","enabled":true}]
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201; body=%s", recorder.Code, recorder.Body.String())
@@ -302,7 +302,7 @@ func TestAdminProbeTargetCreateAcceptsPingWithoutPort(t *testing.T) {
 		"interval_sec": 45
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201; body=%s", recorder.Code, recorder.Body.String())
@@ -371,7 +371,7 @@ func TestAdminProbeTargetCreateAcceptsHTTPGETWithoutPort(t *testing.T) {
 		"interval_sec": 30
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201; body=%s", recorder.Code, recorder.Body.String())
@@ -436,7 +436,7 @@ func TestAdminProbeTargetPatchCanSwitchToPingAndClearPort(t *testing.T) {
 		"address": "  1.1.1.1  "
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -483,7 +483,7 @@ func TestAdminProbeTargetPatchCanSwitchToHTTPGETAndClearPort(t *testing.T) {
 		"address": "  https://example.com/health  "
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -528,7 +528,7 @@ func TestAdminProbeTargetPatchRejectsHTTPGETWithoutFullURL(t *testing.T) {
 		"type": "http_get"
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 for http_get target without full URL; body=%s", recorder.Code, recorder.Body.String())
@@ -555,7 +555,7 @@ func TestAdminProbeTargetPatchUpdatesEditableFieldsAndAffectsAgentTargets(t *tes
 		"interval_sec": 30
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -618,7 +618,7 @@ func TestAdminProbeTargetPatchUpdatesNodeAssignments(t *testing.T) {
 		]
 	}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -685,7 +685,7 @@ func TestAdminProbeTargetDisplayOrderControlsInventoryAndAgentOrder(t *testing.T
 		t.Fatalf("seed preview data: %v", err)
 	}
 
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 	for targetID, order := range map[string]int{"google-dns": 5, "example-node-a-local": 250} {
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/probe-targets/"+targetID, bytes.NewBufferString(fmt.Sprintf(`{"display_order": %d}`, order)))
@@ -765,7 +765,7 @@ func TestAdminProbeTargetDeleteRemovesTargetAndAssignments(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodDelete, "/api/admin/v1/probe-targets/example-node-a-local", nil)
 	request.Header.Set("X-Admin-Token", "admin-pass")
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204; body=%s", recorder.Code, recorder.Body.String())
@@ -814,7 +814,7 @@ func TestAdminProbeTargetWritesRejectUnauthorizedUnknownAndInvalidRequests(t *te
 	if err := store.SeedPreviewData(context.Background(), PreviewSeedOptions{NodeID: "example-node-a", DisplayName: "Example Node A", CountryCode: "HK", AgentToken: "test-agent-token"}); err != nil {
 		t.Fatalf("seed preview data: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	cases := []struct {
 		name       string
@@ -954,7 +954,7 @@ func TestAdminProbeTargetsRequiresAdminToken(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/probe-targets", nil)
-	NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")}).ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401; body=%s", recorder.Code, recorder.Body.String())

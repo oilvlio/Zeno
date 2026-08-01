@@ -18,7 +18,7 @@ func TestAdminNotificationChannelsAreTelegramOnlyAndDoNotExposeChannelType(t *te
 	}
 	defer store.Close()
 	enableTestNotificationCredentialEncryption(t, store)
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	createRecorder := httptest.NewRecorder()
 	createRequest := httptest.NewRequest(http.MethodPost, "/api/admin/v1/notification-channels", bytes.NewBufferString(`{
@@ -69,7 +69,7 @@ func TestAdminNotificationChannelsCreateListAndPatchHideStoredCredentials(t *tes
 	defer store.Close()
 	enableTestNotificationCredentialEncryption(t, store)
 	ctx := context.Background()
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	createRecorder := httptest.NewRecorder()
 	createRequest := httptest.NewRequest(http.MethodPost, "/api/admin/v1/notification-channels", bytes.NewBufferString(`{
@@ -213,7 +213,7 @@ func TestAdminNotificationChannelTestSendsTelegramAndReturnsSanitizedDelivery(t 
 	if err != nil {
 		t.Fatalf("create notification channel: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass"), NotificationClient: telegramAPI.Client(), TelegramAPIBaseURL: telegramAPI.URL})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass"), NotificationClient: telegramAPI.Client(), TelegramAPIBaseURL: telegramAPI.URL})
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/notification-channels/"+channel.ID+"/test", nil)
@@ -261,7 +261,7 @@ func TestAdminNotificationChannelTestIsBlockedWithoutNotificationAuthority(t *te
 	if err != nil {
 		t.Fatalf("create notification channel: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass"), DisableNotifications: true})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass"), DisableNotifications: true})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/notification-channels/"+channel.ID+"/test", nil)
 	request.Header.Set("X-Admin-Token", "admin-pass")
@@ -289,7 +289,7 @@ func TestAdminNotificationChannelTestRespectsChannelEnabledState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create notification channel: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/notification-channels/"+channel.ID+"/test", nil)
 	request.Header.Set("X-Admin-Token", "admin-pass")
@@ -317,7 +317,7 @@ func TestAdminNotificationChannelDeleteRemovesChannelWithoutCredentialLeak(t *te
 	if err != nil {
 		t.Fatalf("create notification channel: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	deleteRecorder := httptest.NewRecorder()
 	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/admin/v1/notification-channels/"+channel.ID, nil)
@@ -351,7 +351,7 @@ func TestAdminNotificationChannelsRejectUnauthorizedUnknownAndInvalidRequests(t 
 		t.Fatalf("open sqlite store: %v", err)
 	}
 	defer store.Close()
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	cases := []struct {
 		name       string
@@ -394,7 +394,7 @@ func TestAdminNotificationTypesPatch(t *testing.T) {
 		t.Fatalf("open sqlite store: %v", err)
 	}
 	defer store.Close()
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	patchRecorder := httptest.NewRecorder()
 	patchRequest := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/notification-types/node_offline", bytes.NewBufferString(`{"enabled": false}`))
@@ -434,7 +434,7 @@ func TestAdminNotificationTypesPatchRejectsSharedEventCompatibilityNoOp(t *testi
 	if _, err := store.db.ExecContext(ctx, `UPDATE alert_rules SET enabled = 0 WHERE notification_event_type = 'probe_unhealthy'`); err != nil {
 		t.Fatalf("disable shared event rules: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	patchRecorder := httptest.NewRecorder()
 	patchRequest := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/notification-types/probe_unhealthy", bytes.NewBufferString(`{"enabled": true}`))
@@ -468,7 +468,7 @@ func TestAdminNotificationTypesRejectUnauthorizedUnknownAndInvalidRequests(t *te
 		t.Fatalf("open sqlite store: %v", err)
 	}
 	defer store.Close()
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	cases := []struct {
 		name       string

@@ -13,7 +13,7 @@ import (
 type HandlerOptions struct {
 	StaticDir                    string
 	Store                        Store
-	AdminTokenHash               string
+	AdminPasswordHash            string
 	TrustedProxies               TrustedProxySet
 	AgentBinaryPath              string
 	AgentVersion                 string
@@ -32,7 +32,7 @@ type HandlerOptions struct {
 
 type handler struct {
 	store                     Store
-	adminTokenHash            string
+	adminPasswordHash         string
 	agentBinaryPath           string
 	agentVersion              string
 	notificationSender        notificationSender
@@ -117,7 +117,7 @@ func NewHandler(options ...HandlerOptions) http.Handler {
 	backgroundCtx, backgroundCancel := context.WithCancel(backgroundParent)
 	h := &handler{
 		store:                store,
-		adminTokenHash:       opts.AdminTokenHash,
+		adminPasswordHash:    opts.AdminPasswordHash,
 		agentBinaryPath:      opts.AgentBinaryPath,
 		agentVersion:         opts.AgentVersion,
 		notificationSender:   newHTTPNotificationSender(opts.NotificationClient, opts.TelegramAPIBaseURL),

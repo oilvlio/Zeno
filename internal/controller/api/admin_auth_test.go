@@ -22,7 +22,7 @@ func TestAdminNodesRequiresAdminToken(t *testing.T) {
 		t.Fatalf("seed preview data: %v", err)
 	}
 
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/nodes", nil)
 
@@ -50,7 +50,7 @@ func TestAdminNodesEmptyStoreReturnsEmptyList(t *testing.T) {
 		t.Fatalf("empty admin nodes = %#v, want non-nil empty slice", nodes)
 	}
 
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/nodes", nil)
 	request.Header.Set("X-Admin-Token", "admin-pass")
@@ -62,6 +62,41 @@ func TestAdminNodesEmptyStoreReturnsEmptyList(t *testing.T) {
 		t.Fatalf("empty admin nodes response = %s, want nodes:[]", recorder.Body.String())
 	}
 }
+func TestAdminLoginMigratesLegacyPasswordHashesToArgon2ID(t *testing.T) {
+	for name, legacyHash := range map[string]string{
+		"salted-sha256": hashAdminPasswordWithSalt("legacy-admin-pass", "legacy-salt"),
+		"bare-sha256":   HashAdminToken("legacy-admin-pass"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+			if err != nil {
+				t.Fatalf("open sqlite store: %v", err)
+			}
+			defer store.Close()
+			if _, err := store.db.ExecContext(context.Background(), `
+				INSERT INTO settings (key, value, updated_at)
+				VALUES (?, ?, ?)
+			`, settingKeyAdminPasswordHash, legacyHash, time.Now().UTC().Unix()); err != nil {
+				t.Fatalf("seed legacy password hash: %v", err)
+			}
+
+			if _, err := store.AdminLogin(context.Background(), "admin", "legacy-admin-pass", ""); err != nil {
+				t.Fatalf("login with legacy password: %v", err)
+			}
+			var upgradedHash string
+			if err := store.db.QueryRowContext(context.Background(), `SELECT value FROM settings WHERE key = ?`, settingKeyAdminPasswordHash).Scan(&upgradedHash); err != nil {
+				t.Fatalf("read upgraded password hash: %v", err)
+			}
+			if !strings.HasPrefix(upgradedHash, "argon2id:") || upgradedHash == legacyHash {
+				t.Fatalf("upgraded password hash = %q, want a new Argon2id hash", upgradedHash)
+			}
+			if !adminArgon2PasswordMatches(upgradedHash, "legacy-admin-pass") {
+				t.Fatal("upgraded Argon2id hash does not match the legacy password")
+			}
+		})
+	}
+}
+
 func TestAdminLoginCreatesSessionAndPasswordUpdateInvalidatesOldPassword(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {
@@ -75,7 +110,7 @@ func TestAdminLoginCreatesSessionAndPasswordUpdateInvalidatesOldPassword(t *test
 	if _, err := store.UpdateAdminSettings(context.Background(), AdminSettingsUpdateRequest{AgentControllerURL: &publicURL}); err != nil {
 		t.Fatalf("set agent controller URL: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	loginRecorder := httptest.NewRecorder()
 	loginRequest := httptest.NewRequest(http.MethodPost, "/api/admin/v1/login", strings.NewReader(`{"username":"admin","password":"admin-pass"}`))
@@ -190,7 +225,7 @@ func TestAdminSessionExpiresAfterOneDay(t *testing.T) {
 	if err := store.SeedPreviewData(context.Background(), PreviewSeedOptions{NodeID: "example-node-a", DisplayName: "Example Node A", CountryCode: "HK", AgentToken: "test-agent-token"}); err != nil {
 		t.Fatalf("seed preview data: %v", err)
 	}
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	loginRecorder := httptest.NewRecorder()
 	loginRequest := httptest.NewRequest(http.MethodPost, "/api/admin/v1/login", strings.NewReader(`{"username":"admin","password":"admin-pass"}`))

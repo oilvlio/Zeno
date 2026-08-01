@@ -681,7 +681,7 @@ func TestNodeLatencyEndpointPreservesLossOnlyPointsAsNullLatency(t *testing.T) {
 func requestLatency(t *testing.T, path string) LatencyResponse {
 	t.Helper()
 	const adminToken = "history-test-admin"
-	handler := NewHandler(HandlerOptions{AdminTokenHash: HashAdminToken(adminToken)})
+	handler := NewHandler(HandlerOptions{AdminPasswordHash: testAdminPasswordHash(adminToken)})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, path, nil)
 	if strings.Contains(path, "range=7d") || strings.Contains(path, "range=30d") {
@@ -702,7 +702,7 @@ func requestLatency(t *testing.T, path string) LatencyResponse {
 func requestState(t *testing.T, path string) StateResponse {
 	t.Helper()
 	const adminToken = "history-test-admin"
-	handler := NewHandler(HandlerOptions{AdminTokenHash: HashAdminToken(adminToken)})
+	handler := NewHandler(HandlerOptions{AdminPasswordHash: testAdminPasswordHash(adminToken)})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, path, nil)
 	if strings.Contains(path, "range=7d") || strings.Contains(path, "range=30d") {

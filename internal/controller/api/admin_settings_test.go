@@ -17,7 +17,7 @@ func TestPublicSettingsDefaultsAndReflectsAdminPatch(t *testing.T) {
 		t.Fatalf("open sqlite store: %v", err)
 	}
 	defer store.Close()
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	defaultRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(defaultRecorder, httptest.NewRequest(http.MethodGet, "/api/public/v1/settings", nil))
@@ -94,7 +94,7 @@ func TestAdminSettingsRequiresTokenAndRejectsInvalidValues(t *testing.T) {
 		t.Fatalf("open sqlite store: %v", err)
 	}
 	defer store.Close()
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	unauthRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(unauthRecorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/settings", nil))
@@ -156,7 +156,7 @@ func TestAdminSettingsAllowsBlankLogoURL(t *testing.T) {
 		t.Fatalf("open sqlite store: %v", err)
 	}
 	defer store.Close()
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/settings", strings.NewReader(`{"logo_url":"   "}`))

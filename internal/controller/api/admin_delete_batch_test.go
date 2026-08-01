@@ -37,7 +37,7 @@ func TestAdminNodeDeleteReturnsImmediatelyHidesAndRejectsNewReports(t *testing.T
 	rowCount := adminDeleteBatchSize*2 + 37
 	seedAdminDeleteHistory(t, store, "large-node", "example-node-a-local", rowCount, 2)
 
-	handler := NewHandler(HandlerOptions{Store: store, AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodDelete, "/api/admin/v1/nodes/large-node", nil)
 	request.Header.Set("X-Admin-Token", "admin-pass")

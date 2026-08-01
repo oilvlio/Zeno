@@ -118,7 +118,7 @@ func TestAdminLoginRejectsWhenArgon2QueueIsFull(t *testing.T) {
 		}
 	}()
 
-	handler := NewHandler(HandlerOptions{AdminTokenHash: HashAdminToken("admin-pass")})
+	handler := NewHandler(HandlerOptions{AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 	for attempt := 0; attempt < adminLoginMaxFailures; attempt++ {
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/login", strings.NewReader(`{"username":"admin","password":"admin-pass"}`))

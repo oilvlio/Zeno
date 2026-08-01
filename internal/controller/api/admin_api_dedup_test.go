@@ -218,7 +218,7 @@ func runAdminAPIDedupCase(t *testing.T, testCase adminAPIDedupCase, reference bo
 		request.Header.Set("X-Admin-Token", testCase.token)
 	}
 	recorder := httptest.NewRecorder()
-	h := &handler{store: store, adminTokenHash: HashAdminToken("admin-pass")}
+	h := &handler{store: store, adminPasswordHash: testAdminPasswordHash("admin-pass")}
 	switch testCase.endpoint {
 	case adminAPIDedupSettings:
 		if reference {

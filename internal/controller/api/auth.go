@@ -51,12 +51,8 @@ func HashAdminToken(token string) string {
 	return hashAgentToken(strings.TrimSpace(token))
 }
 
-func adminTokenMatches(expectedHash, token string) bool {
-	if expectedHash == "" || strings.TrimSpace(token) == "" {
-		return false
-	}
-	computed := HashAdminToken(token)
-	return subtle.ConstantTimeCompare([]byte(expectedHash), []byte(computed)) == 1
+func HashAdminPassword(password string) (string, error) {
+	return hashAdminPassword(password)
 }
 
 func randomToken() (string, error) {
@@ -96,8 +92,21 @@ func consumeDummyAdminPasswordKDF(password string) {
 }
 
 func hashAdminPasswordWithSalt(password, salt string) string {
+	// This legacy SHA-256 verifier is retained only to migrate pre-Argon2
+	// password records after one successful login. New hashes always use
+	// Argon2id, and sqliteAdminAuth immediately replaces a matching legacy hash.
+	// lgtm[go/weak-sensitive-data-hashing]
 	sum := sha256.Sum256([]byte(strings.TrimSpace(password) + ":" + salt))
 	return fmt.Sprintf("sha256:%s:%s", salt, hex.EncodeToString(sum[:]))
+}
+
+func legacyAdminPasswordTokenMatches(expectedHash, password string) bool {
+	// This compatibility path handles the oldest unsalted bootstrap hash and is
+	// removed from the database after one successful login.
+	// lgtm[go/weak-sensitive-data-hashing]
+	sum := sha256.Sum256([]byte(strings.TrimSpace(password)))
+	computed := hex.EncodeToString(sum[:])
+	return subtle.ConstantTimeCompare([]byte(expectedHash), []byte(computed)) == 1
 }
 
 func adminArgon2PasswordMatches(storedHash, password string) bool {
@@ -159,6 +168,9 @@ func adminPasswordMatches(storedHash, fallbackHash, password string) bool {
 		return false
 	}
 	storedHash = strings.TrimSpace(storedHash)
+	if storedHash == "" {
+		storedHash = strings.TrimSpace(fallbackHash)
+	}
 	if strings.HasPrefix(storedHash, "argon2id:") {
 		return adminArgon2PasswordMatches(storedHash, password)
 	}
@@ -171,17 +183,14 @@ func adminPasswordMatches(storedHash, fallbackHash, password string) bool {
 		return subtle.ConstantTimeCompare([]byte(storedHash), []byte(computed)) == 1
 	}
 	if storedHash != "" {
-		matched := adminTokenMatches(storedHash, password)
+		matched := legacyAdminPasswordTokenMatches(storedHash, password)
 		if !matched {
 			consumeDummyAdminPasswordKDF(password)
 		}
 		return matched
 	}
-	matched := adminTokenMatches(fallbackHash, password)
-	if !matched {
-		consumeDummyAdminPasswordKDF(password)
-	}
-	return matched
+	consumeDummyAdminPasswordKDF(password)
+	return false
 }
 
 func (s *sqliteAgentAccess) AuthorizeAgent(ctx context.Context, nodeID, token string) (bool, error) {

@@ -97,7 +97,7 @@ func (h *handler) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if h.adminTokenHash == "" {
+	if h.adminPasswordHash == "" {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -148,7 +148,7 @@ func (h *handler) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		ipReservation.release(loginSucceeded)
 	}()
 	if authStore, ok := h.store.(adminAuthStore); ok {
-		session, err := authStore.AdminLogin(r.Context(), request.Username, request.Password, h.adminTokenHash)
+		session, err := authStore.AdminLogin(r.Context(), request.Username, request.Password, h.adminPasswordHash)
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -162,7 +162,7 @@ func (h *handler) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	passwordOK := adminPasswordMatches("", h.adminTokenHash, request.Password)
+	passwordOK := adminPasswordMatches("", h.adminPasswordHash, request.Password)
 	if strings.TrimSpace(request.Username) != "admin" || !passwordOK {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -220,7 +220,7 @@ func (h *handler) handleAdminAccount(w http.ResponseWriter, r *http.Request) {
 		if !decodeJSONBody(w, r, &request, adminJSONBodyLimit, true) {
 			return
 		}
-		session, err := authStore.UpdateAdminAccount(r.Context(), request.Username, request.CurrentPassword, request.NewPassword, h.adminTokenHash)
+		session, err := authStore.UpdateAdminAccount(r.Context(), request.Username, request.CurrentPassword, request.NewPassword, h.adminPasswordHash)
 		if err != nil {
 			writeAdminError(w, err)
 			return
@@ -533,7 +533,7 @@ func (h *handler) handleAdminNodeInstallCommand(w http.ResponseWriter, r *http.R
 }
 
 func (h *handler) authorizeAdminRequest(w http.ResponseWriter, r *http.Request) (adminStore, bool) {
-	if h.adminTokenHash == "" {
+	if h.adminPasswordHash == "" {
 		writeError(w, http.StatusNotFound, "not found")
 		return nil, false
 	}
@@ -572,7 +572,7 @@ func (h *handler) authorizeAdminRequest(w http.ResponseWriter, r *http.Request) 
 			return nil, false
 		}
 	}
-	if !adminTokenMatches(h.adminTokenHash, provided) {
+	if !h.bootstrapAdminPasswordMatches(provided) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return nil, false
 	}
@@ -607,11 +607,23 @@ func (h *handler) authorizeExtendedHistoryRequest(w http.ResponseWriter, r *http
 			return false
 		}
 	}
-	if h.adminTokenHash != "" && adminTokenMatches(h.adminTokenHash, provided) {
+	if h.bootstrapAdminPasswordMatches(provided) {
 		return true
 	}
 	writeError(w, http.StatusUnauthorized, "unauthorized")
 	return false
+}
+
+func (h *handler) bootstrapAdminPasswordMatches(password string) bool {
+	if h.adminPasswordHash == "" {
+		return false
+	}
+	releaseArgon2, admitted := reserveAdminArgon2Request()
+	if !admitted {
+		return false
+	}
+	defer releaseArgon2()
+	return adminPasswordMatches("", h.adminPasswordHash, password)
 }
 
 func (h *handler) adminLoginIPRateLimitKey(r *http.Request) string {
