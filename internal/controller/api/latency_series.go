@@ -135,7 +135,7 @@ func serviceLatencyPointFromSeries(series ServiceLatencySeries, createdAt int64,
 
 func latencySeriesPayloadFromPoints(points []LatencyPoint) ([]int64, []LatencySeries) {
 	series := latencySeriesFromPoints(points)
-	shared := sharedLatencyCreatedAt(series)
+	shared := sharedSeriesCreatedAt(series, func(series LatencySeries) []int64 { return series.CreatedAt })
 	if len(shared) > 0 {
 		for index := range series {
 			series[index].CreatedAt = nil
@@ -150,7 +150,7 @@ func latencySeriesFromPoints(points []LatencyPoint) []LatencySeries {
 
 func serviceLatencySeriesPayloadFromPoints(points []ServiceLatencyPoint) ([]int64, []ServiceLatencySeries) {
 	series := serviceLatencySeriesFromPoints(points)
-	shared := sharedServiceLatencyCreatedAt(series)
+	shared := sharedSeriesCreatedAt(series, func(series ServiceLatencySeries) []int64 { return series.CreatedAt })
 	if len(shared) > 0 {
 		for index := range series {
 			series[index].CreatedAt = nil
@@ -172,15 +172,17 @@ func serviceLatencySeriesIdentity(point ServiceLatencyPoint) (string, ServiceLat
 }
 
 func appendLatencySeriesPoint(series *LatencySeries, point LatencyPoint) {
-	series.CreatedAt = append(series.CreatedAt, latencyTimestampMillis(point.TS))
-	series.AvgMS = append(series.AvgMS, compactLatencyValue(point.AvgMS))
-	series.LossPercent = append(series.LossPercent, compactLatencyNumber(point.LossPercent))
+	appendLatencySeriesValues(&series.CreatedAt, &series.AvgMS, &series.LossPercent, point.TS, point.AvgMS, point.LossPercent)
 }
 
 func appendServiceLatencySeriesPoint(series *ServiceLatencySeries, point ServiceLatencyPoint) {
-	series.CreatedAt = append(series.CreatedAt, latencyTimestampMillis(point.TS))
-	series.AvgMS = append(series.AvgMS, compactLatencyValue(point.AvgMS))
-	series.LossPercent = append(series.LossPercent, compactLatencyNumber(point.LossPercent))
+	appendLatencySeriesValues(&series.CreatedAt, &series.AvgMS, &series.LossPercent, point.TS, point.AvgMS, point.LossPercent)
+}
+
+func appendLatencySeriesValues(createdAt *[]int64, average *[]*float64, lossPercent *[]float64, timestamp string, averageMS *float64, loss float64) {
+	*createdAt = append(*createdAt, latencyTimestampMillis(timestamp))
+	*average = append(*average, compactLatencyValue(averageMS))
+	*lossPercent = append(*lossPercent, compactLatencyNumber(loss))
 }
 
 func groupLatencySeries[P, S any](points []P, newSeries func(P) (string, S), appendPoint func(*S, P)) []S {
@@ -203,26 +205,13 @@ func groupLatencySeries[P, S any](points []P, newSeries func(P) (string, S), app
 	return seriesList
 }
 
-func sharedLatencyCreatedAt(seriesList []LatencySeries) []int64 {
-	if len(seriesList) == 0 || len(seriesList[0].CreatedAt) == 0 {
+func sharedSeriesCreatedAt[S any](seriesList []S, createdAt func(S) []int64) []int64 {
+	if len(seriesList) == 0 || len(createdAt(seriesList[0])) == 0 {
 		return nil
 	}
-	shared := seriesList[0].CreatedAt
+	shared := createdAt(seriesList[0])
 	for _, series := range seriesList[1:] {
-		if !sameInt64Slice(shared, series.CreatedAt) {
-			return nil
-		}
-	}
-	return append([]int64(nil), shared...)
-}
-
-func sharedServiceLatencyCreatedAt(seriesList []ServiceLatencySeries) []int64 {
-	if len(seriesList) == 0 || len(seriesList[0].CreatedAt) == 0 {
-		return nil
-	}
-	shared := seriesList[0].CreatedAt
-	for _, series := range seriesList[1:] {
-		if !sameInt64Slice(shared, series.CreatedAt) {
+		if !sameInt64Slice(shared, createdAt(series)) {
 			return nil
 		}
 	}

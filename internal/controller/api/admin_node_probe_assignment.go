@@ -37,10 +37,14 @@ func verifyAdminNodeProbeSelectionTx(ctx context.Context, tx *sql.Tx, update Adm
 }
 
 func requireActiveProbeTargetTx(ctx context.Context, tx *sql.Tx, targetID string) error {
+	return requireAdminResourceTx(ctx, tx, activeAdminProbeTargetExistsSQL, targetID, errInvalidAdminNodeUpdate)
+}
+
+func requireAdminResourceTx(ctx context.Context, tx *sql.Tx, query, resourceID string, notFound error) error {
 	var exists int
-	if err := tx.QueryRowContext(ctx, activeAdminProbeTargetExistsSQL, targetID).Scan(&exists); err != nil {
+	if err := tx.QueryRowContext(ctx, query, resourceID).Scan(&exists); err != nil {
 		if err == sql.ErrNoRows {
-			return errInvalidAdminNodeUpdate
+			return notFound
 		}
 		return err
 	}

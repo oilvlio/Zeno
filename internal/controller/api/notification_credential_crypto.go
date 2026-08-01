@@ -47,10 +47,6 @@ func (s *SQLiteStore) RequireNotificationCredentialKeyForExistingCredentials(ctx
 	return s.notificationDomain().RequireNotificationCredentialKeyForExistingCredentials(ctx)
 }
 
-func newNotificationCredentialCipher(key []byte) (*notifycrypto.Cipher, error) {
-	return notifycrypto.NewCipher(key)
-}
-
 // translateNotificationCredentialError maps the crypto package's blank
 // credential signal onto the admin write error the HTTP layer already reports.
 func translateNotificationCredentialError(err error) error {

@@ -14,8 +14,12 @@ func testKey(fill byte) []byte {
 	return key
 }
 
+func newTestCipher(key []byte) (*Cipher, error) {
+	return NewCipherWithID(DerivedKeyID(key), key)
+}
+
 func TestCipherRoundTrip(t *testing.T) {
-	cipher, err := NewCipher(testKey(0x01))
+	cipher, err := newTestCipher(testKey(0x01))
 	if err != nil {
 		t.Fatalf("new cipher: %v", err)
 	}
@@ -41,7 +45,7 @@ func TestCipherRoundTrip(t *testing.T) {
 // The channel id and type are authenticated, not merely stored, so ciphertext
 // moved to another channel must fail rather than decrypt.
 func TestCipherBindsChannelIdentity(t *testing.T) {
-	cipher, err := NewCipher(testKey(0x02))
+	cipher, err := newTestCipher(testKey(0x02))
 	if err != nil {
 		t.Fatalf("new cipher: %v", err)
 	}
@@ -58,11 +62,11 @@ func TestCipherBindsChannelIdentity(t *testing.T) {
 }
 
 func TestCipherRejectsForeignKey(t *testing.T) {
-	first, err := NewCipher(testKey(0x03))
+	first, err := newTestCipher(testKey(0x03))
 	if err != nil {
 		t.Fatalf("new cipher: %v", err)
 	}
-	second, err := NewCipher(testKey(0x04))
+	second, err := newTestCipher(testKey(0x04))
 	if err != nil {
 		t.Fatalf("new cipher: %v", err)
 	}
@@ -76,7 +80,7 @@ func TestCipherRejectsForeignKey(t *testing.T) {
 }
 
 func TestCipherRejectsBadInput(t *testing.T) {
-	cipher, err := NewCipher(testKey(0x05))
+	cipher, err := newTestCipher(testKey(0x05))
 	if err != nil {
 		t.Fatalf("new cipher: %v", err)
 	}
@@ -92,7 +96,7 @@ func TestCipherRejectsBadInput(t *testing.T) {
 }
 
 func TestNewCipherRejectsWrongKeySize(t *testing.T) {
-	if _, err := NewCipher(make([]byte, KeySize-1)); err == nil {
+	if _, err := newTestCipher(make([]byte, KeySize-1)); err == nil {
 		t.Fatal("short key accepted, want error")
 	}
 	if _, err := NewCipherWithID("bad key id", testKey(0x06)); err == nil {
@@ -145,7 +149,7 @@ func TestKeyringRotation(t *testing.T) {
 // fallback would strand credentials written before key ids existed.
 func TestKeyringOpensLegacyEnvelopeWithNonActiveKey(t *testing.T) {
 	legacyKey := testKey(0x09)
-	legacyCipher, err := NewCipher(legacyKey)
+	legacyCipher, err := newTestCipher(legacyKey)
 	if err != nil {
 		t.Fatalf("new cipher: %v", err)
 	}
@@ -250,7 +254,7 @@ func TestNilReceiversReportMissingKey(t *testing.T) {
 // Nonces must never repeat under a fixed key, so identical plaintexts have to
 // produce distinct envelopes.
 func TestEncryptUsesFreshNonce(t *testing.T) {
-	cipher, err := NewCipher(testKey(0x10))
+	cipher, err := newTestCipher(testKey(0x10))
 	if err != nil {
 		t.Fatalf("new cipher: %v", err)
 	}

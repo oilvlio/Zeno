@@ -1,72 +1,53 @@
 :root {
   color-scheme: light dark;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #ffffff;
-  color: #0f172a;
-  --background: #ffffff;
-  --card: #ffffff;
-  --foreground: #0f172a;
-  --muted: #53657d;
-  --border: rgba(37, 99, 235, 0.26);
-  --secondary: rgba(255, 255, 255, 0.66);
-  --metric-bg: rgba(255, 255, 255, 0.72);
-  --surface: rgba(255, 255, 255, 0.82);
-  --surface-strong: rgba(255, 255, 255, 0.92);
-  --surface-soft: rgba(255, 255, 255, 0.56);
-  --field-bg: rgba(255, 255, 255, 0.74);
-  --control-bg: rgba(255, 255, 255, 0.76);
-  --usage-track-bg: rgba(148, 163, 184, 0.08);
-  --usage-track-border: rgba(148, 163, 184, 0.12);
-  --shadow-stone: rgba(15, 23, 42, 0.08);
-  --metric-shadow: rgba(37, 99, 235, 0.12);
+  background: var(--background);
+  color: var(--foreground);
+  --background: light-dark(#ffffff, #07111f);
+  --card: light-dark(#ffffff, rgba(15, 23, 42, 0.62));
+  --foreground: light-dark(#0f172a, #f8fafc);
+  --muted: light-dark(#53657d, #94a3b8);
+  --border: light-dark(rgba(37, 99, 235, 0.26), rgba(148, 163, 184, 0.28));
+  --secondary: light-dark(rgba(255, 255, 255, 0.66), rgba(15, 23, 42, 0.46));
+  --metric-bg: light-dark(rgba(255, 255, 255, 0.72), rgba(15, 23, 42, 0.44));
+  --surface: light-dark(rgba(255, 255, 255, 0.82), rgba(15, 23, 42, 0.54));
+  --surface-strong: light-dark(rgba(255, 255, 255, 0.92), rgba(15, 23, 42, 0.66));
+  --surface-soft: light-dark(rgba(255, 255, 255, 0.56), rgba(15, 23, 42, 0.34));
+  --field-bg: light-dark(rgba(255, 255, 255, 0.74), rgba(15, 23, 42, 0.42));
+  --control-bg: light-dark(rgba(255, 255, 255, 0.76), rgba(15, 23, 42, 0.48));
+  --usage-track-bg: light-dark(rgba(148, 163, 184, 0.08), rgba(148, 163, 184, 0.12));
+  --usage-track-border: light-dark(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.14));
+  --shadow-stone: light-dark(rgba(15, 23, 42, 0.08), rgba(0, 0, 0, 0.34));
+  --metric-shadow: light-dark(rgba(37, 99, 235, 0.12), rgba(14, 165, 233, 0.1));
   --green: #10b981;
   --blue: #2563eb;
   --red: #f43f5e;
   --purple: #8b5cf6;
   --orange: #f97316;
-  --billing-gold: #b8860b;
+  --billing-gold: light-dark(#b8860b, #ffd45c);
   --radius-pill: 999px;
   --radius-field: 12px;
   --radius-card: 16px;
   --radius-panel: 20px;
   --zeno-card-blur: 0px;
   --zeno-background-overlay-color: rgba(255, 255, 255, 0);
-  --zeno-card-highlight: #ffffff;
-  --zeno-card-shadow: 0 10px 26px -24px rgba(15, 23, 42, 0.22), 0 1px 2px rgba(15, 23, 42, 0.035);
+  --zeno-card-highlight: light-dark(#ffffff, rgba(255, 255, 255, 0.1));
+  --zeno-card-shadow-light: 0 10px 26px -24px rgba(15, 23, 42, 0.22), 0 1px 2px rgba(15, 23, 42, 0.035);
+  --zeno-card-shadow-dark: 0 20px 60px -36px rgba(0, 0, 0, 0.72), 0 12px 34px -30px rgba(56, 189, 248, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --zeno-card-shadow: var(--zeno-card-shadow-light);
   --zeno-content-width: 1024px;
   --appearance-preview-surface-rgb: 255, 255, 255;
   --appearance-preview-shadow-rgb: 15, 23, 42;
-  --admin-secondary-surface: #ffffff;
+  --admin-secondary-surface: light-dark(#ffffff, rgb(15, 23, 42));
   --zeno-popover-bg: var(--surface-strong);
   --zeno-popover-blur: 18px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    background: #07111f;
-    color: #f8fafc;
-    --background: #07111f;
-    --card: rgba(15, 23, 42, 0.62);
-    --foreground: #f8fafc;
-    --muted: #94a3b8;
-    --border: rgba(148, 163, 184, 0.28);
-    --secondary: rgba(15, 23, 42, 0.46);
-    --metric-bg: rgba(15, 23, 42, 0.44);
-    --surface: rgba(15, 23, 42, 0.54);
-    --surface-strong: rgba(15, 23, 42, 0.66);
-    --surface-soft: rgba(15, 23, 42, 0.34);
-    --field-bg: rgba(15, 23, 42, 0.42);
-    --control-bg: rgba(15, 23, 42, 0.48);
-    --usage-track-bg: rgba(148, 163, 184, 0.12);
-    --usage-track-border: rgba(148, 163, 184, 0.14);
-    --shadow-stone: rgba(0, 0, 0, 0.34);
-    --metric-shadow: rgba(14, 165, 233, 0.1);
-    --billing-gold: #ffd45c;
-    --zeno-card-highlight: rgba(255, 255, 255, 0.1);
-    --zeno-card-shadow: 0 20px 60px -36px rgba(0, 0, 0, 0.72), 0 12px 34px -30px rgba(56, 189, 248, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    --zeno-card-shadow: var(--zeno-card-shadow-dark);
     --appearance-preview-surface-rgb: 15, 23, 42;
     --appearance-preview-shadow-rgb: 0, 0, 0;
-    --admin-secondary-surface: rgb(15, 23, 42);
   }
 }
 
@@ -116,55 +97,17 @@ svg { display: block; }
 .kulin-shell[data-theme="light"],
 :root[data-zeno-theme="light"] {
   color-scheme: light;
-  --background: #ffffff;
-  --card: #ffffff;
-  --foreground: #0f172a;
-  --muted: #53657d;
-  --border: rgba(37, 99, 235, 0.26);
-  --secondary: rgba(255, 255, 255, 0.66);
-  --metric-bg: rgba(255, 255, 255, 0.72);
-  --surface: rgba(255, 255, 255, 0.82);
-  --surface-strong: rgba(255, 255, 255, 0.92);
-  --surface-soft: rgba(255, 255, 255, 0.56);
-  --field-bg: rgba(255, 255, 255, 0.74);
-  --control-bg: rgba(255, 255, 255, 0.76);
-  --usage-track-bg: rgba(148, 163, 184, 0.08);
-  --usage-track-border: rgba(148, 163, 184, 0.12);
-  --shadow-stone: rgba(15, 23, 42, 0.08);
-  --metric-shadow: rgba(37, 99, 235, 0.12);
-  --billing-gold: #b8860b;
-  --zeno-card-highlight: #ffffff;
-  --zeno-card-shadow: 0 10px 26px -24px rgba(15, 23, 42, 0.22), 0 1px 2px rgba(15, 23, 42, 0.035);
+  --zeno-card-shadow: var(--zeno-card-shadow-light);
   --appearance-preview-surface-rgb: 255, 255, 255;
   --appearance-preview-shadow-rgb: 15, 23, 42;
-  --admin-secondary-surface: #ffffff;
 }
 
 .kulin-shell[data-theme="dark"],
 :root[data-zeno-theme="dark"] {
   color-scheme: dark;
-  --background: #07111f;
-  --card: rgba(15, 23, 42, 0.62);
-  --foreground: #f8fafc;
-  --muted: #94a3b8;
-  --border: rgba(148, 163, 184, 0.28);
-  --secondary: rgba(15, 23, 42, 0.46);
-  --metric-bg: rgba(15, 23, 42, 0.44);
-  --surface: rgba(15, 23, 42, 0.54);
-  --surface-strong: rgba(15, 23, 42, 0.66);
-  --surface-soft: rgba(15, 23, 42, 0.34);
-  --field-bg: rgba(15, 23, 42, 0.42);
-  --control-bg: rgba(15, 23, 42, 0.48);
-  --usage-track-bg: rgba(148, 163, 184, 0.12);
-  --usage-track-border: rgba(148, 163, 184, 0.14);
-  --shadow-stone: rgba(0, 0, 0, 0.34);
-  --metric-shadow: rgba(14, 165, 233, 0.1);
-  --billing-gold: #ffd45c;
-  --zeno-card-highlight: rgba(255, 255, 255, 0.1);
-  --zeno-card-shadow: 0 20px 60px -36px rgba(0, 0, 0, 0.72), 0 12px 34px -30px rgba(56, 189, 248, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --zeno-card-shadow: var(--zeno-card-shadow-dark);
   --appearance-preview-surface-rgb: 15, 23, 42;
   --appearance-preview-shadow-rgb: 0, 0, 0;
-  --admin-secondary-surface: rgb(15, 23, 42);
 }
 
 .kulin-nav {
@@ -226,17 +169,23 @@ svg { display: block; }
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
+}
+.theme-menu-popover,
+.admin-select-popover,
+.admin-install-platforms {
   background: var(--zeno-popover-bg);
   box-shadow: 0 18px 40px -26px rgba(15, 23, 42, .36), 0 4px 12px -8px rgba(15, 23, 42, .16);
   -webkit-backdrop-filter: blur(var(--zeno-popover-blur)) saturate(1.04);
   backdrop-filter: blur(var(--zeno-popover-blur)) saturate(1.04);
 }
-.theme-menu-popover button {
+.theme-menu-popover button,
+.home-currency-popover button,
+.admin-select-popover button,
+.admin-install-platforms button {
   min-width: 0;
   min-height: 34px;
   display: flex;
   align-items: center;
-  padding: 0 10px;
   border: 1px solid transparent;
   border-radius: var(--radius-field);
   background: transparent;
@@ -244,6 +193,7 @@ svg { display: block; }
   text-align: left;
   transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
 }
+.theme-menu-popover button { padding: 0 10px; }
 .theme-menu-popover button:hover { border-color: color-mix(in srgb, var(--blue) 34%, var(--border)); background: color-mix(in srgb, var(--surface-soft) 88%, var(--blue) 10%); color: var(--blue); transform: translateY(-1px); }
 .theme-menu-popover button[data-active='true'] { border-color: var(--blue); background: var(--blue); color: #fff; box-shadow: 0 8px 18px -14px var(--blue); }
 .theme-menu-popover span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
@@ -349,7 +299,8 @@ svg { display: block; }
 .route-state-container { display: flex; flex-direction: column; gap: 24px; }
 .route-state-panel { min-height: 180px; display: flex; flex-direction: column; }
 .route-state-panel.is-admin { min-height: 360px; }
-.route-state-card {
+.route-state-card,
+.admin-state-card {
   min-height: 96px;
   margin-top: 18px;
   display: flex;
@@ -362,7 +313,8 @@ svg { display: block; }
   color: var(--muted);
   font-weight: 500;
 }
-.route-state-card.is-error { color: var(--red); }
+.route-state-card.is-error,
+.admin-state-card.is-error { color: var(--red); }
 @media (max-width: 767px) {
   .route-state-container { gap: 14px; }
   .route-state-panel.is-admin { min-height: calc(100dvh - 92px); }
@@ -538,19 +490,9 @@ svg { display: block; }
   transform-origin: top right;
 }
 .home-currency-popover button {
-  min-width: 0;
-  min-height: 34px;
-  display: flex;
-  align-items: center;
   justify-content: space-between;
   gap: 6px;
   padding: 0 9px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-field);
-  background: transparent;
-  color: var(--foreground);
-  text-align: left;
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
 }
 .home-currency-option__flag {
   flex: none;
@@ -669,12 +611,14 @@ svg { display: block; }
 @media (min-width: 768px) { .server-card-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1024px) { .server-card-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
-@media (max-width: 767px) {
-  .home-top-card .home-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
 .range-tabs button:hover,
-.detail-range-row > button:hover {
+.detail-range-row > button:hover,
+.admin-section-actions button:hover,
+.admin-node-edit-form button:hover,
+.admin-modal-actions button:hover,
+.admin-primary-action:hover,
+.admin-row-action:hover,
+.admin-segmented-options button:hover {
   border-color: color-mix(in srgb, var(--blue) 34%, var(--border));
   background: color-mix(in srgb, var(--surface-soft) 88%, var(--blue) 10%);
   color: var(--blue);

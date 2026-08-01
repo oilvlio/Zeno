@@ -14,6 +14,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/shui1iao/zeno/internal/controller/notifycrypto"
 )
 
 func TestNotificationCredentialEncryptionRoundTripRandomNonceAndNoEcho(t *testing.T) {
@@ -105,7 +107,8 @@ func TestNotificationCredentialAADBindsChannelIDAndType(t *testing.T) {
 		t.Fatalf("dispatch with copied ciphertext error = %v, want invalid ciphertext", err)
 	}
 
-	cipher, err := newNotificationCredentialCipher(testNotificationCredentialKey())
+	key := testNotificationCredentialKey()
+	cipher, err := notifycrypto.NewCipherWithID(notifycrypto.DerivedKeyID(key), key)
 	if err != nil {
 		t.Fatalf("new cipher: %v", err)
 	}

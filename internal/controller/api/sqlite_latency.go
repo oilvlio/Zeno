@@ -72,6 +72,14 @@ type latencyGridTarget struct {
 	Name string
 }
 
+type latencyGridPointValue struct {
+	TS          string
+	Series      latencyGridTarget
+	MedianMS    *float64
+	AvgMS       *float64
+	LossPercent float64
+}
+
 type latencyGridBucket struct {
 	medianSum   float64
 	medianCount int
@@ -187,17 +195,16 @@ func latencyGridQuery(dimension latencyGridDimension) string {
 	`
 }
 
-// latencyGridPointsFor renders one bucketed grid: it lists the enabled series for
-// the requested id, aggregates raw rounds plus rollups into fixed-width buckets,
-// and emits a dense point per (bucket, series) pair via newPoint.
-func latencyGridPointsFor[T any](
+// latencyGridValuesFor renders one neutral bucketed grid: it lists the enabled
+// series for the requested id, aggregates raw rounds plus rollups into
+// fixed-width buckets, and emits a dense value per (bucket, series) pair.
+func latencyGridValuesFor(
 	ctx context.Context,
 	s *sqliteLatencyQueries,
 	id string,
 	window latencyWindow,
 	dimension latencyGridDimension,
-	newPoint func(ts string, series latencyGridTarget, median, avg *float64, loss float64) T,
-) ([]T, error) {
+) ([]latencyGridPointValue, error) {
 	gridWindow, ok := resolveLatencyGridWindow(window.Name)
 	if !ok {
 		return nil, nil
@@ -207,7 +214,7 @@ func latencyGridPointsFor[T any](
 		return nil, err
 	}
 	if len(series) == 0 {
-		return []T{}, nil
+		return []latencyGridPointValue{}, nil
 	}
 
 	start, end, stepSeconds := latencyGridBounds(gridWindow)
@@ -242,7 +249,7 @@ func latencyGridPointsFor[T any](
 		return nil, err
 	}
 
-	points := make([]T, 0, gridWindow.Samples*len(series))
+	points := make([]latencyGridPointValue, 0, gridWindow.Samples*len(series))
 	for index := 0; index < gridWindow.Samples; index++ {
 		bucketTS := start.Add(time.Duration(index) * gridWindow.Step).Unix()
 		ts := time.Unix(bucketTS, 0).UTC().Format(time.RFC3339)
@@ -254,24 +261,43 @@ func latencyGridPointsFor[T any](
 				avg = bucket.avgPtr()
 				loss = bucket.lossPercent()
 			}
-			points = append(points, newPoint(ts, item, median, avg, loss))
+			points = append(points, latencyGridPointValue{
+				TS: ts, Series: item, MedianMS: median, AvgMS: avg, LossPercent: loss,
+			})
 		}
 	}
 	return points, nil
 }
 
+func latencyGridPointsFor[T any](ctx context.Context, s *sqliteLatencyQueries, id string, window latencyWindow, dimension latencyGridDimension, convert func(latencyGridPointValue) T) ([]T, error) {
+	values, err := latencyGridValuesFor(ctx, s, id, window, dimension)
+	if err != nil {
+		return nil, err
+	}
+	if values == nil {
+		return nil, nil
+	}
+	points := make([]T, 0, len(values))
+	for _, value := range values {
+		points = append(points, convert(value))
+	}
+	return points, nil
+}
+
 func (s *sqliteLatencyQueries) latencyGridPoints(ctx context.Context, nodeID string, window latencyWindow) ([]LatencyPoint, error) {
-	return latencyGridPointsFor(ctx, s, nodeID, window, latencyGridByNode,
-		func(ts string, target latencyGridTarget, median, avg *float64, loss float64) LatencyPoint {
-			return LatencyPoint{TS: ts, TargetID: target.ID, TargetName: target.Name, MedianMS: median, AvgMS: avg, LossPercent: loss}
-		})
+	return latencyGridPointsFor(ctx, s, nodeID, window, latencyGridByNode, latencyPointFromGridValue)
 }
 
 func (s *sqliteLatencyQueries) serviceLatencyGridPoints(ctx context.Context, targetID string, window latencyWindow) ([]ServiceLatencyPoint, error) {
-	return latencyGridPointsFor(ctx, s, targetID, window, latencyGridByTarget,
-		func(ts string, node latencyGridTarget, median, avg *float64, loss float64) ServiceLatencyPoint {
-			return ServiceLatencyPoint{TS: ts, NodeID: node.ID, NodeName: node.Name, MedianMS: median, AvgMS: avg, LossPercent: loss}
-		})
+	return latencyGridPointsFor(ctx, s, targetID, window, latencyGridByTarget, serviceLatencyPointFromGridValue)
+}
+
+func latencyPointFromGridValue(point latencyGridPointValue) LatencyPoint {
+	return LatencyPoint{TS: point.TS, TargetID: point.Series.ID, TargetName: point.Series.Name, MedianMS: point.MedianMS, AvgMS: point.AvgMS, LossPercent: point.LossPercent}
+}
+
+func serviceLatencyPointFromGridValue(point latencyGridPointValue) ServiceLatencyPoint {
+	return ServiceLatencyPoint{TS: point.TS, NodeID: point.Series.ID, NodeName: point.Series.Name, MedianMS: point.MedianMS, AvgMS: point.AvgMS, LossPercent: point.LossPercent}
 }
 
 func (s *sqliteLatencyQueries) latencyGridSeries(ctx context.Context, query, id string) ([]latencyGridTarget, error) {

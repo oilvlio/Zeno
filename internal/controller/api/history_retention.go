@@ -124,17 +124,26 @@ func (s *sqliteHistoryStore) pruneRawHistoryTier(ctx context.Context, cutoffs hi
 	if rollupReady {
 		return s.PruneRawHistory(ctx, time.Unix(cutoffs.Raw, 0).UTC())
 	}
-	if err := s.pruneRowsInBatches(ctx, history.PruneExpiredProbeRoundsSQL, cutoffs.LegacyRaw); err != nil {
-		return err
-	}
-	return s.pruneRowsInBatches(ctx, history.PruneExpiredStateSamplesSQL, cutoffs.LegacyRaw)
+	return s.pruneHistoryStatements(ctx, cutoffs.LegacyRaw,
+		history.PruneExpiredProbeRoundsSQL,
+		history.PruneExpiredStateSamplesSQL,
+	)
 }
 
 func (s *sqliteHistoryStore) pruneRollupTiers(ctx context.Context, cutoffs history.Cutoffs) error {
-	if err := s.pruneRowsInBatches(ctx, history.PruneExpiredLatencyRollupsSQL, cutoffs.LatencyRollup); err != nil {
+	if err := s.pruneHistoryStatements(ctx, cutoffs.LatencyRollup, history.PruneExpiredLatencyRollupsSQL); err != nil {
 		return err
 	}
-	return s.pruneRowsInBatches(ctx, history.PruneExpiredStateRollupsSQL, cutoffs.StateRollup)
+	return s.pruneHistoryStatements(ctx, cutoffs.StateRollup, history.PruneExpiredStateRollupsSQL)
+}
+
+func (s *sqliteHistoryStore) pruneHistoryStatements(ctx context.Context, cutoff int64, statements ...string) error {
+	for _, statement := range statements {
+		if err := s.pruneRowsInBatches(ctx, statement, cutoff); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *sqliteHistoryStore) pruneNotificationHistory(ctx context.Context, cutoffs history.Cutoffs) error {

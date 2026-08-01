@@ -1,7 +1,7 @@
 import { currencyOptions as displayCurrencyOptions } from '../../lib/currency'
 import type { AdminAlertRule, AdminNode, AdminProbeTarget, ProbeType } from '../../types'
 
-export const renewalDayOptions = [0, 1, 3, 7, 15, 30]
+export const renewalDayOptions = [1, 3, 7, 15, 30]
 
 export const billingModeOptions = [
   { value: 'both', label: '双向' },
@@ -103,7 +103,6 @@ export function formatDurationCompact(seconds: number): string {
 }
 
 export function formatRenewalDayOption(days: number): string {
-  if (days === 0) return '当天提醒'
   if (days === 15) return '提前半个月'
   if (days === 30) return '提前1个月'
   return `提前${days}天`
@@ -117,6 +116,7 @@ export function parseRenewalThreshold(value: string): number | null {
 
 export function normalizeRenewalThreshold(value: number): number {
   const normalized = Math.max(0, Math.min(30, Math.round(value)))
+  if (normalized <= 1) return 1
   return renewalDayOptions.includes(normalized) ? normalized : 3
 }
 

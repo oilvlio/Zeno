@@ -292,15 +292,23 @@ func (h *handler) dispatchNotificationEvent(store agentStore, event notification
 }
 
 func (h *handler) dispatchAgentStatusNotification(store agentStore, transition notificationStatusTransition, ts time.Time) {
-	eventType, ok := notificationEventTypeForStatusChange(transition.Previous.Status, transition.Current.Status)
+	event, ok := notificationEventForStatusTransition(transition, ts)
 	if !ok || h.notificationSender == nil {
 		return
+	}
+	h.dispatchNotificationEvent(store, event)
+}
+
+func notificationEventForStatusTransition(transition notificationStatusTransition, ts time.Time) (notificationEvent, bool) {
+	eventType, ok := notificationEventTypeForStatusChange(transition.Previous.Status, transition.Current.Status)
+	if !ok {
+		return notificationEvent{}, false
 	}
 	node := transition.Current
 	if node.ID == "" {
 		node = transition.Previous
 	}
-	event := notificationEvent{
+	return notificationEvent{
 		EventType:      eventType,
 		NodeID:         node.ID,
 		NodeName:       node.DisplayName,
@@ -309,8 +317,7 @@ func (h *handler) dispatchAgentStatusNotification(store agentStore, transition n
 		PreviousStatus: transition.Previous.Status,
 		TS:             ts.UTC().Format(time.RFC3339),
 		Detail:         transition.Detail,
-	}
-	h.dispatchNotificationEvent(store, event)
+	}, true
 }
 
 func (h *handler) runRenewalNotificationScanner(ctx context.Context, interval time.Duration) {

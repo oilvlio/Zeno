@@ -409,11 +409,9 @@ export interface AdminSettingsUpdateInput {
   customCode?: string
 }
 
-export interface AdminNodeUpdateInput {
-  displayName?: string
+export interface AdminNodeSharedInput {
   countryCode?: string
   region?: string
-  homeProbeTargetId?: string
   expiryDate?: string
   expiryPermanent?: boolean
   billingCycle?: string
@@ -426,42 +424,20 @@ export interface AdminNodeUpdateInput {
   publicIPv6?: string
   monthlyQuotaBytes?: number | null
   disabled?: boolean
+}
+
+export interface AdminNodeUpdateInput extends AdminNodeSharedInput {
+  displayName?: string
+  homeProbeTargetId?: string
   probeTargetIds?: string[]
 }
 
-export interface AdminNodeCreateInput {
+export interface AdminNodeCreateInput extends AdminNodeSharedInput {
   id?: string
   displayName: string
-  countryCode?: string
-  region?: string
-  expiryDate?: string
-  expiryPermanent?: boolean
-  billingCycle?: string
-  renewalAmount?: number | null
-  renewalCurrency?: string
-  billingMode?: string
-  monthlyResetDay?: number
-  displayOrder?: number
-  publicIPv4?: string
-  publicIPv6?: string
-  monthlyQuotaBytes?: number | null
-  disabled?: boolean
 }
 
-export interface AdminProbeTargetInput {
-  id?: string
-  name: string
-  type: ProbeType
-  address: string
-  port: number | null
-  count: number
-  timeoutMs: number
-  intervalSec: number
-  displayOrder?: number
-  assignments?: Array<{ nodeId: string; enabled: boolean }>
-}
-
-export interface AdminProbeTargetUpdateInput {
+export interface AdminProbeTargetSharedInput {
   name?: string
   type?: ProbeType
   address?: string
@@ -472,6 +448,19 @@ export interface AdminProbeTargetUpdateInput {
   displayOrder?: number
   assignments?: Array<{ nodeId: string; enabled: boolean }>
 }
+
+export interface AdminProbeTargetInput extends AdminProbeTargetSharedInput {
+  id?: string
+  name: string
+  type: ProbeType
+  address: string
+  port: number | null
+  count: number
+  timeoutMs: number
+  intervalSec: number
+}
+
+export interface AdminProbeTargetUpdateInput extends AdminProbeTargetSharedInput {}
 
 export interface AdminNotificationChannelCreateInput {
   id?: string

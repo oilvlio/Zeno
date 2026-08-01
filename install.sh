@@ -762,7 +762,8 @@ sqlite_quick_check_scratch_copy() {
   local data_dir="$1"
   local secrets_dir="$2"
   [ -e "$data_dir/zeno.db" ] || return 0
-  local scratch="$INSTALL_DIR/.staging/check-$(date +%Y%m%d-%H%M%S)-$$-${RANDOM}"
+  local scratch
+  scratch="$INSTALL_DIR/.staging/check-$(date +%Y%m%d-%H%M%S)-$$-${RANDOM}"
   rm -rf -- "$scratch"
   mkdir -p "$INSTALL_DIR/.staging" || return 1
   chmod 700 "$INSTALL_DIR/.staging" || return 1
@@ -853,7 +854,8 @@ restart_current_install() {
 
 preserve_failed_state() {
   local backup_root="$INSTALL_DIR/backups"
-  local failed="$backup_root/failed-install-$(date +%Y%m%d-%H%M%S)-$$"
+  local failed
+  failed="$backup_root/failed-install-$(date +%Y%m%d-%H%M%S)-$$"
   mkdir -p "$failed" || return 1
   chmod 700 "$failed" || return 1
   local name
@@ -881,7 +883,8 @@ restore_backup() {
   verify_backup_for_restore "$BACKUP_DIR" || return 1
   echo "正在从备份恢复旧配置和数据: ${BACKUP_DIR}" >&2
 
-  local restore_stage="$INSTALL_DIR/.staging/restore-$(date +%Y%m%d-%H%M%S)-$$"
+  local restore_stage
+  restore_stage="$INSTALL_DIR/.staging/restore-$(date +%Y%m%d-%H%M%S)-$$"
   rm -rf -- "$restore_stage"
   mkdir -p "$restore_stage" || return 1
   chmod 700 "$restore_stage" || return 1

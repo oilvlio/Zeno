@@ -126,13 +126,9 @@ func (s *sqliteAgentDomain) RecordAgentPresenceOfflineTransition(ctx context.Con
 }
 
 func (s *sqliteAgentDomain) recordAgentPresenceTransition(ctx context.Context, nodeID string, ts time.Time, status string) (notificationStatusTransition, error) {
-	var transition notificationStatusTransition
-	err := s.writes.withAgentWrite(ctx, nodeID, func(ctx context.Context) error {
-		var err error
-		transition, err = s.recordAgentPresenceTransitionOnce(ctx, nodeID, ts, status)
-		return err
+	return withAgentWriteResult(s.writes, ctx, nodeID, func(writeCtx context.Context) (notificationStatusTransition, error) {
+		return s.recordAgentPresenceTransitionOnce(writeCtx, nodeID, ts, status)
 	})
-	return transition, err
 }
 
 func (s *sqliteAgentDomain) StaleAgentOfflineNodeIDs(ctx context.Context, now time.Time) ([]string, error) {

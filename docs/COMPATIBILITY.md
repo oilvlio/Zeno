@@ -8,10 +8,9 @@
 
 | Controller | Agent | 状态 | 说明 |
 | --- | --- | --- | --- |
-| v1.1.1 | v0.6.3 | 支持 | v1.1.0 patch；大型 SQLite 升级检查默认允许 10 分钟，可配置且保持失败自动回滚 |
-| v1.1.0 | v0.6.3 | 支持 | 发布时完整验证：enrollment、heartbeat、state、host/identity、network/disk、ICMP/TCP/HTTP 探测与离线恢复 |
-| v1.1.0 | v0.6.2 | 支持 | 兼容升级；Controller 可先升级，Agent 无需批量滚动 |
-| v1.0.1 | v0.6.2 | 支持 | 上一稳定组合 |
+| v1.9.4 | v0.6.6 | 支持 | 当前稳定组合；无协议字段或数据库结构变更，Controller 与 Agent 完整发布门禁均通过 |
+| v1.9.4 | v0.6.5 | 支持 | Agent 本次仅精简内部实现，现有 v0.6.5 可继续上报并独立升级 |
+| v1.9.3 | v0.6.5 | 支持 | 上一稳定组合 |
 
 只有表中明确列出的组合属于已验证支持范围。较旧 Agent 可能仍可上报，但未列出的组合仅为 best effort；排障前请先升级 Agent。Controller 与 Agent 独立发布，版本号不要求相同。
 
@@ -38,10 +37,9 @@
 
 | Controller | Agent | Status | Notes |
 | --- | --- | --- | --- |
-| v1.1.1 | v0.6.3 | Supported | v1.1.0 patch; large SQLite upgrade checks default to 10 minutes, remain configurable, and still roll back on failure |
-| v1.1.0 | v0.6.3 | Supported | Release validation covers enrollment, heartbeat, state, host/identity, network/disk, ICMP/TCP/HTTP probes, and offline recovery |
-| v1.1.0 | v0.6.2 | Supported | Compatible upgrade path; the Controller can be upgraded first without a fleet-wide Agent rollout |
-| v1.0.1 | v0.6.2 | Supported | Previous stable combination |
+| v1.9.4 | v0.6.6 | Supported | Current stable combination; no protocol-field or database-schema changes, with complete Controller and Agent release gates passed |
+| v1.9.4 | v0.6.5 | Supported | This Agent release only simplifies internals, so existing v0.6.5 installations remain supported and can upgrade independently |
+| v1.9.3 | v0.6.5 | Supported | Previous stable combination |
 
 Only combinations explicitly listed above are verified and supported. Older Agents may continue to report, but unlisted combinations are best effort; upgrade the Agent before troubleshooting. Controller and Agent are released independently and their version numbers do not need to match.
 

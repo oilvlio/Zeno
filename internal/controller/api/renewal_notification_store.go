@@ -164,7 +164,7 @@ func renewalNotificationCandidatesTx(ctx context.Context, tx *sql.Tx, now time.T
 		if err != nil {
 			return nil, err
 		}
-		if !renewalRulesMatch(rules, float64(daysRemaining)) {
+		if !renewalRulesMatch(rules, dueDate, today) {
 			continue
 		}
 		mark := renewalNotificationMark(markDay, dueDateText)
@@ -223,15 +223,25 @@ func (s *sqliteRenewalNotifications) MarkRenewalNotification(ctx context.Context
 	return err
 }
 
-func renewalRulesMatch(rules []AdminAlertRule, daysRemaining float64) bool {
+func renewalRulesMatch(rules []AdminAlertRule, dueDate, today time.Time) bool {
+	today = dateOnlyUTC(today)
+	dueDate = dateOnlyUTC(dueDate)
 	for _, rule := range rules {
 		if rule.NotificationEventType != "renewal_due" || rule.Metric != "expiry_days" || !rule.Enabled {
 			continue
 		}
-		// The configured lead time is one reminder day, not a range that stays
-		// active through the due date. Selecting 1 day therefore sends once at
-		// T-1 and does not send another reminder at T-0.
-		if daysRemaining == rule.Threshold {
+		threshold := int(rule.Threshold)
+		if rule.Threshold != float64(threshold) || !allowedRenewalNoticeDays[threshold] {
+			continue
+		}
+		reminderDate := dueDate.AddDate(0, 0, -threshold)
+		if threshold == renewalNoticeCalendarMonthThreshold {
+			// “提前 1 个月” is a calendar operation, not a 30-day duration.
+			// Clamping preserves end-of-month intent: Mar 31 -> Feb 28/29,
+			// May 31 -> Apr 30, and leap-year dates remain deterministic.
+			reminderDate = addMonthsFromAnchorClampedUTC(dueDate, -1)
+		}
+		if dateOnlyUTC(reminderDate).Equal(today) {
 			return true
 		}
 	}

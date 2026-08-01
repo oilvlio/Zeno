@@ -331,6 +331,7 @@ func TestAdminAlertRulesRejectUnauthorizedUnknownAndInvalidRequests(t *testing.T
 		{name: "patch unknown rule", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/missing", body: `{"enabled":true}`, adminToken: "admin-pass", wantStatus: http.StatusNotFound},
 		{name: "patch empty body", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/cpu_high", body: `{}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "patch negative threshold", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/cpu_high", body: `{"threshold":-1}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
+		{name: "patch removed same-day renewal threshold", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/renewal_due", body: `{"threshold":0}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "patch renewal threshold unsupported days", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/renewal_due", body: `{"threshold":2}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "patch renewal threshold above 30 days", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/renewal_due", body: `{"threshold":31}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "patch renewal threshold fractional days", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/renewal_due", body: `{"threshold":1.5}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
@@ -354,6 +355,35 @@ func TestAdminAlertRulesRejectUnauthorizedUnknownAndInvalidRequests(t *testing.T
 			}
 			assertNoSensitiveAlertRuleLeak(t, recorder.Body.String())
 		})
+	}
+}
+
+func TestRemovedSameDayRenewalThresholdMigratesToOneDay(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "zeno.db")
+	store, err := OpenSQLiteStore(databasePath)
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	ctx := context.Background()
+	if _, err := store.db.ExecContext(ctx, `UPDATE alert_rules SET threshold = 0 WHERE id = 'renewal_due'`); err != nil {
+		store.Close()
+		t.Fatalf("seed removed threshold: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close pre-migration store: %v", err)
+	}
+
+	reopened, err := OpenSQLiteStore(databasePath)
+	if err != nil {
+		t.Fatalf("reopen sqlite store: %v", err)
+	}
+	defer reopened.Close()
+	var threshold float64
+	if err := reopened.db.QueryRowContext(ctx, `SELECT threshold FROM alert_rules WHERE id = 'renewal_due'`).Scan(&threshold); err != nil {
+		t.Fatalf("read migrated threshold: %v", err)
+	}
+	if threshold != 1 {
+		t.Fatalf("renewal threshold = %g, want closest supported value 1", threshold)
 	}
 }
 

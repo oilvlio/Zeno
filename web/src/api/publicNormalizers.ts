@@ -1,6 +1,6 @@
 import type { AdminSettings, HomeCardNode, LatencyPoint, ServiceTarget, StatePoint } from '../types'
 import { normalizeCurrencyRates } from '../lib/currency'
-import type { ApiLatencyPoint, ApiLatencyResponse, ApiLatencySummary, ApiNode, ApiServiceLatencyPoint, ApiServiceLatencyResponse, ApiServiceTarget, ApiSettings, ApiStatePoint, ApiStateResponse, NodeLatencyData, NodeStateData, ServiceLatencyData, SummaryData, ApiSummaryResponse } from './apiTypes'
+import type { ApiLatencyPoint, ApiLatencyResponse, ApiLatencySeries, ApiLatencySummary, ApiNode, ApiServiceLatencyPoint, ApiServiceLatencyResponse, ApiServiceLatencySeries, ApiServiceTarget, ApiSettings, ApiStatePoint, ApiStateResponse, NodeLatencyData, NodeStateData, ServiceLatencyData, SummaryData, ApiSummaryResponse } from './apiTypes'
 
 export function normalizeSettings(input: ApiSettings): AdminSettings {
   const logoUrl = input.logo_url
@@ -135,17 +135,29 @@ export function normalizeLatencyPoint(point: ApiLatencyPoint): LatencyPoint {
 
 export function normalizeNodeLatencyPoints(input: ApiLatencyResponse): LatencyPoint[] {
   if (input.points) return input.points.map(normalizeLatencyPoint)
-  const sharedCreatedAt = input.created_at ?? []
-  return (input.series ?? []).flatMap((series) => {
+  return normalizeLatencySeries(input.series, input.created_at ?? [], (series) => ({
+    targetId: series.target_id,
+    targetName: series.target_name,
+  }))
+}
+
+type ApiLatencySeriesValues = Pick<ApiLatencySeries, 'created_at' | 'median_ms' | 'avg_ms' | 'loss_percent'>
+
+function normalizeLatencySeries<T extends ApiLatencySeriesValues>(
+  seriesList: T[] | null | undefined,
+  sharedCreatedAt: number[],
+  identity: (series: T) => Pick<LatencyPoint, 'targetId' | 'targetName'>,
+): LatencyPoint[] {
+  return (seriesList ?? []).flatMap((series) => {
     const medianValues = series.median_ms ?? []
     const avgValues = series.avg_ms ?? []
     const lossValues = series.loss_percent ?? []
+    const target = identity(series)
     return (series.created_at ?? sharedCreatedAt).map((createdAt, index) => {
       const medianMs = medianValues[index] ?? null
       return {
         ts: normalizeSeriesTimestamp(createdAt),
-        targetId: series.target_id,
-        targetName: series.target_name,
+        ...target,
         medianMs,
         avgMs: avgValues[index] ?? null,
         lossPercent: lossValues[index] ?? 0,
@@ -156,23 +168,10 @@ export function normalizeNodeLatencyPoints(input: ApiLatencyResponse): LatencyPo
 
 export function normalizeServiceLatencyPoints(input: ApiServiceLatencyResponse): LatencyPoint[] {
   if (input.points) return input.points.map(normalizeServiceLatencyPoint)
-  const sharedCreatedAt = input.created_at ?? []
-  return (input.series ?? []).flatMap((series) => {
-    const medianValues = series.median_ms ?? []
-    const avgValues = series.avg_ms ?? []
-    const lossValues = series.loss_percent ?? []
-    return (series.created_at ?? sharedCreatedAt).map((createdAt, index) => {
-      const medianMs = medianValues[index] ?? null
-      return {
-        ts: normalizeSeriesTimestamp(createdAt),
-        targetId: series.node_id,
-        targetName: series.node_name,
-        medianMs,
-        avgMs: avgValues[index] ?? null,
-        lossPercent: lossValues[index] ?? 0,
-      }
-    })
-  })
+  return normalizeLatencySeries<ApiServiceLatencySeries>(input.series, input.created_at ?? [], (series) => ({
+    targetId: series.node_id,
+    targetName: series.node_name,
+  }))
 }
 
 export function normalizeSeriesTimestamp(value: number): string {

@@ -254,36 +254,6 @@ func (s *sqliteAdminDomain) UpdateAdminProbeTarget(ctx context.Context, targetID
 	if err := update.normalize(); err != nil {
 		return AdminProbeTarget{}, err
 	}
-	var currentType, currentAddress string
-	var currentPort sql.NullInt64
-	var currentCount, currentTimeoutMS, currentIntervalSec int
-	if err := s.db.QueryRowContext(ctx, `
-		SELECT type, address, port, count, timeout_ms, interval_sec
-		FROM probe_targets pt
-		WHERE pt.id = ?
-		  AND NOT EXISTS (
-			SELECT 1 FROM admin_deletion_jobs deletion
-			WHERE deletion.entity_kind = 'probe_target'
-			  AND deletion.entity_id = pt.id
-			  AND deletion.state IN ('pending', 'running')
-		  )
-	`, targetID).Scan(&currentType, &currentAddress, &currentPort, &currentCount, &currentTimeoutMS, &currentIntervalSec); err != nil {
-		if err == sql.ErrNoRows {
-			return AdminProbeTarget{}, errProbeTargetNotFound
-		}
-		return AdminProbeTarget{}, err
-	}
-	current := adminProbeTargetConfig{
-		targetType:  currentType,
-		address:     currentAddress,
-		port:        currentPort,
-		count:       currentCount,
-		timeoutMS:   currentTimeoutMS,
-		intervalSec: currentIntervalSec,
-	}
-	if err := validateAdminProbeTargetUpdate(current, update); err != nil {
-		return AdminProbeTarget{}, err
-	}
 	patch := buildAdminProbeTargetPatch(update)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -293,11 +263,11 @@ func (s *sqliteAdminDomain) UpdateAdminProbeTarget(ctx context.Context, targetID
 	if _, err := tx.ExecContext(ctx, `UPDATE probe_config_meta SET version = version WHERE id = 1`); err != nil {
 		return AdminProbeTarget{}, err
 	}
-	var targetStillActive int
-	if err := tx.QueryRowContext(ctx, activeAdminProbeTargetExistsSQL, targetID).Scan(&targetStillActive); err != nil {
-		if err == sql.ErrNoRows {
-			return AdminProbeTarget{}, errProbeTargetNotFound
-		}
+	current, err := adminProbeTargetConfigTx(ctx, tx, targetID)
+	if err != nil {
+		return AdminProbeTarget{}, err
+	}
+	if err := validateAdminProbeTargetUpdate(current, update); err != nil {
 		return AdminProbeTarget{}, err
 	}
 	usageBefore, err := probeNodeUsagesTx(ctx, tx)
@@ -355,6 +325,32 @@ func (s *sqliteAdminDomain) UpdateAdminProbeTarget(ctx context.Context, targetID
 	return s.adminProbeTargetByID(ctx, targetID)
 }
 
+func adminProbeTargetConfigTx(ctx context.Context, tx *sql.Tx, targetID string) (adminProbeTargetConfig, error) {
+	var current adminProbeTargetConfig
+	err := tx.QueryRowContext(ctx, `
+		SELECT type, address, port, count, timeout_ms, interval_sec
+		FROM probe_targets pt
+		WHERE pt.id = ?
+		  AND NOT EXISTS (
+			SELECT 1 FROM admin_deletion_jobs deletion
+			WHERE deletion.entity_kind = 'probe_target'
+			  AND deletion.entity_id = pt.id
+			  AND deletion.state IN ('pending', 'running')
+		  )
+	`, targetID).Scan(
+		&current.targetType,
+		&current.address,
+		&current.port,
+		&current.count,
+		&current.timeoutMS,
+		&current.intervalSec,
+	)
+	if err == sql.ErrNoRows {
+		return adminProbeTargetConfig{}, errProbeTargetNotFound
+	}
+	return current, err
+}
+
 func (s *sqliteAdminDomain) DeleteAdminProbeTarget(ctx context.Context, targetID string) error {
 	targetID = strings.TrimSpace(targetID)
 	if targetID == "" {
@@ -410,16 +406,7 @@ func validateProbeNodeUsageTransition(before, after map[string]probeNodeUsage) e
 }
 
 func (s *sqliteAdminDomain) adminProbeTargetByID(ctx context.Context, targetID string) (AdminProbeTarget, error) {
-	targets, err := s.AdminProbeTargets(ctx)
-	if err != nil {
-		return AdminProbeTarget{}, err
-	}
-	for _, target := range targets {
-		if target.ID == targetID {
-			return target, nil
-		}
-	}
-	return AdminProbeTarget{}, errProbeTargetNotFound
+	return adminResourceByID(ctx, targetID, s.AdminProbeTargets, func(target AdminProbeTarget) string { return target.ID }, errProbeTargetNotFound)
 }
 
 func adminOptionalInt64SQLValue(value adminOptionalInt64) any {
@@ -460,55 +447,14 @@ func (s *sqliteAdminDomain) UpdateAdminNode(ctx context.Context, nodeID string, 
 		return AdminNode{}, err
 	}
 
-	var exists int
-	if err := tx.QueryRowContext(ctx, activeAdminNodeExistsSQL, nodeID).Scan(&exists); err != nil {
-		if err == sql.ErrNoRows {
-			return AdminNode{}, errNodeNotFound
-		}
+	if err := ensureActiveAdminNodeExistsTx(ctx, tx, nodeID); err != nil {
 		return AdminNode{}, err
 	}
-
 	if err := verifyAdminNodeProbeSelectionTx(ctx, tx, update); err != nil {
 		return AdminNode{}, err
 	}
-
-	patch := buildAdminNodePatch(update)
-
-	var usageBefore map[string]probeNodeUsage
-	if update.ProbeTargetIDs != nil {
-		usageBefore, err = probeNodeUsagesTx(ctx, tx)
-		if err != nil {
-			return AdminNode{}, err
-		}
-	}
-
-	if !patch.empty() || update.ProbeTargetIDs != nil {
-		patch.set("updated_at", time.Now().UTC().Unix())
-		statement, args := patch.updateStatement("nodes", "id = ?", nodeID)
-		if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
-			return AdminNode{}, err
-		}
-	}
-
-	if update.ProbeTargetIDs != nil {
-		if err := replaceAdminNodeProbeAssignmentsTx(ctx, tx, nodeID, update.ProbeTargetIDs); err != nil {
-			return AdminNode{}, err
-		}
-		if update.HomeProbeTargetID == nil {
-			if err := clearUnselectedHomeProbeTargetTx(ctx, tx, nodeID, update.ProbeTargetIDs); err != nil {
-				return AdminNode{}, err
-			}
-		}
-		usageAfter, err := probeNodeUsagesTx(ctx, tx)
-		if err != nil {
-			return AdminNode{}, err
-		}
-		if err := validateProbeNodeUsageTransition(usageBefore, usageAfter); err != nil {
-			return AdminNode{}, err
-		}
-		if err := bumpProbeConfigVersionTx(ctx, tx); err != nil {
-			return AdminNode{}, err
-		}
+	if err := applyAdminNodeUpdateTx(ctx, tx, nodeID, update); err != nil {
+		return AdminNode{}, err
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -516,14 +462,49 @@ func (s *sqliteAdminDomain) UpdateAdminNode(ctx context.Context, nodeID string, 
 	}
 	tx = nil
 
-	nodes, err := s.AdminNodes(ctx)
-	if err != nil {
-		return AdminNode{}, err
-	}
-	for _, node := range nodes {
-		if node.ID == nodeID {
-			return node, nil
+	return s.adminNodeByID(ctx, nodeID)
+}
+
+func ensureActiveAdminNodeExistsTx(ctx context.Context, tx *sql.Tx, nodeID string) error {
+	return requireAdminResourceTx(ctx, tx, activeAdminNodeExistsSQL, nodeID, errNodeNotFound)
+}
+
+func applyAdminNodeUpdateTx(ctx context.Context, tx *sql.Tx, nodeID string, update AdminNodeUpdateRequest) error {
+	var usageBefore map[string]probeNodeUsage
+	var err error
+	if update.ProbeTargetIDs != nil {
+		usageBefore, err = probeNodeUsagesTx(ctx, tx)
+		if err != nil {
+			return err
 		}
 	}
-	return AdminNode{}, errNodeNotFound
+
+	patch := buildAdminNodePatch(update)
+	if !patch.empty() || update.ProbeTargetIDs != nil {
+		patch.set("updated_at", time.Now().UTC().Unix())
+		statement, args := patch.updateStatement("nodes", "id = ?", nodeID)
+		if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
+			return err
+		}
+	}
+	if update.ProbeTargetIDs == nil {
+		return nil
+	}
+
+	if err := replaceAdminNodeProbeAssignmentsTx(ctx, tx, nodeID, update.ProbeTargetIDs); err != nil {
+		return err
+	}
+	if update.HomeProbeTargetID == nil {
+		if err := clearUnselectedHomeProbeTargetTx(ctx, tx, nodeID, update.ProbeTargetIDs); err != nil {
+			return err
+		}
+	}
+	usageAfter, err := probeNodeUsagesTx(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if err := validateProbeNodeUsageTransition(usageBefore, usageAfter); err != nil {
+		return err
+	}
+	return bumpProbeConfigVersionTx(ctx, tx)
 }

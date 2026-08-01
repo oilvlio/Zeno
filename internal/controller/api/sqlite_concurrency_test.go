@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -54,6 +55,59 @@ func TestOpenSQLiteStoreAllowsWALReadsWhileWriterTransactionIsOpen(t *testing.T)
 		if foreignKeys != 1 {
 			t.Fatalf("foreign_keys on pooled connection %d = %d, want 1", index, foreignKeys)
 		}
+	}
+}
+
+func TestConcurrentProbeTargetPatchRevalidatesAfterWriterLock(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	if err := store.SeedPreviewData(ctx, PreviewSeedOptions{NodeID: "example-node-a", DisplayName: "Example Node A", AgentToken: "token"}); err != nil {
+		t.Fatalf("seed preview data: %v", err)
+	}
+
+	lockConn, err := store.db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("open lock connection: %v", err)
+	}
+	defer lockConn.Close()
+	if _, err := lockConn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		t.Fatalf("begin immediate transaction: %v", err)
+	}
+	defer func() { _, _ = lockConn.ExecContext(context.Background(), `ROLLBACK`) }()
+
+	result := make(chan error, 1)
+	go func() {
+		port := adminOptionalInt64{Set: true, Valid: true, Value: 5353}
+		_, updateErr := store.UpdateAdminProbeTarget(ctx, "google-dns", AdminProbeTargetUpdateRequest{Port: port})
+		result <- updateErr
+	}()
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for store.db.Stats().InUse < 2 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(25 * time.Millisecond)
+	if _, err := lockConn.ExecContext(ctx, `UPDATE probe_targets SET type = 'ping', port = NULL WHERE id = 'google-dns'`); err != nil {
+		t.Fatalf("commit concurrent type change: %v", err)
+	}
+	if _, err := lockConn.ExecContext(ctx, `COMMIT`); err != nil {
+		t.Fatalf("commit writer transaction: %v", err)
+	}
+
+	if err := <-result; !errors.Is(err, errInvalidAdminTargetWrite) {
+		t.Fatalf("stale port patch error = %v, want invalid target rejection", err)
+	}
+	var targetType, address string
+	var port sql.NullInt64
+	if err := store.db.QueryRowContext(ctx, `SELECT type, address, port FROM probe_targets WHERE id = 'google-dns'`).Scan(&targetType, &address, &port); err != nil {
+		t.Fatalf("read final target: %v", err)
+	}
+	if !validAdminProbeTargetForType(targetType, address, port) {
+		t.Fatalf("concurrent patches persisted invalid target type=%s address=%s port=%v", targetType, address, port)
 	}
 }
 

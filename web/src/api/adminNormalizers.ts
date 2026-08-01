@@ -1,5 +1,5 @@
 import type { AdminAlertRule, AdminNode, AdminNotificationChannel, AdminNotificationDelivery, AdminProbeTarget } from '../types'
-import type { AdminAlertRuleUpdateInput, AdminAlertRulesData, AdminNodeCreateInput, AdminNodesData, AdminNodeUpdateInput, AdminNotificationChannelCreateInput, AdminNotificationChannelsData, AdminNotificationChannelUpdateInput, AdminProbeTargetInput, AdminProbeTargetsData, AdminProbeTargetUpdateInput, AdminSettingsUpdateInput, ApiAdminAlertRule, ApiAdminAlertRulesResponse, ApiAdminNode, ApiAdminNodesResponse, ApiAdminNotificationChannel, ApiAdminNotificationChannelsResponse, ApiAdminNotificationDelivery, ApiAdminProbeTarget, ApiAdminProbeTargetsResponse } from './apiTypes'
+import type { AdminAlertRuleUpdateInput, AdminAlertRulesData, AdminNodeCreateInput, AdminNodesData, AdminNodeSharedInput, AdminNodeUpdateInput, AdminNotificationChannelCreateInput, AdminNotificationChannelsData, AdminNotificationChannelUpdateInput, AdminProbeTargetInput, AdminProbeTargetSharedInput, AdminProbeTargetsData, AdminProbeTargetUpdateInput, AdminSettingsUpdateInput, ApiAdminAlertRule, ApiAdminAlertRulesResponse, ApiAdminNode, ApiAdminNodesResponse, ApiAdminNotificationChannel, ApiAdminNotificationChannelsResponse, ApiAdminNotificationDelivery, ApiAdminProbeTarget, ApiAdminProbeTargetsResponse } from './apiTypes'
 
 export function normalizeAdminNodes(input: ApiAdminNodesResponse): AdminNodesData {
   return {
@@ -47,12 +47,11 @@ export function serializeAdminSettingsUpdate(input: AdminSettingsUpdateInput) {
   }
 }
 
-export function serializeAdminNodeUpdate(input: AdminNodeUpdateInput) {
+function serializeAdminNodeShared(input: AdminNodeSharedInput, afterLocation: Record<string, unknown> = {}) {
   return {
-    ...(input.displayName !== undefined ? { display_name: input.displayName } : {}),
     ...(input.countryCode !== undefined ? { country_code: input.countryCode } : {}),
     ...(input.region !== undefined ? { region: input.region } : {}),
-    ...(input.homeProbeTargetId !== undefined ? { home_probe_target_id: input.homeProbeTargetId } : {}),
+    ...afterLocation,
     ...(input.expiryDate !== undefined ? { expiry_date: input.expiryDate } : {}),
     ...(input.expiryPermanent !== undefined ? { expiry_permanent: input.expiryPermanent } : {}),
     ...(input.billingCycle !== undefined ? { billing_cycle: input.billingCycle } : {}),
@@ -65,6 +64,13 @@ export function serializeAdminNodeUpdate(input: AdminNodeUpdateInput) {
     ...(input.publicIPv6 !== undefined ? { public_ipv6: input.publicIPv6 } : {}),
     ...(input.monthlyQuotaBytes !== undefined ? { monthly_quota_bytes: input.monthlyQuotaBytes } : {}),
     ...(input.disabled !== undefined ? { disabled: input.disabled } : {}),
+  }
+}
+
+export function serializeAdminNodeUpdate(input: AdminNodeUpdateInput) {
+  return {
+    ...(input.displayName !== undefined ? { display_name: input.displayName } : {}),
+    ...serializeAdminNodeShared(input, input.homeProbeTargetId !== undefined ? { home_probe_target_id: input.homeProbeTargetId } : {}),
     ...(input.probeTargetIds !== undefined ? { probe_target_ids: input.probeTargetIds } : {}),
   }
 }
@@ -73,44 +79,11 @@ export function serializeAdminNodeCreate(input: AdminNodeCreateInput) {
   return {
     ...(input.id !== undefined && input.id.trim() !== '' ? { id: input.id } : {}),
     display_name: input.displayName,
-    ...(input.countryCode !== undefined ? { country_code: input.countryCode } : {}),
-    ...(input.region !== undefined ? { region: input.region } : {}),
-    ...(input.expiryDate !== undefined ? { expiry_date: input.expiryDate } : {}),
-    ...(input.expiryPermanent !== undefined ? { expiry_permanent: input.expiryPermanent } : {}),
-    ...(input.billingCycle !== undefined ? { billing_cycle: input.billingCycle } : {}),
-    ...(input.renewalAmount !== undefined ? { renewal_amount: input.renewalAmount } : {}),
-    ...(input.renewalCurrency !== undefined ? { renewal_currency: input.renewalCurrency } : {}),
-    ...(input.billingMode !== undefined ? { billing_mode: input.billingMode } : {}),
-    ...(input.monthlyResetDay !== undefined ? { monthly_reset_day: input.monthlyResetDay } : {}),
-    ...(input.displayOrder !== undefined ? { display_order: input.displayOrder } : {}),
-    ...(input.publicIPv4 !== undefined ? { public_ipv4: input.publicIPv4 } : {}),
-    ...(input.publicIPv6 !== undefined ? { public_ipv6: input.publicIPv6 } : {}),
-    ...(input.monthlyQuotaBytes !== undefined ? { monthly_quota_bytes: input.monthlyQuotaBytes } : {}),
-    ...(input.disabled !== undefined ? { disabled: input.disabled } : {}),
+    ...serializeAdminNodeShared(input),
   }
 }
 
-export function serializeAdminProbeTargetCreate(input: AdminProbeTargetInput) {
-  return {
-    ...(input.id !== undefined && input.id.trim() !== '' ? { id: input.id } : {}),
-    name: input.name,
-    type: input.type,
-    address: input.address,
-    ...(input.port !== undefined ? { port: input.port } : {}),
-    count: input.count,
-    timeout_ms: input.timeoutMs,
-    interval_sec: input.intervalSec,
-    ...(input.displayOrder !== undefined ? { display_order: input.displayOrder } : {}),
-    ...(input.assignments !== undefined ? {
-      assignments: input.assignments.map((assignment) => ({
-        node_id: assignment.nodeId,
-        enabled: assignment.enabled,
-      })),
-    } : {}),
-  }
-}
-
-export function serializeAdminProbeTargetUpdate(input: AdminProbeTargetUpdateInput) {
+function serializeAdminProbeTargetShared(input: AdminProbeTargetSharedInput) {
   return {
     ...(input.name !== undefined ? { name: input.name } : {}),
     ...(input.type !== undefined ? { type: input.type } : {}),
@@ -127,6 +100,17 @@ export function serializeAdminProbeTargetUpdate(input: AdminProbeTargetUpdateInp
       })),
     } : {}),
   }
+}
+
+export function serializeAdminProbeTargetCreate(input: AdminProbeTargetInput) {
+  return {
+    ...(input.id !== undefined && input.id.trim() !== '' ? { id: input.id } : {}),
+    ...serializeAdminProbeTargetShared(input),
+  }
+}
+
+export function serializeAdminProbeTargetUpdate(input: AdminProbeTargetUpdateInput) {
+  return serializeAdminProbeTargetShared(input)
 }
 
 export function serializeAdminNotificationChannelCreate(input: AdminNotificationChannelCreateInput) {

@@ -100,7 +100,7 @@ func TestRenewalNotificationScannerDispatchesRecurringBillingCycle(t *testing.T)
 
 	now := time.Now().UTC().Truncate(time.Second)
 	cycleDueDate := dateOnlyUTC(now).AddDate(0, 0, 1)
-	finalExpiryDate := addMonthsClampedUTC(cycleDueDate, 1).Format("2006-01-02")
+	finalExpiryDate := addMonthsFromAnchorClampedUTC(cycleDueDate, 1).Format("2006-01-02")
 	billingCycle := "月"
 	if _, err := store.UpdateAdminNode(ctx, "example-node-a", AdminNodeUpdateRequest{ExpiryDate: &finalExpiryDate, BillingCycle: &billingCycle}); err != nil {
 		t.Fatalf("set recurring expiry date: %v", err)
@@ -143,6 +143,94 @@ func TestRenewalNotificationScannerDispatchesRecurringBillingCycle(t *testing.T)
 	}
 	if deliveryCount != 1 {
 		t.Fatalf("recurring renewal delivery count = %d, want one configured 1-day reminder", deliveryCount)
+	}
+}
+
+func TestRenewalRulesMatchCalendarMonthBoundaries(t *testing.T) {
+	removedSameDayRule := []AdminAlertRule{{
+		Metric:                "expiry_days",
+		NotificationEventType: "renewal_due",
+		Enabled:               true,
+		Threshold:             0,
+	}}
+	dueDay := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	if renewalRulesMatch(removedSameDayRule, dueDay, dueDay) {
+		t.Fatal("removed same-day reminder still matched")
+	}
+
+	monthRule := []AdminAlertRule{{
+		Metric:                "expiry_days",
+		NotificationEventType: "renewal_due",
+		Enabled:               true,
+		Threshold:             renewalNoticeCalendarMonthThreshold,
+	}}
+	cases := []struct {
+		name string
+		due  string
+		now  string
+	}{
+		{name: "non leap march end", due: "2026-03-31", now: "2026-02-28"},
+		{name: "leap march end", due: "2024-03-31", now: "2024-02-29"},
+		{name: "thirty day month", due: "2026-05-31", now: "2026-04-30"},
+		{name: "ordinary month", due: "2026-06-18", now: "2026-05-18"},
+		{name: "leap day due", due: "2024-02-29", now: "2024-01-29"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			due, err := time.Parse("2006-01-02", tc.due)
+			if err != nil {
+				t.Fatalf("parse due date: %v", err)
+			}
+			now, err := time.Parse("2006-01-02", tc.now)
+			if err != nil {
+				t.Fatalf("parse reminder date: %v", err)
+			}
+			if !renewalRulesMatch(monthRule, due, now) {
+				t.Fatalf("calendar-month reminder did not match due=%s now=%s", tc.due, tc.now)
+			}
+			if renewalRulesMatch(monthRule, due, now.AddDate(0, 0, -1)) || renewalRulesMatch(monthRule, due, now.AddDate(0, 0, 1)) {
+				t.Fatalf("calendar-month reminder matched outside its single trigger day")
+			}
+		})
+	}
+}
+
+func TestRenewalNotificationScannerUsesCalendarMonthForRecurringFebruaryCycle(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+	enableTestNotificationCredentialEncryption(t, store)
+	ctx := context.Background()
+	if err := store.SeedPreviewData(ctx, PreviewSeedOptions{NodeID: "example-node-a", DisplayName: "Example Node A", CountryCode: "HK", AgentToken: "test-agent-token"}); err != nil {
+		t.Fatalf("seed preview data: %v", err)
+	}
+	finalExpiryDate := "2026-04-01"
+	billingCycle := "月"
+	if _, err := store.UpdateAdminNode(ctx, "example-node-a", AdminNodeUpdateRequest{ExpiryDate: &finalExpiryDate, BillingCycle: &billingCycle}); err != nil {
+		t.Fatalf("set recurring expiry date: %v", err)
+	}
+	enabled := true
+	if _, err := store.CreateAdminNotificationChannel(ctx, AdminNotificationChannelCreateRequest{ID: "ops-telegram", Name: "Ops Telegram", Destination: "7579942307", Credential: "test-credential", Enabled: &enabled}); err != nil {
+		t.Fatalf("create notification channel: %v", err)
+	}
+	threshold := float64(renewalNoticeCalendarMonthThreshold)
+	if _, err := store.UpdateAdminAlertRule(ctx, "renewal_due", AdminAlertRuleUpdateRequest{Enabled: &enabled, Threshold: &threshold}); err != nil {
+		t.Fatalf("enable renewal rule: %v", err)
+	}
+	now := time.Date(2026, 2, 1, 12, 0, 0, 0, time.UTC)
+	queued, err := store.QueueDueRenewalNotifications(ctx, now)
+	if err != nil {
+		t.Fatalf("queue recurring calendar-month reminder: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("calendar-month scan queued %d deliveries, want 1 for 2026-03-01 due date", queued)
+	}
+	if queued, err := store.QueueDueRenewalNotifications(ctx, now.AddDate(0, 0, 1)); err != nil {
+		t.Fatalf("queue day-after reminder: %v", err)
+	} else if queued != 0 {
+		t.Fatalf("day-after scan queued %d deliveries, want 0", queued)
 	}
 }
 func TestAgentHeartbeatHostAndStateDoNotDispatchRenewalDueNotification(t *testing.T) {

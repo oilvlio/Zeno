@@ -172,11 +172,6 @@ func dateOnlyUTC(value time.Time) time.Time {
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
-func addMonthsClampedUTC(value time.Time, months int) time.Time {
-	value = dateOnlyUTC(value)
-	return addMonthsFromAnchorClampedUTC(value, months)
-}
-
 func addMonthsFromAnchorClampedUTC(anchor time.Time, months int) time.Time {
 	anchor = dateOnlyUTC(anchor)
 	year, month, day := anchor.Date()

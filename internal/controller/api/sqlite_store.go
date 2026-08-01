@@ -100,6 +100,16 @@ func (s *sqliteWriteState) withAgentWrite(ctx context.Context, nodeID string, op
 	}, func() { s.busyRetries.Add(1) })
 }
 
+func withAgentWriteResult[T any](state *sqliteWriteState, ctx context.Context, nodeID string, operation func(context.Context) (T, error)) (T, error) {
+	var result T
+	err := state.withAgentWrite(ctx, nodeID, func(writeCtx context.Context) error {
+		var operationErr error
+		result, operationErr = operation(writeCtx)
+		return operationErr
+	})
+	return result, err
+}
+
 func retrySQLiteBusy(ctx context.Context, operation func() error) error {
 	return retrySQLiteBusyObserved(ctx, operation, nil)
 }

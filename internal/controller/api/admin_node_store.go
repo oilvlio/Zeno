@@ -124,16 +124,22 @@ func (s *sqliteAdminDomain) DeleteAdminNode(ctx context.Context, nodeID string) 
 }
 
 func (s *sqliteAdminDomain) adminNodeByID(ctx context.Context, nodeID string) (AdminNode, error) {
-	nodes, err := s.AdminNodes(ctx)
+	return adminResourceByID(ctx, nodeID, s.AdminNodes, func(node AdminNode) string { return node.ID }, errNodeNotFound)
+}
+
+func adminResourceByID[T any](ctx context.Context, requestedID string, list func(context.Context) ([]T, error), resourceID func(T) string, notFound error) (T, error) {
+	resources, err := list(ctx)
 	if err != nil {
-		return AdminNode{}, err
+		var zero T
+		return zero, err
 	}
-	for _, node := range nodes {
-		if node.ID == nodeID {
-			return node, nil
+	for _, resource := range resources {
+		if resourceID(resource) == requestedID {
+			return resource, nil
 		}
 	}
-	return AdminNode{}, errNodeNotFound
+	var zero T
+	return zero, notFound
 }
 
 func generatedAdminNodeID(displayName string) (string, error) {

@@ -78,7 +78,9 @@ var retiredAdminAlertRuleIDs = []string{"probe_latency_high", "probe_loss_high",
 
 var retiredAdminNotificationEventTypes = []string{"node_online"}
 
-var allowedRenewalNoticeDays = map[int]bool{0: true, 1: true, 3: true, 7: true, 15: true, 30: true}
+const renewalNoticeCalendarMonthThreshold = 30
+
+var allowedRenewalNoticeDays = map[int]bool{1: true, 3: true, 7: true, 15: true, renewalNoticeCalendarMonthThreshold: true}
 
 func (s *sqliteAdminAlertRules) ensureDefaultAlertRules(ctx context.Context) error {
 	now := time.Now().UTC().Unix()
@@ -105,6 +107,9 @@ func (s *sqliteAdminAlertRules) ensureDefaultAlertRules(ctx context.Context) err
 			return err
 		}
 	}
+	if err := s.migrateRemovedSameDayRenewalThreshold(ctx); err != nil {
+		return err
+	}
 	if err := s.migrateDefaultAlertRuleDurations(ctx); err != nil {
 		return err
 	}
@@ -115,6 +120,15 @@ func (s *sqliteAdminAlertRules) ensureDefaultAlertRules(ctx context.Context) err
 		return err
 	}
 	return nil
+}
+
+func (s *sqliteAdminAlertRules) migrateRemovedSameDayRenewalThreshold(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE alert_rules
+		SET threshold = 1, updated_at = ?
+		WHERE id = 'renewal_due' AND threshold = 0
+	`, time.Now().UTC().Unix())
+	return err
 }
 
 func (s *sqliteAdminAlertRules) migrateDefaultAlertRuleDurations(ctx context.Context) error {

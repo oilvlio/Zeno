@@ -109,44 +109,11 @@ func (s *sqliteNotificationDomain) UpdateAdminNotificationChannel(ctx context.Co
 		return AdminNotificationChannel{}, err
 	}
 	defer func() { rollbackUnlessCommitted(tx) }()
-	var currentDestination string
-	var currentVersion int64
-	if err := tx.QueryRowContext(ctx, `
-		SELECT destination, delivery_version
-		FROM notification_channels WHERE id = ?
-	`, channelID).Scan(&currentDestination, &currentVersion); err != nil {
-		if err == sql.ErrNoRows {
-			return AdminNotificationChannel{}, errNotificationChannelNotFound
-		}
+	currentDestination, currentVersion, err := notificationChannelRoutingStateTx(ctx, tx, channelID)
+	if err != nil {
 		return AdminNotificationChannel{}, err
 	}
-	if currentVersion < 1 {
-		currentVersion = 1
-	}
-	routingChanged := update.Destination != nil || update.Credential != nil
-	newDestination := currentDestination
-	if update.Destination != nil {
-		newDestination = *update.Destination
-	}
-	newVersion := currentVersion
-	if routingChanged {
-		newVersion++
-	}
-	newFingerprint := notificationDestinationFingerprint("telegram", newDestination)
-
-	patch := newSQLPatch(8)
-	patch.addString("name", update.Name)
-	patch.addString("destination", update.Destination)
-	if update.Credential != nil {
-		patch.set("credential", encryptedCredential)
-	}
-	patch.addBoolInt("enabled", update.Enabled)
-	if routingChanged {
-		// Version and fingerprint move together: consumers use the pair to
-		// detect that a queued payload targets a superseded destination.
-		patch.set("delivery_version", newVersion)
-		patch.set("destination_fingerprint", newFingerprint)
-	}
+	patch, routingChanged, disabling := buildNotificationChannelUpdatePatch(update, encryptedCredential, currentDestination, currentVersion)
 	if patch.empty() {
 		return AdminNotificationChannel{}, errInvalidAdminNotificationChannelWrite
 	}
@@ -165,29 +132,76 @@ func (s *sqliteNotificationDomain) UpdateAdminNotificationChannel(ctx context.Co
 		return AdminNotificationChannel{}, errNotificationChannelNotFound
 	}
 
-	disabling := update.Enabled != nil && !*update.Enabled
-	if routingChanged || disabling {
-		reason := "notification channel changed"
-		if disabling && !routingChanged {
-			reason = "notification channel disabled"
-		}
-		// Old generations are terminal. A later re-enable or id reuse cannot
-		// silently send their payload to a different destination/credential.
-		if _, err := tx.ExecContext(ctx, `
-			UPDATE notification_deliveries
-			SET state = 'canceled', last_error = ?, lease_until = 0,
-			    claim_token = '', updated_at = ?
-			WHERE channel_id = ?
-			  AND state IN ('pending', 'paused', 'failed', 'leased')
-		`, reason, nowUnix, channelID); err != nil {
-			return AdminNotificationChannel{}, err
-		}
+	if err := cancelSupersededNotificationDeliveriesTx(ctx, tx, channelID, routingChanged, disabling, nowUnix); err != nil {
+		return AdminNotificationChannel{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return AdminNotificationChannel{}, err
 	}
 	tx = nil
 	return s.adminNotificationChannelByID(ctx, channelID)
+}
+
+func notificationChannelRoutingStateTx(ctx context.Context, tx *sql.Tx, channelID string) (string, int64, error) {
+	var destination string
+	var version int64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT destination, delivery_version
+		FROM notification_channels WHERE id = ?
+	`, channelID).Scan(&destination, &version); err != nil {
+		if err == sql.ErrNoRows {
+			return "", 0, errNotificationChannelNotFound
+		}
+		return "", 0, err
+	}
+	if version < 1 {
+		version = 1
+	}
+	return destination, version, nil
+}
+
+func buildNotificationChannelUpdatePatch(update AdminNotificationChannelUpdateRequest, encryptedCredential, currentDestination string, currentVersion int64) (*sqlPatch, bool, bool) {
+	patch := newSQLPatch(8)
+	patch.addString("name", update.Name)
+	patch.addString("destination", update.Destination)
+	if update.Credential != nil {
+		patch.set("credential", encryptedCredential)
+	}
+	patch.addBoolInt("enabled", update.Enabled)
+
+	routingChanged := update.Destination != nil || update.Credential != nil
+	if routingChanged {
+		newDestination := currentDestination
+		if update.Destination != nil {
+			newDestination = *update.Destination
+		}
+		// Version and fingerprint move together: consumers use the pair to
+		// detect that a queued payload targets a superseded destination.
+		patch.set("delivery_version", currentVersion+1)
+		patch.set("destination_fingerprint", notificationDestinationFingerprint("telegram", newDestination))
+	}
+	disabling := update.Enabled != nil && !*update.Enabled
+	return patch, routingChanged, disabling
+}
+
+func cancelSupersededNotificationDeliveriesTx(ctx context.Context, tx *sql.Tx, channelID string, routingChanged, disabling bool, nowUnix int64) error {
+	if !routingChanged && !disabling {
+		return nil
+	}
+	reason := "notification channel changed"
+	if disabling && !routingChanged {
+		reason = "notification channel disabled"
+	}
+	// Old generations are terminal. A later re-enable or id reuse cannot
+	// silently send their payload to a different destination/credential.
+	_, err := tx.ExecContext(ctx, `
+		UPDATE notification_deliveries
+		SET state = 'canceled', last_error = ?, lease_until = 0,
+		    claim_token = '', updated_at = ?
+		WHERE channel_id = ?
+		  AND state IN ('pending', 'paused', 'failed', 'leased')
+	`, reason, nowUnix, channelID)
+	return err
 }
 
 func (s *sqliteNotificationDomain) DeleteAdminNotificationChannel(ctx context.Context, channelID string) error {
@@ -229,16 +243,7 @@ func (s *sqliteNotificationDomain) DeleteAdminNotificationChannel(ctx context.Co
 }
 
 func (s *sqliteNotificationDomain) adminNotificationChannelByID(ctx context.Context, channelID string) (AdminNotificationChannel, error) {
-	channels, err := s.AdminNotificationChannels(ctx)
-	if err != nil {
-		return AdminNotificationChannel{}, err
-	}
-	for _, channel := range channels {
-		if channel.ID == channelID {
-			return channel, nil
-		}
-	}
-	return AdminNotificationChannel{}, errNotificationChannelNotFound
+	return adminResourceByID(ctx, channelID, s.AdminNotificationChannels, func(channel AdminNotificationChannel) string { return channel.ID }, errNotificationChannelNotFound)
 }
 
 func (s *sqliteNotificationDomain) AdminNotificationDispatchChannel(ctx context.Context, channelID string) (notificationDispatchChannel, error) {

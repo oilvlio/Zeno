@@ -62,11 +62,6 @@ type Keyring struct {
 	legacyOrder []*Cipher
 }
 
-// NewCipher builds a cipher whose key id is derived from the key itself.
-func NewCipher(key []byte) (*Cipher, error) {
-	return NewCipherWithID(DerivedKeyID(key), key)
-}
-
 // NewCipherWithID builds a cipher bound to an explicit key id.
 func NewCipherWithID(keyID string, key []byte) (*Cipher, error) {
 	normalizedKeyID := strings.TrimSpace(keyID)

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeAdminNodes, normalizeAdminNotificationChannels, normalizeAdminProbeTargets } from './client'
+import { serializeAdminNodeCreate, serializeAdminNodeUpdate, serializeAdminProbeTargetCreate, serializeAdminProbeTargetUpdate } from './adminNormalizers'
 
 describe('normalizeAdminNodes', () => {
   it('maps authenticated admin node inventory without requiring token fields', () => {
@@ -152,5 +153,61 @@ describe('normalizeAdminNotifications', () => {
 
     expect(channels.channels[0].credentialSet).toBe(true)
     expect(channels.channels[0]).not.toHaveProperty('credential')
+  })
+})
+
+describe('admin node serialization', () => {
+  const shared = {
+    countryCode: 'HK',
+    region: 'Asia',
+    expiryDate: '2027-03-31',
+    expiryPermanent: false,
+    billingCycle: '月',
+    renewalAmount: 10,
+    renewalCurrency: 'USD',
+    billingMode: 'both',
+    monthlyResetDay: 1,
+    displayOrder: 2,
+    publicIPv4: '192.0.2.1',
+    publicIPv6: '2001:db8::1',
+    monthlyQuotaBytes: 1024,
+    disabled: false,
+  }
+
+  it('shares every common field between create and update payloads', () => {
+    const create = serializeAdminNodeCreate({ id: 'node-a', displayName: 'Node A', ...shared })
+    const update = serializeAdminNodeUpdate({ displayName: 'Node A', ...shared })
+    const { id, ...createWithoutID } = create
+    expect(id).toBe('node-a')
+    expect(createWithoutID).toEqual(update)
+  })
+
+  it('keeps operation-specific fields out of the shared serializer', () => {
+    expect(serializeAdminNodeCreate({ id: 'node-a', displayName: 'Node A' })).toEqual({ id: 'node-a', display_name: 'Node A' })
+    expect(serializeAdminNodeUpdate({ homeProbeTargetId: 'probe-a', probeTargetIds: ['probe-a'] })).toEqual({
+      home_probe_target_id: 'probe-a',
+      probe_target_ids: ['probe-a'],
+    })
+  })
+})
+
+describe('admin probe target serialization', () => {
+  it('shares every editable field between create and update payloads', () => {
+    const shared = {
+      name: 'Cloudflare',
+      type: 'tcping' as const,
+      address: '1.1.1.1',
+      port: 443,
+      count: 3,
+      timeoutMs: 1200,
+      intervalSec: 60,
+      displayOrder: 4,
+      assignments: [{ nodeId: 'node-a', enabled: true }],
+    }
+    const create = serializeAdminProbeTargetCreate({ id: 'cloudflare', ...shared })
+    const update = serializeAdminProbeTargetUpdate(shared)
+    const { id, ...createWithoutID } = create
+    expect(id).toBe('cloudflare')
+    expect(createWithoutID).toEqual(update)
   })
 })
