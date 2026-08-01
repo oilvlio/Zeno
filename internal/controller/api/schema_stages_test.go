@@ -107,3 +107,10 @@ func newSchemaTestStore(t *testing.T) *SQLiteStore {
 	t.Cleanup(func() { _ = store.Close() })
 	return store
 }
+
+func (r *schemaStageRunner) exec(name, statement string) {
+	r.run(name, func() error {
+		_, err := r.store.db.ExecContext(r.ctx, statement)
+		return err
+	})
+}

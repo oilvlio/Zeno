@@ -285,8 +285,6 @@ func mockServiceLatencyPoints(targetID string, rangeNames ...string) []ServiceLa
 	return points
 }
 
-func intValue(value int) *int { return &value }
-
 func mockStatePoints(window latencyWindow) []StatePoint {
 	end := time.Date(2026, 7, 2, 13, 30, 0, 0, time.UTC)
 	points := make([]StatePoint, 0, window.Samples)

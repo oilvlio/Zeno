@@ -21,8 +21,6 @@ type agentProbeValidationError struct {
 	message string
 }
 
-func (e *agentProbeValidationError) Error() string { return e.message }
-
 func rejectAgentProbe(message string) *agentProbeValidationError {
 	return &agentProbeValidationError{status: http.StatusBadRequest, message: message}
 }

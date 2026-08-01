@@ -50,48 +50,50 @@ func TestAdminSessionsAreBoundedAndExactExpiryIsRejected(t *testing.T) {
 }
 
 func TestAdminLoginRateLimitKeyHandlesIPv6AndTrustedProxy(t *testing.T) {
+	handler := &handler{}
 	direct := &http.Request{RemoteAddr: "[2001:db8::1]:443"}
-	if got := adminLoginRateLimitKey(direct, "Admin"); !strings.HasPrefix(got, "2001:db8::1:") {
+	if got := handler.adminLoginRateLimitKey(direct, "Admin"); !strings.HasPrefix(got, "2001:db8::1:") {
 		t.Fatalf("direct IPv6 rate key = %q, want parsed IPv6 host", got)
 	}
 
 	proxied := &http.Request{RemoteAddr: "127.0.0.1:12345", Header: http.Header{"X-Forwarded-For": []string{"203.0.113.10, 10.0.0.2"}}}
-	if got := adminLoginRateLimitKey(proxied, "Admin"); !strings.HasPrefix(got, "10.0.0.2:") {
+	if got := handler.adminLoginRateLimitKey(proxied, "Admin"); !strings.HasPrefix(got, "10.0.0.2:") {
 		t.Fatalf("trusted proxy rate key = %q, want rightmost trusted-edge peer", got)
 	}
 
 	spoofedLeftmost := &http.Request{RemoteAddr: "127.0.0.1:12345", Header: http.Header{"X-Forwarded-For": []string{"198.51.100.99, 203.0.113.10"}}}
-	if got := adminLoginRateLimitKey(spoofedLeftmost, "Admin"); !strings.HasPrefix(got, "203.0.113.10:") {
+	if got := handler.adminLoginRateLimitKey(spoofedLeftmost, "Admin"); !strings.HasPrefix(got, "203.0.113.10:") {
 		t.Fatalf("spoofed forwarded rate key = %q, want trusted-edge client", got)
 	}
 
 	untrusted := &http.Request{RemoteAddr: "198.51.100.2:12345", Header: http.Header{"X-Forwarded-For": []string{"203.0.113.10"}}}
-	if got := adminLoginRateLimitKey(untrusted, "Admin"); !strings.HasPrefix(got, "198.51.100.2:") {
+	if got := handler.adminLoginRateLimitKey(untrusted, "Admin"); !strings.HasPrefix(got, "198.51.100.2:") {
 		t.Fatalf("untrusted proxy rate key = %q, want remote addr", got)
 	}
 
 	privateDirect := &http.Request{RemoteAddr: "192.168.1.20:12345", Header: http.Header{"X-Forwarded-For": []string{"203.0.113.10"}}}
-	if got := adminLoginRateLimitKey(privateDirect, "Admin"); !strings.HasPrefix(got, "192.168.1.20:") {
+	if got := handler.adminLoginRateLimitKey(privateDirect, "Admin"); !strings.HasPrefix(got, "192.168.1.20:") {
 		t.Fatalf("private direct rate key = %q, want unspoofed remote addr", got)
 	}
 }
 
 func TestAdminLoginIPRateLimitCannotBeBypassedWithDifferentUsernames(t *testing.T) {
+	handler := &handler{}
 	limiter := newAdminLoginLimiter()
 	request := &http.Request{RemoteAddr: "198.51.100.9:12345"}
 	for index := 0; index < adminLoginMaxFailures; index++ {
-		ipReservation, ok := limiter.reserve(adminLoginIPRateLimitKey(request))
+		ipReservation, ok := limiter.reserve(handler.adminLoginIPRateLimitKey(request))
 		if !ok {
 			t.Fatalf("IP attempt %d rejected before limit", index+1)
 		}
-		accountReservation, ok := limiter.reserve(adminLoginRateLimitKey(request, fmt.Sprintf("user-%d", index)))
+		accountReservation, ok := limiter.reserve(handler.adminLoginRateLimitKey(request, fmt.Sprintf("user-%d", index)))
 		if !ok {
 			t.Fatalf("account attempt %d rejected unexpectedly", index+1)
 		}
 		ipReservation.release(false)
 		accountReservation.release(false)
 	}
-	if _, ok := limiter.reserve(adminLoginIPRateLimitKey(request)); ok {
+	if _, ok := limiter.reserve(handler.adminLoginIPRateLimitKey(request)); ok {
 		t.Fatal("rotating usernames bypassed the per-IP login limit")
 	}
 }

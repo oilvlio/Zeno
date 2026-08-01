@@ -517,15 +517,6 @@ func (h *handler) cachedSummaryJSON(maxAge time.Duration) ([]byte, bool) {
 	return append([]byte(nil), h.summaryCache...), true
 }
 
-func (h *handler) rememberSummaryJSON(payload []byte) {
-	h.summaryCacheMu.Lock()
-	h.summaryCacheGeneration++
-	h.summaryCache = append(h.summaryCache[:0], payload...)
-	h.summaryCacheUpdated = time.Now()
-	h.summaryCacheDirty = false
-	h.summaryCacheMu.Unlock()
-}
-
 func (h *handler) markSummaryCacheDirty() {
 	h.summaryCacheMu.Lock()
 	h.summaryCacheDirtyRevision++

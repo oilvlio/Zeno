@@ -531,3 +531,12 @@ func TestScheduleDetailPublishCoalescesSameTopicWithTrailingRefresh(t *testing.T
 		t.Fatalf("coalesced detail publish calls = %d, want one active and one trailing refresh", got)
 	}
 }
+
+func (h *handler) rememberSummaryJSON(payload []byte) {
+	h.summaryCacheMu.Lock()
+	h.summaryCacheGeneration++
+	h.summaryCache = append(h.summaryCache[:0], payload...)
+	h.summaryCacheUpdated = time.Now()
+	h.summaryCacheDirty = false
+	h.summaryCacheMu.Unlock()
+}

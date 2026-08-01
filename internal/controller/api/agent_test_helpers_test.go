@@ -39,7 +39,7 @@ func (probeTargetsVersionErrorStore) AuthorizeAgent(context.Context, string, str
 	return true, nil
 }
 func (probeTargetsVersionErrorStore) EnabledProbeTargets(context.Context, string) ([]ProbeTarget, error) {
-	return []ProbeTarget{{ID: "target", Name: "Target", Type: "tcping", Address: "127.0.0.1", Port: intValue(80), Count: 1, TimeoutMS: 1000, IntervalSec: 30}}, nil
+	return []ProbeTarget{{ID: "target", Name: "Target", Type: "tcping", Address: "127.0.0.1", Port: intPtrValue(80), Count: 1, TimeoutMS: 1000, IntervalSec: 30}}, nil
 }
 func (probeTargetsVersionErrorStore) ProbeConfigVersion(context.Context) (int64, error) {
 	return 0, fmt.Errorf("database unavailable")

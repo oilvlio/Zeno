@@ -122,15 +122,6 @@ func (m *agentPresenceManager) cancelOfflineChecks() {
 	m.mu.Unlock()
 }
 
-func (m *agentPresenceManager) pendingOfflineCheckCount() int {
-	if m == nil {
-		return 0
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return len(m.offlineChecks)
-}
-
 func (m *agentPresenceManager) notifyConfigChanged(nodeID string, version int64) bool {
 	if m == nil {
 		return false

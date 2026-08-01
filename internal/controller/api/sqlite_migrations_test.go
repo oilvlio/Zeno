@@ -10,6 +10,10 @@ import (
 	"testing"
 )
 
+func (s *sqliteSchemaStore) runSchemaMigration(ctx context.Context, name string, migrate func(context.Context) error) error {
+	return s.runValidatedSchemaMigration(ctx, name, nil, migrate)
+}
+
 func TestRunSchemaMigrationRecordsAndSkipsCompletedWork(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {

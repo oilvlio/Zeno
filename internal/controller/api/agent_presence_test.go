@@ -132,3 +132,12 @@ func TestAgentPresenceOfflineDebounceMergesReconnectChurnAndCleansUp(t *testing.
 		t.Fatalf("pending checks after cleanup = %d, want 0", got)
 	}
 }
+
+func (m *agentPresenceManager) pendingOfflineCheckCount() int {
+	if m == nil {
+		return 0
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.offlineChecks)
+}

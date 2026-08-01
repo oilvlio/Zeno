@@ -43,14 +43,6 @@ func (r *schemaStageRunner) columns(name, table string, columns map[string]strin
 	})
 }
 
-// exec runs a plain statement as a named stage.
-func (r *schemaStageRunner) exec(name, statement string) {
-	r.run(name, func() error {
-		_, err := r.store.db.ExecContext(r.ctx, statement)
-		return err
-	})
-}
-
 // result reports the first stage failure, if any.
 func (r *schemaStageRunner) result() error {
 	return r.err

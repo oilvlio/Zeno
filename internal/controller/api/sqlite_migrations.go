@@ -22,10 +22,6 @@ type schemaStageSnapshot struct {
 	databaseBytes int64
 }
 
-func (s *sqliteSchemaStore) runSchemaMigration(ctx context.Context, name string, migrate func(context.Context) error) error {
-	return s.runValidatedSchemaMigration(ctx, name, nil, migrate)
-}
-
 func (s *sqliteSchemaStore) runValidatedSchemaMigration(ctx context.Context, name string, current func(context.Context) (bool, error), migrate func(context.Context) error) error {
 	name = strings.TrimSpace(name)
 	if s == nil || s.db == nil {

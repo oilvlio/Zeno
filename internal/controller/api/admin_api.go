@@ -648,16 +648,6 @@ func (h *handler) clientIPForRateLimit(r *http.Request) string {
 	return strings.TrimSpace(r.RemoteAddr)
 }
 
-// Compatibility wrappers keep focused unit tests and internal callers on the
-// secure default (loopback proxies only).
-func adminLoginIPRateLimitKey(r *http.Request) string {
-	return (&handler{}).adminLoginIPRateLimitKey(r)
-}
-
-func adminLoginRateLimitKey(r *http.Request, username string) string {
-	return (&handler{}).adminLoginRateLimitKey(r, username)
-}
-
 // adminErrorResponses maps admin store errors onto their HTTP response.
 //
 // This is a lookup table rather than a chain of conditionals because it is pure
