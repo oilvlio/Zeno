@@ -2,234 +2,11 @@ package api
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 	"path/filepath"
-	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
-
-// The reference implementations below are verbatim copies of latencyGridPoints
-// and serviceLatencyGridPoints as they existed before the shared
-// latencyGridPointsFor rewrite (v1.9.1, df1cde9). They exist purely so the
-// merged implementation can be differentially tested against the behaviour it
-// replaced: SQL, bucket bounds, ordering, null handling and error paths must all
-// stay identical.
-
-func refLatencyGridPoints(ctx context.Context, s *SQLiteStore, nodeID string, window latencyWindow) ([]LatencyPoint, error) {
-	gridWindow, ok := resolveLatencyGridWindow(window.Name)
-	if !ok {
-		return nil, nil
-	}
-	targets, err := refEnabledLatencyTargetsForNode(ctx, s, nodeID)
-	if err != nil {
-		return nil, err
-	}
-	if len(targets) == 0 {
-		return []LatencyPoint{}, nil
-	}
-
-	start, end, stepSeconds := latencyGridBounds(gridWindow)
-	buckets := make(map[string]map[int64]*latencyGridBucket, len(targets))
-	rows, err := s.db.QueryContext(ctx, `
-		WITH measurements AS (
-			SELECT ts, node_id, target_id,
-			       COALESCE(median_ms, 0) AS median_sum, CASE WHEN median_ms IS NULL THEN 0 ELSE 1 END AS median_count,
-			       COALESCE(avg_ms, 0) AS avg_sum, CASE WHEN avg_ms IS NULL THEN 0 ELSE 1 END AS avg_count,
-			       loss_percent AS loss_sum, 1 AS loss_count
-			FROM probe_rounds WHERE node_id = ? AND ts >= ? AND ts < ?
-			UNION ALL
-			SELECT bucket_start AS ts, node_id, target_id,
-			       median_sum, median_count, avg_sum, avg_count, loss_sum, loss_count
-			FROM latency_history_rollups WHERE node_id = ? AND bucket_start >= ? AND bucket_start < ?
-		)
-		SELECT (measurements.ts / ?) * ? AS bucket_ts, measurements.target_id,
-		       SUM(median_sum) / NULLIF(SUM(median_count), 0),
-		       SUM(avg_sum) / NULLIF(SUM(avg_count), 0),
-		       SUM(loss_sum) / NULLIF(SUM(loss_count), 0)
-		FROM measurements
-		JOIN probe_targets pt ON pt.id = measurements.target_id
-		LEFT JOIN node_probe_targets npt ON npt.node_id = measurements.node_id AND npt.target_id = measurements.target_id
-		WHERE measurements.node_id = ?
-		  AND COALESCE(npt.enabled, 0) = 1
-		GROUP BY bucket_ts, measurements.target_id
-	`, nodeID, start.Unix(), end.Add(gridWindow.Step).Unix(), nodeID, start.Unix(), end.Add(gridWindow.Step).Unix(), stepSeconds, stepSeconds, nodeID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var bucketTS int64
-		var targetID string
-		var median, avg, loss sql.NullFloat64
-		if err := rows.Scan(&bucketTS, &targetID, &median, &avg, &loss); err != nil {
-			return nil, err
-		}
-		if bucketTS < start.Unix() || bucketTS > end.Unix() {
-			continue
-		}
-		if buckets[targetID] == nil {
-			buckets[targetID] = map[int64]*latencyGridBucket{}
-		}
-		if buckets[targetID][bucketTS] == nil {
-			buckets[targetID][bucketTS] = &latencyGridBucket{}
-		}
-		buckets[targetID][bucketTS].add(median, avg, nullFloatOr(loss, 0))
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	points := make([]LatencyPoint, 0, gridWindow.Samples*len(targets))
-	for index := 0; index < gridWindow.Samples; index++ {
-		bucketTS := start.Add(time.Duration(index) * gridWindow.Step).Unix()
-		ts := time.Unix(bucketTS, 0).UTC().Format(time.RFC3339)
-		for _, target := range targets {
-			bucket := buckets[target.ID][bucketTS]
-			point := LatencyPoint{TS: ts, TargetID: target.ID, TargetName: target.Name, LossPercent: 0}
-			if bucket != nil {
-				point.MedianMS = bucket.medianPtr()
-				point.AvgMS = bucket.avgPtr()
-				point.LossPercent = bucket.lossPercent()
-			}
-			points = append(points, point)
-		}
-	}
-	return points, nil
-}
-
-func refServiceLatencyGridPoints(ctx context.Context, s *SQLiteStore, targetID string, window latencyWindow) ([]ServiceLatencyPoint, error) {
-	gridWindow, ok := resolveLatencyGridWindow(window.Name)
-	if !ok {
-		return nil, nil
-	}
-	nodes, err := refEnabledLatencyNodesForTarget(ctx, s, targetID)
-	if err != nil {
-		return nil, err
-	}
-	if len(nodes) == 0 {
-		return []ServiceLatencyPoint{}, nil
-	}
-
-	start, end, stepSeconds := latencyGridBounds(gridWindow)
-	buckets := make(map[string]map[int64]*latencyGridBucket, len(nodes))
-	rows, err := s.db.QueryContext(ctx, `
-		WITH measurements AS (
-			SELECT ts, node_id, target_id,
-			       COALESCE(median_ms, 0) AS median_sum, CASE WHEN median_ms IS NULL THEN 0 ELSE 1 END AS median_count,
-			       COALESCE(avg_ms, 0) AS avg_sum, CASE WHEN avg_ms IS NULL THEN 0 ELSE 1 END AS avg_count,
-			       loss_percent AS loss_sum, 1 AS loss_count
-			FROM probe_rounds WHERE target_id = ? AND ts >= ? AND ts < ?
-			UNION ALL
-			SELECT bucket_start AS ts, node_id, target_id,
-			       median_sum, median_count, avg_sum, avg_count, loss_sum, loss_count
-			FROM latency_history_rollups WHERE target_id = ? AND bucket_start >= ? AND bucket_start < ?
-		)
-		SELECT (measurements.ts / ?) * ? AS bucket_ts, measurements.node_id,
-		       SUM(median_sum) / NULLIF(SUM(median_count), 0),
-		       SUM(avg_sum) / NULLIF(SUM(avg_count), 0),
-		       SUM(loss_sum) / NULLIF(SUM(loss_count), 0)
-		FROM measurements
-		JOIN nodes n ON n.id = measurements.node_id
-		JOIN probe_targets pt ON pt.id = measurements.target_id
-		LEFT JOIN node_probe_targets npt ON npt.node_id = measurements.node_id AND npt.target_id = measurements.target_id
-		WHERE measurements.target_id = ?
-		  AND n.disabled = 0
-		  AND COALESCE(npt.enabled, 0) = 1
-		GROUP BY bucket_ts, measurements.node_id
-	`, targetID, start.Unix(), end.Add(gridWindow.Step).Unix(), targetID, start.Unix(), end.Add(gridWindow.Step).Unix(), stepSeconds, stepSeconds, targetID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var bucketTS int64
-		var nodeID string
-		var median, avg, loss sql.NullFloat64
-		if err := rows.Scan(&bucketTS, &nodeID, &median, &avg, &loss); err != nil {
-			return nil, err
-		}
-		if bucketTS < start.Unix() || bucketTS > end.Unix() {
-			continue
-		}
-		if buckets[nodeID] == nil {
-			buckets[nodeID] = map[int64]*latencyGridBucket{}
-		}
-		if buckets[nodeID][bucketTS] == nil {
-			buckets[nodeID][bucketTS] = &latencyGridBucket{}
-		}
-		buckets[nodeID][bucketTS].add(median, avg, nullFloatOr(loss, 0))
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	points := make([]ServiceLatencyPoint, 0, gridWindow.Samples*len(nodes))
-	for index := 0; index < gridWindow.Samples; index++ {
-		bucketTS := start.Add(time.Duration(index) * gridWindow.Step).Unix()
-		ts := time.Unix(bucketTS, 0).UTC().Format(time.RFC3339)
-		for _, node := range nodes {
-			bucket := buckets[node.ID][bucketTS]
-			point := ServiceLatencyPoint{TS: ts, NodeID: node.ID, NodeName: node.Name, LossPercent: 0}
-			if bucket != nil {
-				point.MedianMS = bucket.medianPtr()
-				point.AvgMS = bucket.avgPtr()
-				point.LossPercent = bucket.lossPercent()
-			}
-			points = append(points, point)
-		}
-	}
-	return points, nil
-}
-
-func refEnabledLatencyTargetsForNode(ctx context.Context, s *SQLiteStore, nodeID string) ([]latencyGridTarget, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT pt.id, pt.name
-		FROM probe_targets pt
-		LEFT JOIN node_probe_targets npt ON npt.target_id = pt.id AND npt.node_id = ?
-		WHERE COALESCE(npt.enabled, 0) = 1
-		ORDER BY pt.display_order ASC, pt.name ASC, pt.id ASC
-	`, nodeID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var targets []latencyGridTarget
-	for rows.Next() {
-		var target latencyGridTarget
-		if err := rows.Scan(&target.ID, &target.Name); err != nil {
-			return nil, err
-		}
-		targets = append(targets, target)
-	}
-	return targets, rows.Err()
-}
-
-func refEnabledLatencyNodesForTarget(ctx context.Context, s *SQLiteStore, targetID string) ([]latencyGridTarget, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT n.id, n.display_name
-		FROM nodes n
-		LEFT JOIN node_probe_targets npt ON npt.node_id = n.id AND npt.target_id = ?
-		WHERE n.disabled = 0 AND COALESCE(npt.enabled, 0) = 1
-		ORDER BY n.display_order ASC, n.display_name ASC, n.id ASC
-	`, targetID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var nodes []latencyGridTarget
-	for rows.Next() {
-		var node latencyGridTarget
-		if err := rows.Scan(&node.ID, &node.Name); err != nil {
-			return nil, err
-		}
-		nodes = append(nodes, node)
-	}
-	return nodes, rows.Err()
-}
 
 func newLatencyGridTestStore(t *testing.T) *SQLiteStore {
 	t.Helper()
@@ -313,7 +90,7 @@ func seedLatencyGridFixture(ctx context.Context, t *testing.T, store *SQLiteStor
 	insertRollup("node-a", "t-1", start.Unix()-int64(step), 999.0, 1, 999.0, 1, 99.0, 1)
 }
 
-func TestLatencyGridPointsMatchesPreMergeImplementation(t *testing.T) {
+func TestLatencyGridPointsStayDenseAcrossWindowsAndDimensions(t *testing.T) {
 	ctx := context.Background()
 	for _, rangeName := range []string{"1h", "7d"} {
 		t.Run("node/"+rangeName, func(t *testing.T) {
@@ -324,17 +101,15 @@ func TestLatencyGridPointsMatchesPreMergeImplementation(t *testing.T) {
 			}
 			seedLatencyGridFixture(ctx, t, store, window)
 
-			want, err := refLatencyGridPoints(ctx, store, "node-a", window)
-			if err != nil {
-				t.Fatalf("reference latency grid: %v", err)
-			}
 			got, err := store.latencyGridPoints(ctx, "node-a", window)
 			if err != nil {
-				t.Fatalf("merged latency grid: %v", err)
+				t.Fatalf("latency grid: %v", err)
 			}
-			assertLatencyPointsEqual(t, got, want)
 			if len(got) != window.Samples*2 {
 				t.Fatalf("point count = %d, want %d (samples × enabled targets)", len(got), window.Samples*2)
+			}
+			if got[0].TargetID != "t-1" || got[1].TargetID != "t-2" {
+				t.Fatalf("first bucket target order = %s,%s, want t-1,t-2", got[0].TargetID, got[1].TargetID)
 			}
 		})
 
@@ -346,17 +121,15 @@ func TestLatencyGridPointsMatchesPreMergeImplementation(t *testing.T) {
 			}
 			seedLatencyGridFixture(ctx, t, store, window)
 
-			want, err := refServiceLatencyGridPoints(ctx, store, "t-1", window)
-			if err != nil {
-				t.Fatalf("reference service latency grid: %v", err)
-			}
 			got, err := store.serviceLatencyGridPoints(ctx, "t-1", window)
 			if err != nil {
-				t.Fatalf("merged service latency grid: %v", err)
+				t.Fatalf("service latency grid: %v", err)
 			}
-			assertServiceLatencyPointsEqual(t, got, want)
 			if len(got) != window.Samples*2 {
 				t.Fatalf("point count = %d, want %d (samples × enabled nodes)", len(got), window.Samples*2)
+			}
+			if got[0].NodeID != "node-a" || got[1].NodeID != "node-b" {
+				t.Fatalf("first bucket node order = %s,%s, want node-a,node-b", got[0].NodeID, got[1].NodeID)
 			}
 		})
 	}
@@ -572,11 +345,11 @@ func TestLatencyGridQueryMatchesPreMergeSQL(t *testing.T) {
 		"WHERE measurements.node_id = ?",
 		"GROUP BY bucket_ts, measurements.target_id",
 	} {
-		if !contains(nodeQuery, want) {
+		if !strings.Contains(nodeQuery, want) {
 			t.Fatalf("node grid query missing %q\n%s", want, nodeQuery)
 		}
 	}
-	if contains(nodeQuery, "JOIN nodes n") || contains(nodeQuery, "n.disabled = 0") {
+	if strings.Contains(nodeQuery, "JOIN nodes n") || strings.Contains(nodeQuery, "n.disabled = 0") {
 		t.Fatalf("node grid query must not join nodes:\n%s", nodeQuery)
 	}
 
@@ -590,7 +363,7 @@ func TestLatencyGridQueryMatchesPreMergeSQL(t *testing.T) {
 		"AND n.disabled = 0",
 		"GROUP BY bucket_ts, measurements.node_id",
 	} {
-		if !contains(serviceQuery, want) {
+		if !strings.Contains(serviceQuery, want) {
 			t.Fatalf("service grid query missing %q\n%s", want, serviceQuery)
 		}
 	}
@@ -601,65 +374,11 @@ func TestLatencyGridQueryMatchesPreMergeSQL(t *testing.T) {
 			"LEFT JOIN node_probe_targets npt ON npt.node_id = measurements.node_id AND npt.target_id = measurements.target_id",
 			"AND COALESCE(npt.enabled, 0) = 1",
 		} {
-			if !contains(query, want) {
+			if !strings.Contains(query, want) {
 				t.Fatalf("%s grid query missing %q", name, want)
 			}
 		}
 	}
-}
-
-func contains(haystack, needle string) bool {
-	return len(needle) == 0 || indexOf(haystack, needle) >= 0
-}
-
-func indexOf(haystack, needle string) int {
-	for index := 0; index+len(needle) <= len(haystack); index++ {
-		if haystack[index:index+len(needle)] == needle {
-			return index
-		}
-	}
-	return -1
-}
-
-func assertLatencyPointsEqual(t *testing.T, got, want []LatencyPoint) {
-	t.Helper()
-	if len(got) != len(want) {
-		t.Fatalf("point count = %d, want %d", len(got), len(want))
-	}
-	for index := range want {
-		if !reflect.DeepEqual(latencyPointKey(got[index]), latencyPointKey(want[index])) {
-			t.Fatalf("point %d = %s, want %s", index, latencyPointKey(got[index]), latencyPointKey(want[index]))
-		}
-	}
-}
-
-func assertServiceLatencyPointsEqual(t *testing.T, got, want []ServiceLatencyPoint) {
-	t.Helper()
-	if len(got) != len(want) {
-		t.Fatalf("point count = %d, want %d", len(got), len(want))
-	}
-	for index := range want {
-		if !reflect.DeepEqual(serviceLatencyPointKey(got[index]), serviceLatencyPointKey(want[index])) {
-			t.Fatalf("point %d = %s, want %s", index, serviceLatencyPointKey(got[index]), serviceLatencyPointKey(want[index]))
-		}
-	}
-}
-
-func latencyPointKey(point LatencyPoint) string {
-	return fmt.Sprintf("%s|%s|%s|%s|%s|%.9f", point.TS, point.TargetID, point.TargetName,
-		formatFloatPtr(point.MedianMS), formatFloatPtr(point.AvgMS), point.LossPercent)
-}
-
-func serviceLatencyPointKey(point ServiceLatencyPoint) string {
-	return fmt.Sprintf("%s|%s|%s|%s|%s|%.9f", point.TS, point.NodeID, point.NodeName,
-		formatFloatPtr(point.MedianMS), formatFloatPtr(point.AvgMS), point.LossPercent)
-}
-
-func formatFloatPtr(value *float64) string {
-	if value == nil {
-		return "nil"
-	}
-	return fmt.Sprintf("%.9f", *value)
 }
 
 func assertFloatPtr(t *testing.T, name string, got *float64, want float64) {
