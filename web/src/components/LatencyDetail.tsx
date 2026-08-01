@@ -1,8 +1,8 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { HomeCardNode, LatencyPoint, StatePoint } from '../types'
 import { formatLatency } from '../lib/format'
 import { summarizeLatencyTargets } from '../lib/latencyTargets'
-import { LatencyChart } from './LatencyChart'
+import { latencySeriesColor, LatencyChart } from './LatencyChart'
 import { ServerFlag } from './ServerFlag'
 import { StateHistoryPanel } from './StateHistoryPanel'
 import { availableHistoryRanges } from '../lib/historyRange'
@@ -58,6 +58,14 @@ export function LatencyDetail({
     : node.load1 !== null && node.load1 !== undefined && node.load5 !== null && node.load5 !== undefined && node.load15 !== null && node.load15 !== undefined
       ? `${formatFixed(node.load1, 2)} / ${formatFixed(node.load5, 2)} / ${formatFixed(node.load15, 2)}`
     : '-- / -- / --'
+  const memoryUsageValue = formatBinaryUsage(
+    latestState?.memoryUsedBytes ?? node.memoryUsedBytes,
+    latestState?.memoryTotalBytes ?? node.memoryTotalBytes,
+  )
+  const diskUsageValue = formatBinaryUsage(
+    latestState?.diskUsedBytes ?? node.diskUsedBytes,
+    latestState?.diskTotalBytes ?? node.diskTotalBytes,
+  )
   const hasLatencyData = points.length > 0 || targetSummaries.length > 0
   const showLatencySkeleton = loading && !hasLatencyData && !error
   const toggleTarget = (targetId: string) => {
@@ -84,12 +92,12 @@ export function LatencyDetail({
           <section className="detail-fact-strip" aria-label={`${node.displayName} server facts`}>
             <InfoFact label="系统" value={formatSystemSpec(node)} wide />
             <InfoFact label="CPU" value={formatCpuSpec(node)} wide />
-            <InfoFact label="内存" value={formatBinaryBytes(node.memoryTotalBytes)} />
-            <InfoFact label="磁盘" value={formatBinaryBytes(node.diskTotalBytes)} />
+            <InfoFact label="内存" value={memoryUsageValue} />
+            <InfoFact label="磁盘" value={diskUsageValue} />
             <InfoFact label="开机时间" value={formatBootTime(node.bootTime)} />
-            <InfoFact label="运行时间" value={uptimeValue ?? '--'} pending={!uptimeValue} />
-            <InfoFact label="负载" value={loadValue} pending={loadValue === '-- / -- / --'} />
-            <InfoFact label="累计流量" value={`↑${formatBinaryBytes(node.netOutTotalBytes)} ↓${formatBinaryBytes(node.netInTotalBytes)}`} />
+            <InfoFact label="运行时间" value={uptimeValue ?? '--'} adaptive pending={!uptimeValue} />
+            <InfoFact label="负载" value={loadValue} adaptive pending={loadValue === '-- / -- / --'} />
+            <TrafficFact sent={formatBinaryBytes(node.netOutTotalBytes)} received={formatBinaryBytes(node.netInTotalBytes)} />
           </section>
         </section>
       </section>
@@ -129,7 +137,7 @@ export function LatencyDetail({
         {!showLatencySkeleton && !error && hasLatencyData && (
           <>
             <div className="latency-target-grid" aria-label="monitor services">
-              {targetSummaries.map((target) => (
+              {targetSummaries.map((target, index) => (
                 <button
                   key={target.targetId}
                   type="button"
@@ -137,7 +145,10 @@ export function LatencyDetail({
                   data-active={activeTargetIds.includes(target.targetId)}
                   onClick={() => toggleTarget(target.targetId)}
                 >
-                  <span>{target.targetName}</span>
+                  <span className="latency-target-name">
+                    <i className="latency-target-color" style={{ backgroundColor: latencySeriesColor(index) }} aria-hidden="true" />
+                    <span>{target.targetName}</span>
+                  </span>
                   <strong>{formatLatency(target.avgMs)}</strong>
                   <em>丢包 {formatLossPercent(target.lossPercent)}</em>
                 </button>
@@ -150,6 +161,7 @@ export function LatencyDetail({
               eyebrow={`${rangeLabel} · ${targetSummaries.length} 个监控服务${peakCut ? ' · 平滑' : ''}`}
               compactHeader
               hideHeader
+              hideLegend
               peakCut={peakCut}
               activeTargetIds={activeTargetIds}
             />
@@ -189,11 +201,53 @@ function LatencyLoadingSkeleton() {
   )
 }
 
-function InfoFact({ label, value, wide = false, pending = false }: { label: string; value: string; wide?: boolean; pending?: boolean }) {
+function InfoFact({ label, value, wide = false, adaptive = false, pending = false }: { label: string; value: string; wide?: boolean; adaptive?: boolean; pending?: boolean }) {
+  const valueRef = useRef<HTMLElement>(null)
+  const [multiline, setMultiline] = useState(false)
+
+  useEffect(() => {
+    if (!adaptive) return undefined
+    const element = valueRef.current
+    if (!element) return undefined
+    let active = true
+
+    const measure = () => {
+      if (!active) return
+      const lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight)
+      const height = element.getBoundingClientRect().height
+      setMultiline(Number.isFinite(lineHeight) && height > lineHeight * 1.5)
+    }
+    measure()
+
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    observer?.observe(element)
+    if (element.parentElement) observer?.observe(element.parentElement)
+    window.addEventListener('resize', measure)
+    void document.fonts?.ready.then(measure)
+
+    return () => {
+      active = false
+      observer?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [adaptive, value])
+
   return (
-    <article className={`detail-fact${wide ? ' is-wide' : ''}${pending ? ' is-pending' : ''}`} title={`${label}: ${value}`}>
+    <article className={`detail-fact${wide ? ' is-wide' : ''}${adaptive ? ' is-adaptive' : ''}${multiline ? ' is-multiline' : ''}${pending ? ' is-pending' : ''}`} title={`${label}: ${value}`}>
       <p>{label}</p>
-      <strong>{value}</strong>
+      <strong>{adaptive ? <span ref={valueRef}>{value}</span> : value}</strong>
+    </article>
+  )
+}
+
+function TrafficFact({ sent, received }: { sent: string; received: string }) {
+  return (
+    <article className="detail-fact detail-fact--traffic" title={`累计流量: ↑ ${sent}  ↓ ${received}`}>
+      <p>累计流量</p>
+      <strong className="detail-traffic-values">
+        <span className="detail-traffic-value"><span aria-hidden="true">↑</span><span>{sent}</span></span>
+        <span className="detail-traffic-value"><span aria-hidden="true">↓</span><span>{received}</span></span>
+      </strong>
     </article>
   )
 }
@@ -261,6 +315,11 @@ function formatBinaryBytes(value: number | null | undefined): string {
     unit += 1
   }
   return `${size.toFixed(unit === 0 ? 0 : 2)} ${units[unit]}`
+}
+
+function formatBinaryUsage(used: number | null | undefined, total: number | null | undefined): string {
+  if ((used === null || used === undefined) && (total === null || total === undefined)) return '--'
+  return `${formatBinaryBytes(used)} / ${formatBinaryBytes(total)}`
 }
 
 function formatLossPercent(value: number | null | undefined): string {

@@ -897,6 +897,7 @@ svg { display: block; }
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.resource-card-value.is-compact { font-size: 12px; }
 .resource-card-value .metric-inline-label { color: var(--muted); font-weight: 500; }
 .resource-chart-frame {
   flex: 1 1 auto;
@@ -931,8 +932,8 @@ svg { display: block; }
   position: absolute;
   z-index: 3;
   top: 8px;
-  min-width: 150px;
-  max-width: min(220px, calc(100% - 8px));
+  min-width: 190px;
+  max-width: min(280px, calc(100% - 8px));
   padding: 9px 10px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -1001,6 +1002,9 @@ svg { display: block; }
 .latency-target-grid strong,
 .latency-target-grid em { width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .latency-target-grid span { color: var(--muted); font-size: 12.5px; line-height: 1.12; font-weight: 500; }
+.latency-target-grid .latency-target-name { display: flex; align-items: center; gap: 6px; }
+.latency-target-grid .latency-target-name > span { width: auto; flex: 1 1 auto; color: inherit; font: inherit; }
+.latency-target-grid .latency-target-color { width: 8px; height: 8px; flex: none; border-radius: var(--radius-pill); }
 .latency-target-grid strong { color: var(--foreground); font-size: 20px; line-height: 1.05; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .latency-target-grid em { color: var(--muted); font-size: 11.5px; line-height: 1.1; font-style: normal; font-weight: 500; font-variant-numeric: tabular-nums; }
 

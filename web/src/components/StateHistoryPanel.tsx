@@ -1,6 +1,6 @@
 import { type MouseEvent, type ReactNode, useMemo, useState } from 'react'
 import type { StatePoint } from '../types'
-import { formatBps, formatPercent } from '../lib/format'
+import { formatBps, formatBytes, formatPercent } from '../lib/format'
 import { availableHistoryRanges } from '../lib/historyRange'
 
 interface StateHistoryPanelProps {
@@ -16,6 +16,7 @@ interface MetricLine {
   key: string
   label: string
   values: Array<number | null>
+  tooltipValues?: string[]
   color: string
 }
 
@@ -27,6 +28,7 @@ interface MetricConfig {
   unitLabel: string
   domainMax?: number
   fillArea?: boolean
+  compactValue?: boolean
   lines: MetricLine[]
 }
 
@@ -37,11 +39,11 @@ export function StateHistoryPanel({ points, range, loading = false, error, canUs
   const chartPoints = useMemo(() => downsampleStatePoints(points, range), [points, range])
   const sampleCount = chartPoints.length
   const latestCpu = latest(chartPoints, (point) => point.cpuPercent)
-  const latestMemory = latest(chartPoints, memoryPercent)
-  const latestDisk = latest(chartPoints, diskPercent)
+  const latestMemory = latestResourceUsage(chartPoints, (point) => point.memoryUsedBytes, (point) => point.memoryTotalBytes)
+  const latestDisk = latestResourceUsage(chartPoints, (point) => point.diskUsedBytes, (point) => point.diskTotalBytes)
   const latestInSpeed = latest(chartPoints, (point) => point.netInSpeedBps)
   const latestOutSpeed = latest(chartPoints, (point) => point.netOutSpeedBps)
-  const latestSwap = latest(chartPoints, swapPercent)
+  const latestSwap = latestResourceUsage(chartPoints, (point) => point.swapUsedBytes, (point) => point.swapTotalBytes)
   const latestProcessCount = latest(chartPoints, (point) => point.processCount)
   const latestTcpConnectionCount = latest(chartPoints, (point) => point.tcpConnectionCount)
   const latestUdpConnectionCount = latest(chartPoints, (point) => point.udpConnectionCount)
@@ -56,30 +58,50 @@ export function StateHistoryPanel({ points, range, loading = false, error, canUs
       unitLabel: '%',
       domainMax: 100,
       fillArea: true,
+      compactValue: true,
       lines: [{ key: 'cpu', label: 'CPU', values: chartPoints.map((point) => finiteOrNull(point.cpuPercent)), color: '#22c55e' }],
     },
     {
       key: 'memory',
       label: '内存 / Swap',
-      value: <><MetricValue label="内存" value={formatPercent(latestMemory)} /><MetricValue label="Swap" value={formatPercent(latestSwap)} /></>,
+      value: <><MetricValue label="内存" value={latestMemory} /><MetricValue label="Swap" value={latestSwap} /></>,
       tone: 'blue',
       unitLabel: '%',
       domainMax: 100,
       fillArea: true,
+      compactValue: true,
       lines: [
-        { key: 'memory', label: '内存', values: chartPoints.map(memoryPercent), color: '#2563eb' },
-        { key: 'swap', label: 'Swap', values: chartPoints.map(swapPercent), color: '#0ea5e9' },
+        {
+          key: 'memory',
+          label: '内存',
+          values: chartPoints.map(memoryPercent),
+          tooltipValues: chartPoints.map((point) => formatResourceUsage(point.memoryUsedBytes, point.memoryTotalBytes)),
+          color: '#2563eb',
+        },
+        {
+          key: 'swap',
+          label: 'Swap',
+          values: chartPoints.map(swapPercent),
+          tooltipValues: chartPoints.map((point) => formatResourceUsage(point.swapUsedBytes, point.swapTotalBytes)),
+          color: '#0ea5e9',
+        },
       ],
     },
     {
       key: 'disk',
       label: '磁盘',
-      value: formatPercent(latestDisk),
+      value: latestDisk,
       tone: 'purple',
       unitLabel: '%',
       domainMax: 100,
       fillArea: true,
-      lines: [{ key: 'disk', label: '磁盘', values: chartPoints.map(diskPercent), color: '#9333ea' }],
+      lines: [{
+        key: 'disk',
+        label: '磁盘',
+        values: chartPoints.map(diskPercent),
+        tooltipValues: chartPoints.map((point) => formatResourceUsage(point.diskUsedBytes, point.diskTotalBytes)),
+        color: '#9333ea',
+      }],
     },
     {
       key: 'network',
@@ -165,7 +187,7 @@ function ResourceMetricCard({ metric, timestamps }: { metric: MetricConfig; time
             </span>
           )}
         </div>
-        <strong className="resource-card-value">{metric.value}</strong>
+        <strong className={`resource-card-value${metric.compactValue ? ' is-compact' : ''}`}>{metric.value}</strong>
       </header>
 
       <div className="resource-chart-frame">
@@ -206,7 +228,7 @@ function ResourceMetricCard({ metric, timestamps }: { metric: MetricConfig; time
                   <span key={line.key}>
                     <i style={{ backgroundColor: line.color }} />
                     <b>{line.label}</b>
-                    <strong>{formatTooltipValue(line.values[hoverIndex], metric.unitLabel)}</strong>
+                    <strong>{line.tooltipValues?.[hoverIndex] ?? formatTooltipValue(line.values[hoverIndex], metric.unitLabel)}</strong>
                   </span>
                 ))}
               </div>
@@ -310,6 +332,28 @@ function latest(points: StatePoint[], read: (point: StatePoint) => number | null
     if (value !== null) return value
   }
   return null
+}
+
+function latestResourceUsage(
+  points: StatePoint[],
+  readUsed: (point: StatePoint) => number | null | undefined,
+  readTotal: (point: StatePoint) => number | null | undefined,
+): string {
+  for (let index = points.length - 1; index >= 0; index -= 1) {
+    const used = finiteOrNull(readUsed(points[index]))
+    const total = finiteOrNull(readTotal(points[index]))
+    if (used !== null || total !== null) return formatResourceUsage(used, total)
+  }
+  return 'No data'
+}
+
+export function formatResourceUsage(used: number | null | undefined, total: number | null | undefined): string {
+  const safeUsed = finiteOrNull(used)
+  const safeTotal = finiteOrNull(total)
+  if (safeUsed === null && safeTotal === null) return 'No data'
+  const pair = `${safeUsed === null ? '--' : formatBytes(safeUsed)} / ${safeTotal === null ? '--' : formatBytes(safeTotal)}`
+  const percent = ratioPercent(safeUsed, safeTotal)
+  return percent === null ? pair : `${pair} · ${formatPercent(percent)}`
 }
 
 function memoryPercent(point: StatePoint): number | null {

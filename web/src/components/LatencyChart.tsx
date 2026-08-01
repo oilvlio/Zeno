@@ -16,6 +16,7 @@ interface LatencyChartProps {
   title?: string
   compactHeader?: boolean
   hideHeader?: boolean
+  hideLegend?: boolean
   peakCut?: boolean
   activeTargetIds?: string[]
 }
@@ -26,12 +27,18 @@ const palette = ['#22c55e', '#38bdf8', '#f59e0b', '#a78bfa', '#fb7185', '#14b8a6
 const packetLossColor = '#94a3b8'
 const maxDrawableLatencyMs = 5000
 
+export function latencySeriesColor(index: number): string {
+  const normalized = ((Math.trunc(index) % palette.length) + palette.length) % palette.length
+  return palette[normalized]
+}
+
 export function LatencyChart({
   points,
   eyebrow = 'Latency',
   title = '多目标延迟图',
   compactHeader = false,
   hideHeader = false,
+  hideLegend = false,
   peakCut = false,
   activeTargetIds = [],
 }: LatencyChartProps) {
@@ -198,7 +205,7 @@ export function LatencyChart({
             key={key}
             d={linePath(rows, key, x, yDelay)}
             fill="none"
-            stroke={palette[paletteIndexForKey(series, key) % palette.length]}
+            stroke={latencySeriesColor(paletteIndexForKey(series, key))}
             strokeWidth={lineStrokeWidth}
             vectorEffect="non-scaling-stroke"
             clipPath={`url(#${clipId})`}
@@ -222,7 +229,7 @@ export function LatencyChart({
                 cx={x(hoverColumn.createdAt)}
                 cy={yDelay(point.delay)}
                 r={5}
-                fill={palette[paletteIndexForKey(series, point.key) % palette.length]}
+                fill={latencySeriesColor(paletteIndexForKey(series, point.key))}
                 clipPath={`url(#${clipId})`}
               />
             ))}
@@ -248,14 +255,17 @@ export function LatencyChart({
         )}
       </svg>
 
-      <div className="latency-legend">
-        {legendSeries.map((item, index) => (
-          <span key={item.targetId}><i style={{ background: palette[(series.findIndex((seriesItem) => seriesItem.targetId === item.targetId) >= 0 ? series.findIndex((seriesItem) => seriesItem.targetId === item.targetId) : index) % palette.length] }} />{item.targetName}</span>
-        ))}
-        {baseView.showPacketLossArea && baseView.packetLossKey && packetLossSeries && (
-          <span><i style={{ background: packetLossColor }} />{packetLossSeries.targetName} 丢包 {formatPercent(avgPacketLoss(lossRows, baseView.packetLossKey))}</span>
-        )}
-      </div>
+      {!hideLegend && (
+        <div className="latency-legend">
+          {legendSeries.map((item, index) => {
+            const seriesIndex = series.findIndex((seriesItem) => seriesItem.targetId === item.targetId)
+            return <span key={item.targetId}><i style={{ background: latencySeriesColor(seriesIndex >= 0 ? seriesIndex : index) }} />{item.targetName}</span>
+          })}
+          {baseView.showPacketLossArea && baseView.packetLossKey && packetLossSeries && (
+            <span><i style={{ background: packetLossColor }} />{packetLossSeries.targetName} 丢包 {formatPercent(avgPacketLoss(lossRows, baseView.packetLossKey))}</span>
+          )}
+        </div>
+      )}
     </section>
   )
 }
@@ -295,7 +305,7 @@ function LatencyTooltip({ column, series, x: tooltipAnchorX, layout }: { column:
           <div className="latency-tooltip-grid" style={{ gridTemplateColumns: `repeat(${tooltipColumns}, minmax(0, 1fr))` }}>
             {column.points.map((point) => (
               <span key={`${point.key}-${column.createdAt}`} className="latency-tooltip-row">
-                <i style={{ backgroundColor: palette[paletteIndexForKey(series, point.key) % palette.length] }} />
+                <i style={{ backgroundColor: latencySeriesColor(paletteIndexForKey(series, point.key)) }} />
                 <b>{point.label}</b>
                 <strong>{formatLatencyValue(point.delay)}</strong>
               </span>

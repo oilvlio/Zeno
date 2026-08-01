@@ -137,6 +137,8 @@
 .detail-fact.is-wide p { font-size: 10.5px; }
 .detail-fact.is-wide strong { font-size: 13px; line-height: 1.22; }
 .detail-fact.is-pending strong { color: color-mix(in srgb, var(--foreground) 48%, transparent); }
+.detail-traffic-values { display: flex; align-items: center; column-gap: 18px; }
+.detail-traffic-value { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
 
 .detail-range-row {
   display: flex;
@@ -260,7 +262,12 @@
   .detail-fact.is-wide { grid-column: 1 / -1; min-height: 54px; padding: 9px 11px; }
   .detail-fact p { flex: none; font-size: 10px; }
   .detail-fact strong { min-width: 0; font-size: 11.5px; line-height: 1.22; }
+  .detail-fact:not(.is-wide) { justify-content: flex-start; }
+  .detail-fact.is-adaptive > strong { width: 100%; flex: 1 1 auto; display: flex; align-items: center; }
+  .detail-fact.is-adaptive.is-multiline > strong { align-items: flex-start; }
+  .detail-fact.is-adaptive > strong > span { min-width: 0; }
   .detail-fact:not(.is-wide) strong { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+  .detail-fact--traffic .detail-traffic-values { flex-direction: column; align-items: flex-start; gap: 3px; white-space: normal; }
   .detail-fact.is-wide strong { font-size: 12.5px; }
   .monitor-heading { padding: 16px 14px 10px; flex-direction: row; align-items: flex-start; gap: 8px; }
   .monitor-heading-title { flex: 1 1 auto; min-width: 0; }

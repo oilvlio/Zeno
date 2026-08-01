@@ -30,6 +30,13 @@ describe('LatencyChart', () => {
     expect(singleHtml).toContain('Alpha 丢包')
   })
 
+  it('can hide the chart legend when an external target picker already provides the same labels', () => {
+    const html = renderToStaticMarkup(<LatencyChart points={points} activeTargetIds={['alpha']} hideLegend />)
+
+    expect(html).not.toContain('latency-legend')
+    expect(html).toContain('packet-loss-area')
+  })
+
   it('anchors every day-range tick to the newest sample minute', () => {
     const dayPoints = Array.from({ length: 49 }, (_, index) => ({
       ts: new Date(Date.UTC(2026, 6, 5, 0, 30) + index * 30 * 60 * 1000).toISOString(),

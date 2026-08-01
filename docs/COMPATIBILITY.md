@@ -8,9 +8,9 @@
 
 | Controller | Agent | 状态 | 说明 |
 | --- | --- | --- | --- |
-| v1.9.4 | v0.6.6 | 支持 | 当前稳定组合；无协议字段或数据库结构变更，Controller 与 Agent 完整发布门禁均通过 |
-| v1.9.4 | v0.6.5 | 支持 | Agent 本次仅精简内部实现，现有 v0.6.5 可继续上报并独立升级 |
-| v1.9.3 | v0.6.5 | 支持 | 上一稳定组合 |
+| v1.9.5 | v0.6.6 | 支持 | 当前稳定组合；仅改进服务器详情资源值与延迟图展示，无协议字段或数据库结构变更 |
+| v1.9.4 | v0.6.6 | 支持 | 上一稳定组合 |
+| v1.9.4 | v0.6.5 | 支持 | Agent 仅精简内部实现，现有 v0.6.5 可继续上报并独立升级 |
 
 只有表中明确列出的组合属于已验证支持范围。较旧 Agent 可能仍可上报，但未列出的组合仅为 best effort；排障前请先升级 Agent。Controller 与 Agent 独立发布，版本号不要求相同。
 
@@ -37,9 +37,9 @@
 
 | Controller | Agent | Status | Notes |
 | --- | --- | --- | --- |
-| v1.9.4 | v0.6.6 | Supported | Current stable combination; no protocol-field or database-schema changes, with complete Controller and Agent release gates passed |
-| v1.9.4 | v0.6.5 | Supported | This Agent release only simplifies internals, so existing v0.6.5 installations remain supported and can upgrade independently |
-| v1.9.3 | v0.6.5 | Supported | Previous stable combination |
+| v1.9.5 | v0.6.6 | Supported | Current stable combination; only improves server-detail resource values and latency-chart presentation, with no protocol-field or database-schema changes |
+| v1.9.4 | v0.6.6 | Supported | Previous stable combination |
+| v1.9.4 | v0.6.5 | Supported | The Agent release only simplifies internals, so existing v0.6.5 installations remain supported and can upgrade independently |
 
 Only combinations explicitly listed above are verified and supported. Older Agents may continue to report, but unlisted combinations are best effort; upgrade the Agent before troubleshooting. Controller and Agent are released independently and their version numbers do not need to match.
 

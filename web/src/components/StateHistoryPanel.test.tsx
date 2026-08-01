@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { StatePoint } from '../types'
-import { StateHistoryPanel, stateYDomain } from './StateHistoryPanel'
+import { formatResourceUsage, StateHistoryPanel, stateYDomain } from './StateHistoryPanel'
 
 const points: StatePoint[] = [
   {
@@ -81,10 +81,10 @@ describe('StateHistoryPanel', () => {
     expect(html).toContain('CPU')
     expect(html).toContain('18.8%')
     expect(html).toContain('内存 / Swap')
-    expect(html).toContain('内存 50.0%')
-    expect(html).toContain('Swap 25.0%')
+    expect(html).toContain('内存 2.0 KiB / 4.0 KiB · 50.0%')
+    expect(html).toContain('Swap 512 B / 2.0 KiB · 25.0%')
     expect(html).toContain('磁盘')
-    expect(html).toContain('50.0%')
+    expect(html).toContain('4.0 KiB / 8.0 KiB · 50.0%')
     expect(html).toContain('网络速率')
     expect(html).toContain('↑512.0 KiB/s')
     expect(html).toContain('↓64.0 KiB/s')
@@ -119,5 +119,11 @@ describe('StateHistoryPanel', () => {
 
     expect(() => stateYDomain(values)).not.toThrow()
     expect(stateYDomain(values)).toEqual({ min: 0, max: 230 })
+  })
+
+  it('formats concrete resource usage with its percentage for chart values and tooltips', () => {
+    expect(formatResourceUsage(2048, 4096)).toBe('2.0 KiB / 4.0 KiB · 50.0%')
+    expect(formatResourceUsage(null, 4096)).toBe('-- / 4.0 KiB')
+    expect(formatResourceUsage(null, null)).toBe('No data')
   })
 })
