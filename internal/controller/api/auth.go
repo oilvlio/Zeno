@@ -95,7 +95,7 @@ func hashAdminPasswordWithSalt(password, salt string) string {
 	// This legacy SHA-256 verifier is retained only to migrate pre-Argon2
 	// password records after one successful login. New hashes always use
 	// Argon2id, and sqliteAdminAuth immediately replaces a matching legacy hash.
-	// lgtm[go/weak-sensitive-data-hashing]
+	// codeql[go/weak-sensitive-data-hashing]
 	sum := sha256.Sum256([]byte(strings.TrimSpace(password) + ":" + salt))
 	return fmt.Sprintf("sha256:%s:%s", salt, hex.EncodeToString(sum[:]))
 }
@@ -103,7 +103,7 @@ func hashAdminPasswordWithSalt(password, salt string) string {
 func legacyAdminPasswordTokenMatches(expectedHash, password string) bool {
 	// This compatibility path handles the oldest unsalted bootstrap hash and is
 	// removed from the database after one successful login.
-	// lgtm[go/weak-sensitive-data-hashing]
+	// codeql[go/weak-sensitive-data-hashing]
 	sum := sha256.Sum256([]byte(strings.TrimSpace(password)))
 	computed := hex.EncodeToString(sum[:])
 	return subtle.ConstantTimeCompare([]byte(expectedHash), []byte(computed)) == 1
