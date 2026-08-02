@@ -139,7 +139,7 @@ export function StateHistoryPanel({ points, range, loading = false, error, canUs
   return (
     <section className="monitor-panel resource-history-panel" aria-label="agent state history">
       <header className="resource-history-header">
-        <h3>系统资源历史</h3>
+        <h3>系统资源趋势</h3>
         <div className="detail-range-row resource-range-row" aria-label="resource history range selector">
           {stateRangeOptions.map((option) => (
             <button key={option.value} type="button" className={range === option.value ? 'is-active' : ''} onClick={() => onRangeChange(option.value)}>{option.label}</button>
@@ -149,7 +149,7 @@ export function StateHistoryPanel({ points, range, loading = false, error, canUs
 
       {loading && <div className="detail-state">正在读取系统资源…</div>}
       {error && <div className="detail-state is-error">系统资源读取失败：{error}</div>}
-      {!loading && !error && sampleCount === 0 && <div className="detail-state">暂无系统资源历史</div>}
+      {!loading && !error && sampleCount === 0 && <div className="detail-state">暂无系统资源趋势数据</div>}
 
       {!loading && !error && sampleCount > 0 && (
         <div className="resource-history-grid">

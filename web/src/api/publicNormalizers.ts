@@ -41,7 +41,70 @@ export function normalizeNodeLatency(input: ApiLatencyResponse): NodeLatencyData
     nodeId: input.node_id,
     range: input.range,
     points: normalizeNodeLatencyPoints(input),
+    snapshotKey: nodeLatencySnapshotKey(input),
   }
+}
+
+type SnapshotHash = { first: number; second: number }
+
+const snapshotNumberBuffer = new ArrayBuffer(8)
+const snapshotNumberView = new DataView(snapshotNumberBuffer)
+
+function mixSnapshotHash(hash: SnapshotHash, value: number): void {
+  const part = value | 0
+  hash.first = Math.imul(hash.first ^ part, 16_777_619)
+  hash.second = Math.imul(hash.second ^ part, 2_246_822_519)
+}
+
+function mixSnapshotString(hash: SnapshotHash, value: string): void {
+  mixSnapshotHash(hash, value.length)
+  for (let index = 0; index < value.length; index += 1) mixSnapshotHash(hash, value.charCodeAt(index))
+}
+
+function mixSnapshotNumber(hash: SnapshotHash, value: number | null | undefined): void {
+  if (value === null || value === undefined) {
+    mixSnapshotHash(hash, 0x6d2b79f5)
+    return
+  }
+  if (!Number.isFinite(value)) {
+    mixSnapshotHash(hash, 0x1b873593)
+    return
+  }
+  snapshotNumberView.setFloat64(0, value === 0 ? 0 : value)
+  mixSnapshotHash(hash, snapshotNumberView.getUint32(0))
+  mixSnapshotHash(hash, snapshotNumberView.getUint32(4))
+}
+
+function mixSnapshotNumbers(hash: SnapshotHash, values: Array<number | null> | null | undefined): void {
+  mixSnapshotHash(hash, values?.length ?? 0)
+  for (const value of values ?? []) mixSnapshotNumber(hash, value)
+}
+
+export function nodeLatencySnapshotKey(input: ApiLatencyResponse): string {
+  const hash: SnapshotHash = { first: 0x811c9dc5, second: 0x9e3779b9 }
+  mixSnapshotString(hash, input.node_id)
+  mixSnapshotString(hash, input.range)
+  if (input.points) {
+    for (const point of input.points) {
+      mixSnapshotString(hash, point.ts)
+      mixSnapshotString(hash, point.target_id)
+      mixSnapshotString(hash, point.target_name)
+      mixSnapshotNumber(hash, point.median_ms)
+      mixSnapshotNumber(hash, point.avg_ms)
+      mixSnapshotNumber(hash, point.loss_percent)
+    }
+  } else {
+    mixSnapshotNumbers(hash, input.created_at)
+    for (const series of input.series ?? []) {
+      mixSnapshotString(hash, series.target_id)
+      mixSnapshotString(hash, series.target_name)
+      mixSnapshotNumbers(hash, series.created_at)
+      mixSnapshotNumbers(hash, series.median_ms)
+      mixSnapshotNumbers(hash, series.avg_ms)
+      mixSnapshotNumbers(hash, series.loss_percent)
+    }
+  }
+  return `${(hash.first >>> 0).toString(36)}:${(hash.second >>> 0).toString(36)}`
 }
 
 export function normalizeServiceLatency(input: ApiServiceLatencyResponse): ServiceLatencyData {
@@ -123,8 +186,10 @@ export function normalizeLatencySummary(summary: ApiLatencySummary) {
 }
 
 export function normalizeLatencyPoint(point: ApiLatencyPoint): LatencyPoint {
+  const parsedTimestamp = Date.parse(point.ts)
   return {
     ts: point.ts,
+    tsMs: Number.isFinite(parsedTimestamp) ? parsedTimestamp : 0,
     targetId: point.target_id,
     targetName: point.target_name,
     medianMs: point.median_ms,
@@ -155,8 +220,10 @@ function normalizeLatencySeries<T extends ApiLatencySeriesValues>(
     const target = identity(series)
     return (series.created_at ?? sharedCreatedAt).map((createdAt, index) => {
       const medianMs = medianValues[index] ?? null
+      const tsMs = normalizeSeriesTimestampValue(createdAt)
       return {
-        ts: normalizeSeriesTimestamp(createdAt),
+        ts: new Date(tsMs).toISOString(),
+        tsMs,
         ...target,
         medianMs,
         avgMs: avgValues[index] ?? null,
@@ -174,10 +241,13 @@ export function normalizeServiceLatencyPoints(input: ApiServiceLatencyResponse):
   }))
 }
 
+function normalizeSeriesTimestampValue(value: number): number {
+  const timestamp = new Date(value).getTime()
+  return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
 export function normalizeSeriesTimestamp(value: number): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return new Date(0).toISOString()
-  return date.toISOString()
+  return new Date(normalizeSeriesTimestampValue(value)).toISOString()
 }
 
 export function normalizeServiceTarget(target: ApiServiceTarget): ServiceTarget {

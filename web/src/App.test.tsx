@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { DashboardRouteState, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, documentBrandingForSettings, filterHomeNodesByRegion, homeMonthlyCostForNodes, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, preloadAdminRoute, shellStyleForSettings, shouldPreloadAdminRoute, shouldRefreshHomeRealtimeSnapshot } from './App'
+import { DashboardRouteState, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, documentBrandingForSettings, filterHomeNodesByRegion, homeMonthlyCostForNodes, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, preloadAdminRoute, preloadNodeDetailRoute, shellStyleForSettings, shouldPreloadAdminRoute, shouldPreloadNodeDetailRoute, shouldRefreshHomeRealtimeSnapshot } from './App'
 import type { HomeCardNode } from './types'
 import { settings } from './components/admin/adminTestFixtures'
 
@@ -75,6 +75,13 @@ describe('HomeTopPanel', () => {
     expect(shouldPreloadAdminRoute('home', true, '')).toBe(false)
     expect(shouldPreloadAdminRoute('home', false, '__cookie_session__')).toBe(false)
     expect(shouldPreloadAdminRoute('admin', true, '__cookie_session__')).toBe(false)
+  })
+
+  it('preloads the shared server detail surface after the home summary is ready', async () => {
+    expect(shouldPreloadNodeDetailRoute('home', true)).toBe(true)
+    expect(shouldPreloadNodeDetailRoute('home', false)).toBe(false)
+    expect(shouldPreloadNodeDetailRoute('node', true)).toBe(false)
+    await expect(preloadNodeDetailRoute()).resolves.toBeUndefined()
   })
 
   it('keeps route loading content inside the same top-card shell used by destination pages', () => {

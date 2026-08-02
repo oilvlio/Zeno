@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { HomeCardNode, HourlyLatencyPoint, NodeStatus } from '../types'
 import { formatLatency } from '../lib/format'
 import { convertCurrencyAmount, formatCurrencyAmount, normalizeCurrencyCode, normalizeCurrencyRates, type CurrencyCode, type CurrencyRates } from '../lib/currency'
@@ -9,6 +9,7 @@ interface ServerCardProps {
   displayCurrency?: CurrencyCode
   exchangeRates?: CurrencyRates
   onOpen?: (nodeId: string) => void
+  onIntent?: (nodeId: string) => void
 }
 
 const osAsset: Record<string, string> = {
@@ -176,7 +177,7 @@ function formatRenewalCost(amount: number | null | undefined, currency: string |
   return `${formatCurrencyAmount(shownAmount, shownCurrency, { spaced: true })}${cycleText ? ` / ${cycleText}` : ''}`
 }
 
-export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: inputExchangeRates = { CNY: 1 }, onOpen }: ServerCardProps) {
+export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: inputExchangeRates = { CNY: 1 }, onOpen, onIntent }: ServerCardProps) {
   const memoryPercent = ratio(node.memoryUsedBytes, node.memoryTotalBytes)
   const diskPercent = ratio(node.diskUsedBytes, node.diskTotalBytes)
   const trafficPercent = ratio(node.monthlyBillableBytes, node.monthlyQuotaBytes)
@@ -186,13 +187,37 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
   const exchangeRates = normalizeCurrencyRates(inputExchangeRates)
   const renewalCost = formatRenewalCost(node.renewalAmount, node.renewalCurrency, node.billingCycle, displayCurrency, exchangeRates)
   const isOfflineCard = isOfflineStatus(node.status)
+  const intentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const open = () => onOpen?.(node.id)
+  const clearIntentTimer = () => {
+    if (intentTimerRef.current === null) return
+    clearTimeout(intentTimerRef.current)
+    intentTimerRef.current = null
+  }
+  const runIntent = () => {
+    clearIntentTimer()
+    onIntent?.(node.id)
+  }
+  const scheduleIntent = () => {
+    if (!onIntent || intentTimerRef.current !== null) return
+    intentTimerRef.current = setTimeout(() => {
+      intentTimerRef.current = null
+      onIntent(node.id)
+    }, 120)
+  }
+
+  useEffect(() => clearIntentTimer, [])
 
   return (
     <article
       className={`kulin-node-card${isOfflineCard ? ' is-offline' : ''}`}
       role={onOpen ? 'link' : undefined}
       tabIndex={onOpen ? 0 : undefined}
+      onPointerEnter={scheduleIntent}
+      onPointerLeave={clearIntentTimer}
+      onPointerDown={runIntent}
+      onFocus={runIntent}
+      onBlur={clearIntentTimer}
       onClick={open}
       onKeyDown={(event) => {
         if (!onOpen) return
@@ -230,13 +255,11 @@ export function ServerCard({ node, displayCurrency = 'CNY', exchangeRates: input
           <UsageBar tone="disk" label="存储" valueText={`${formatUsage(diskPercent)}%`} percent={diskPercent} />
           <UsageBar tone="traffic" label={formatTrafficLabel()} valueText={`${formatKulinBytes(node.monthlyBillableBytes, { compact: true })} / ${formatKulinBytes(node.monthlyQuotaBytes, { compact: true })}`} percent={trafficPercent} />
         </div>
-        <section className="node-footer-grid" aria-label={`${node.displayName} network and billing`}>
+        <section className="node-footer-grid" aria-label={`${node.displayName} network, billing, and health`}>
           <Metric tone="up" icon={<UploadIcon />} label="上传" value={formatRate(node.netOutSpeedBps)} />
           <Metric tone="down" icon={<DownloadIcon />} label="下载" value={formatRate(node.netInSpeedBps)} />
           <Metric tone="expiry" stateTone={expiry?.tone} icon={<CalendarIcon />} label="剩余" value={expiryMetricValue(expiry)} />
           <Metric tone="billing" icon={<WalletIcon />} label="账单" value={renewalCost ?? '--'} />
-        </section>
-        <section className="node-health-history" aria-label={`${node.displayName} latency and packet loss history`}>
           <HealthHistoryRow kind="latency" icon={<ActivityIcon />} label="延迟" value={latency?.avgMs != null ? formatLatency(latency.avgMs) : '--ms'} points={hourlyHistory} />
           <HealthHistoryRow kind="loss" icon={<TriangleAlertIcon />} label="丢包率" value={latency ? normalizeLoss(latency.lossPercent) : '--%'} points={hourlyHistory} />
         </section>

@@ -26,6 +26,16 @@ describe('buildKulinTargetSeries', () => {
     expect(series[0].points.map((point) => point.avg_delay)).toEqual([14, null, null])
     expect(series[0].points.map((point) => point.packet_loss)).toEqual([0, 100, 100])
   })
+
+  it('reuses normalized millisecond timestamps while preserving out-of-order fallback sorting', () => {
+    const series = buildKulinTargetSeries([
+      { ts: 'ignored-later', tsMs: 2000, targetId: 'alpha', targetName: 'Alpha', medianMs: 20, avgMs: 20, lossPercent: 0 },
+      { ts: 'ignored-earlier', tsMs: 1000, targetId: 'alpha', targetName: 'Alpha', medianMs: 10, avgMs: 10, lossPercent: Number.NaN },
+    ])
+
+    expect(series[0].points.map((point) => point.created_at)).toEqual([1000, 2000])
+    expect(series[0].points[0].packet_loss).toBe(0)
+  })
 })
 
 describe('buildKulinChartRows', () => {

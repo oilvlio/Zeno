@@ -19,6 +19,20 @@ export type StateHistoryLoadState =
   | { kind: 'error'; message: string }
 
 const detailHttpFallbackDelayMs = 1800
+const detailSnapshotKeyLimit = 12
+
+export function shouldApplyNodeLatencySnapshot(seen: Map<string, string>, cacheKey: string, snapshotKey?: string): boolean {
+  if (!snapshotKey) return true
+  if (seen.get(cacheKey) === snapshotKey) return false
+  seen.delete(cacheKey)
+  seen.set(cacheKey, snapshotKey)
+  while (seen.size > detailSnapshotKeyLimit) {
+    const oldest = seen.keys().next().value as string | undefined
+    if (oldest === undefined) break
+    seen.delete(oldest)
+  }
+  return true
+}
 
 function validateNodeLatencyData(value: unknown): NodeLatencyData | null {
   const data = value as Partial<NodeLatencyData> | null
@@ -92,6 +106,7 @@ export function useNodeDetailController({ nodeId, summary, adminToken, expireAdm
   const [stateHistoryState, setStateHistoryState] = useState<StateHistoryLoadState>({ kind: 'idle' })
   const nodeLatencyCacheRef = useRef(new DetailMemoryCache<NodeLatencyData>())
   const nodeStateCacheRef = useRef(new DetailMemoryCache<NodeStateData>())
+  const nodeLatencySnapshotRef = useRef(new Map<string, string>())
 
   useEffect(() => {
     const hasToken = adminToken !== ''
@@ -113,12 +128,15 @@ export function useNodeDetailController({ nodeId, summary, adminToken, expireAdm
     const cached = memoryCached?.data ?? sessionCached?.data ?? null
     const seeded = cached ?? seedNodeLatencyFromSummary(summary, nodeId, nodeLatencyRange)
     if (sessionCached) nodeLatencyCacheRef.current.set(cacheKey, sessionCached.data, sessionCached.storedAt)
+    if (cached?.snapshotKey) shouldApplyNodeLatencySnapshot(nodeLatencySnapshotRef.current, cacheKey, cached.snapshotKey)
     if (seeded) setLatencyState({ kind: 'ready', data: seeded })
     else setLatencyState((current) => current.kind === 'ready' && current.data.nodeId === nodeId ? current : { kind: 'loading' })
     const applyData = (data: NodeLatencyData) => {
+      if (cancelled) return
+      if (!shouldApplyNodeLatencySnapshot(nodeLatencySnapshotRef.current, cacheKey, data.snapshotKey)) return
       nodeLatencyCacheRef.current.set(cacheKey, data)
       rememberDetailData(nodeLatencyCachePrefix, nodeId, nodeLatencyRange, data)
-      if (!cancelled) setLatencyState({ kind: 'ready', data })
+      setLatencyState({ kind: 'ready', data })
     }
     const useLiveStream = !rangeRequiresAdmin(nodeLatencyRange)
     const requestToken = useLiveStream ? undefined : adminToken

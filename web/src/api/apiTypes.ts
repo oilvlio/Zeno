@@ -359,6 +359,7 @@ export interface NodeLatencyData {
   nodeId: string
   range: string
   points: LatencyPoint[]
+  snapshotKey?: string
 }
 
 export interface ServiceLatencyData {

@@ -106,7 +106,7 @@ export function LatencyDetail({
         <header className="monitor-heading latency-monitor-heading">
           <div className="monitor-heading-title">
             <div className="monitor-title-row">
-              <h3>{node.displayName}</h3>
+              <h3>网络延迟</h3>
               <label className="peak-switch">
                 <input type="checkbox" aria-label="平滑" checked={peakCut} onChange={(event) => setPeakCut(event.target.checked)} />
                 <span />

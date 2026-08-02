@@ -54,7 +54,7 @@ describe('StateHistoryPanel', () => {
       <StateHistoryPanel points={points} range="1h" loading={false} canUseExtendedRanges />,
     )
 
-    expect(html).toContain('系统资源历史')
+    expect(html).toContain('系统资源趋势')
     expect(html).not.toContain('实时 · 2 个状态采样')
     expect(html).not.toContain('个状态采样')
     expect(html).toContain('resource history range selector')
@@ -111,7 +111,7 @@ describe('StateHistoryPanel', () => {
       <StateHistoryPanel points={[]} range="1d" loading={false} />,
     )
 
-    expect(html).toContain('暂无系统资源历史')
+    expect(html).toContain('暂无系统资源趋势数据')
   })
 
   it('reduces an exceptionally large state payload without spreading it into Math.max', () => {

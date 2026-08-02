@@ -6,7 +6,7 @@ import type { HomeCardNode, LatencyPoint } from '../types'
 import { LatencyDetail } from './LatencyDetail'
 import '../styles/detail.css'
 
-interface NodeDetailRouteProps {
+export interface NodeDetailRouteProps {
   node: HomeCardNode
   summary: SummaryData | null
   adminToken: string

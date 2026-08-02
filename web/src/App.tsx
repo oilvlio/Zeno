@@ -12,7 +12,9 @@ import { useDashboardRouter } from './hooks/useDashboardRouter'
 import { homeRealtimeSnapshotForNodes, useSummaryController } from './hooks/useSummaryController'
 import { HomeRegionFilter, HomeTopPanel } from './components/HomeOverviewPanel'
 import type { AdminDashboardContainerProps } from './components/admin/AdminDashboard'
+import type { NodeDetailRouteProps } from './components/NodeDetailRoute'
 import type { DashboardRoute } from './lib/route'
+import { prefetchNodeLatency } from './api/publicClient'
 
 export { applyCustomCode, extractSafeCustomCSS } from './lib/customCode'
 export { availableHistoryRanges, coerceHistoryRange, rangeRequiresAdmin } from './lib/historyRange'
@@ -25,11 +27,14 @@ export { HomeOverviewPanel, HomeRegionFilter, HomeTopPanel } from './components/
 
 const loadAdminDashboardModule = () => import('./components/admin/AdminDashboard')
 const loadAdminDashboard = () => loadAdminDashboardModule().then((module) => ({ default: module.AdminDashboardContainer }))
+const loadNodeDetailRouteModule = () => import('./components/NodeDetailRoute')
 const LazyAdminDashboard = lazy(loadAdminDashboard)
-const LazyNodeDetailRoute = lazy(() => import('./components/NodeDetailRoute').then((module) => ({ default: module.NodeDetailRoute })))
+const LazyNodeDetailRoute = lazy(() => loadNodeDetailRouteModule().then((module) => ({ default: module.NodeDetailRoute })))
 const LazyServiceDetailRoute = lazy(() => import('./components/ServiceDetailRoute').then((module) => ({ default: module.ServiceDetailRoute })))
 let preloadedAdminDashboard: ComponentType<AdminDashboardContainerProps> | null = null
+let preloadedNodeDetailRoute: ComponentType<NodeDetailRouteProps> | null = null
 let adminRoutePreload: Promise<void> | null = null
+let nodeDetailRoutePreload: Promise<void> | null = null
 
 export async function preloadAdminRoute(): Promise<void> {
   if (adminRoutePreload === null) {
@@ -41,6 +46,18 @@ export async function preloadAdminRoute(): Promise<void> {
       })
   }
   return adminRoutePreload
+}
+
+export async function preloadNodeDetailRoute(): Promise<void> {
+  if (nodeDetailRoutePreload === null) {
+    nodeDetailRoutePreload = loadNodeDetailRouteModule()
+      .then((detailModule) => { preloadedNodeDetailRoute = detailModule.NodeDetailRoute })
+      .catch((error: unknown) => {
+        nodeDetailRoutePreload = null
+        throw error
+      })
+  }
+  return nodeDetailRoutePreload
 }
 
 export function DashboardRouteState({
@@ -143,6 +160,10 @@ export function shouldPreloadAdminRoute(routeKind: DashboardRoute['kind'], summa
   return routeKind === 'home' && summaryReady && adminToken !== ''
 }
 
+export function shouldPreloadNodeDetailRoute(routeKind: DashboardRoute['kind'], summaryReady: boolean): boolean {
+  return routeKind === 'home' && summaryReady
+}
+
 export function App() {
   const { state, summaryRef, homeRealtimeSnapshot } = useSummaryController()
   const [homeRegion, setHomeRegion] = useState('ALL')
@@ -151,6 +172,7 @@ export function App() {
   const { settings, settingsReady, setSettings } = usePublicSettings()
   const { adminToken, setAdminToken, expireAdminSession } = useAdminAccess()
   const [AdminDashboardRoute, setAdminDashboardRoute] = useState<ComponentType<AdminDashboardContainerProps>>(() => preloadedAdminDashboard ?? LazyAdminDashboard)
+  const [NodeDetailRouteComponent, setNodeDetailRouteComponent] = useState<ComponentType<NodeDetailRouteProps>>(() => preloadedNodeDetailRoute ?? LazyNodeDetailRoute)
   const [adminSurfaceMounted, setAdminSurfaceMounted] = useState(route.kind === 'admin')
   const [adminSurfaceReady, setAdminSurfaceReady] = useState(false)
   const adminSurfaceReadyRef = useRef(false)
@@ -162,7 +184,39 @@ export function App() {
   const [backgroundEnabled, setBackgroundEnabled] = useState(() => storedBackgroundEnabled())
   const backgroundEnabledRef = useRef(backgroundEnabled)
   const effectiveSettings = settingsForChrome(settings, themeOverride, backgroundEnabled)
+  const nodeRouteId = route.kind === 'node' ? route.nodeId : null
   useDocumentTheme(effectiveSettings)
+
+  const adoptPreloadedNodeDetailRoute = useCallback(() => {
+    if (preloadedNodeDetailRoute) setNodeDetailRouteComponent(() => preloadedNodeDetailRoute as ComponentType<NodeDetailRouteProps>)
+  }, [])
+
+  useEffect(() => {
+    if (nodeRouteId === null) return
+    // Start both the detail surface and its initial chart request as soon as the
+    // route is known. The controller reuses this request without changing data.
+    void preloadNodeDetailRoute().catch(() => {})
+    void prefetchNodeLatency(nodeRouteId, '1d').catch(() => {})
+  }, [nodeRouteId])
+
+  useEffect(() => {
+    if (!shouldPreloadNodeDetailRoute(route.kind, state.kind === 'ready')) return undefined
+    let active = true
+    let timeoutId: number | null = null
+    let idleId: number | null = null
+    const preload = () => {
+      void preloadNodeDetailRoute()
+        .then(() => { if (active) adoptPreloadedNodeDetailRoute() })
+        .catch(() => {})
+    }
+    if (typeof window.requestIdleCallback === 'function') idleId = window.requestIdleCallback(preload, { timeout: 1_000 })
+    else timeoutId = window.setTimeout(preload, 0)
+    return () => {
+      active = false
+      if (idleId !== null) window.cancelIdleCallback(idleId)
+      if (timeoutId !== null) window.clearTimeout(timeoutId)
+    }
+  }, [route.kind, state.kind, adoptPreloadedNodeDetailRoute])
 
   useEffect(() => {
     applyDocumentBranding(settings)
@@ -287,6 +341,11 @@ export function App() {
       })
   }
   const preloadAdminIntent = () => { void preloadAdmin().catch(() => {}) }
+  const preloadNodeIntent = (nodeId: string) => {
+    // Prime the module cache without replacing an already mounted lazy route.
+    void preloadNodeDetailRoute().catch(() => {})
+    void prefetchNodeLatency(nodeId, '1d').catch(() => {})
+  }
   const handleAdminReadyStateChange = useCallback((ready: boolean) => {
     adminSurfaceReadyRef.current = ready
     setAdminSurfaceReady(ready)
@@ -331,7 +390,7 @@ export function App() {
 
       {state.kind === 'ready' && route.kind === 'node' && selectedNode && (
         <Suspense fallback={<DashboardRouteState {...routeStateProps} message="加载中…" />}>
-          <LazyNodeDetailRoute
+          <NodeDetailRouteComponent
             node={selectedNode}
             summary={summaryRef.current}
             adminToken={adminToken}
@@ -388,7 +447,7 @@ export function App() {
           <HomeRegionFilter regions={homeRegions} activeRegion={activeHomeRegion} onChange={setHomeRegion} />
 
           <section className="server-card-list" aria-label="server cards">
-            {visibleHomeNodes.map((node) => <ServerCard key={node.id} node={node} displayCurrency={activeHomeCurrency} exchangeRates={exchangeRates} onOpen={navigateNode} />)}
+            {visibleHomeNodes.map((node) => <ServerCard key={node.id} node={node} displayCurrency={activeHomeCurrency} exchangeRates={exchangeRates} onOpen={navigateNode} onIntent={preloadNodeIntent} />)}
           </section>
         </div>
       )}

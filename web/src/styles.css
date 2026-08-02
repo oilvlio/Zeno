@@ -707,7 +707,7 @@ svg { display: block; }
   margin-top: 20px;
   display: grid;
   flex: none;
-  grid-template-rows: auto auto auto;
+  grid-template-rows: auto auto;
   align-content: start;
   gap: 14px;
   /* The footer metrics size themselves against the card, not the viewport: the
@@ -777,10 +777,7 @@ svg { display: block; }
 .metric-expiry.is-expired { --metric-accent: var(--red); }
 .metric-billing { --metric-accent: var(--billing-gold); }
 
-.node-health-history {
-  display: grid;
-  gap: 8px;
-}
+.node-footer-grid > .node-health-metric { grid-column: 1 / -1; }
 .node-health-metric {
   --metric-accent: var(--green);
   min-width: 0;
@@ -847,7 +844,7 @@ svg { display: block; }
   gap: 16px;
   padding: 22px 24px 12px;
 }
-.resource-history-header h3 { margin: 0; color: var(--foreground); font-size: 20px; font-weight: 500; }
+.resource-history-header h3 { margin: 0; color: var(--foreground); font-size: 20px; font-weight: 600; }
 .resource-range-row { flex-wrap: nowrap; justify-content: flex-end; }
 .resource-history-grid {
   display: grid;

@@ -86,6 +86,7 @@ export interface HomeCardNode {
 
 export interface LatencyPoint {
   ts: string
+  tsMs?: number
   targetId: string
   targetName: string
   medianMs: number | null

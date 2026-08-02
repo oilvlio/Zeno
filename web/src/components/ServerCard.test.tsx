@@ -105,15 +105,15 @@ describe('ServerCard', () => {
     expect(html).not.toContain('>占用<')
   })
 
-  it('uses original-size individual frames for upload, download, expiry and billing', () => {
+  it('uses one evenly spaced grid for upload, download, expiry, billing, latency and loss', () => {
     const html = renderToStaticMarkup(
       <ServerCard node={{ ...baseNode, renewalAmount: 20, renewalCurrency: 'USD', billingCycle: '年' }} displayCurrency="CNY" exchangeRates={{ CNY: 1, USD: 8 }} onOpen={vi.fn()} />,
     )
 
-    expect(html).toMatch(/class="node-footer-grid"[\s\S]*metric-up[\s\S]*metric-down[\s\S]*metric-expiry is-safe[\s\S]*metric-billing/)
+    expect(html).toMatch(/class="node-footer-grid"[\s\S]*metric-up[\s\S]*metric-down[\s\S]*metric-expiry is-safe[\s\S]*metric-billing[\s\S]*health-latency[\s\S]*health-loss/)
     expect(html.match(/class="node-metric /g)).toHaveLength(4)
-    expect(html).not.toContain('metric-latency')
-    expect(html).not.toContain('metric-loss')
+    expect(html.match(/class="node-health-metric /g)).toHaveLength(2)
+    expect(html).not.toContain('node-health-history')
     expect(html).toContain('>¥ 160 / 年</strong>')
     expect(html).toMatch(/metric-up[\s\S]*>上传<\/span>[\s\S]*>256 B\/s<\/strong>/)
     expect(html).toMatch(/metric-down[\s\S]*>下载<\/span>[\s\S]*>128 B\/s<\/strong>/)
@@ -122,7 +122,7 @@ describe('ServerCard', () => {
   it('renders latency and packet loss in separate original-size frames with twelve hourly cells each', () => {
     const html = renderToStaticMarkup(<ServerCard node={baseNode} onOpen={vi.fn()} />)
 
-    expect(html).toMatch(/class="node-health-history"[\s\S]*health-latency[\s\S]*health-loss/)
+    expect(html).toMatch(/class="node-footer-grid"[\s\S]*health-latency[\s\S]*health-loss/)
     expect(html.match(/class="history-cell history-latency /g)).toHaveLength(12)
     expect(html.match(/class="history-cell history-loss /g)).toHaveLength(12)
     expect(html).toContain('history-latency is-good')

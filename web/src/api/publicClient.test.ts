@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchServiceLatency, normalizeSettings, normalizeNodeLatency, normalizeNodeState, normalizeServiceLatency, normalizeSummary } from './client'
+import { fetchNodeLatency, fetchServiceLatency, nodeLatencySnapshotKey, normalizeSettings, normalizeNodeLatency, normalizeNodeState, normalizeServiceLatency, normalizeSummary, prefetchNodeLatency } from './client'
 
 describe('normalizeSummary', () => {
   it('maps controller snake_case JSON into frontend camelCase models', () => {
@@ -209,6 +209,70 @@ describe('fetchServiceLatency', () => {
   })
 })
 
+describe('prefetchNodeLatency', () => {
+  const originalFetch = globalThis.fetch
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('reuses the route prefetch when the detail controller requests the same chart', async () => {
+    let resolveFetch: ((response: Response) => void) | undefined
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { resolveFetch = resolve }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const prefetched = prefetchNodeLatency('prefetched-node', '1d')
+    const requested = fetchNodeLatency('prefetched-node', '1d')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith('/api/public/v1/nodes/prefetched-node/latency?range=1d', {
+      signal: expect.any(AbortSignal),
+      headers: { Accept: 'application/json' },
+    })
+
+    resolveFetch?.(new Response(JSON.stringify({ node_id: 'prefetched-node', range: '1d', points: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(prefetched).resolves.toEqual(expect.objectContaining({ nodeId: 'prefetched-node', range: '1d' }))
+    await expect(requested).resolves.toEqual(expect.objectContaining({ nodeId: 'prefetched-node', range: '1d' }))
+
+    const reopened = fetchNodeLatency('prefetched-node', '1d')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    resolveFetch?.(new Response(JSON.stringify({ node_id: 'prefetched-node', range: '1d', points: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    await expect(reopened).resolves.toEqual(expect.objectContaining({ nodeId: 'prefetched-node', range: '1d' }))
+  })
+
+  it('times out a stalled intent prefetch without pinning later detail requests to it', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      if (fetchMock.mock.calls.length === 1) {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })
+        })
+      }
+      return Promise.resolve(new Response(JSON.stringify({ node_id: 'timeout-node', range: '1d', points: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }))
+    })
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const stalled = prefetchNodeLatency('timeout-node', '1d')
+    const rejected = expect(stalled).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.advanceTimersByTimeAsync(10_000)
+    await rejected
+
+    await expect(fetchNodeLatency('timeout-node', '1d')).resolves.toEqual(expect.objectContaining({ nodeId: 'timeout-node' }))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('normalizeNodeLatency', () => {
   it('keeps node id, range, and loss-only null latency points', () => {
     const data = normalizeNodeLatency({
@@ -271,9 +335,54 @@ describe('normalizeNodeLatency', () => {
     })
 
     expect(data.points).toEqual([
-      expect.objectContaining({ ts: '2026-07-02T12:00:00.000Z', targetId: 'google', targetName: 'Google', avgMs: 1.4, lossPercent: 0 }),
-      expect.objectContaining({ ts: '2026-07-02T12:00:00.000Z', targetId: 'dc1', targetName: 'DC1', avgMs: 20, lossPercent: 100 }),
+      expect.objectContaining({ ts: '2026-07-02T12:00:00.000Z', tsMs: Date.parse('2026-07-02T12:00:00Z'), targetId: 'google', targetName: 'Google', avgMs: 1.4, lossPercent: 0 }),
+      expect.objectContaining({ ts: '2026-07-02T12:00:00.000Z', tsMs: Date.parse('2026-07-02T12:00:00Z'), targetId: 'dc1', targetName: 'DC1', avgMs: 20, lossPercent: 100 }),
     ])
+  })
+
+  it('fingerprints the complete compact chart snapshot for duplicate live-frame suppression', () => {
+    const input = {
+      node_id: 'example-node-a',
+      range: '1d',
+      created_at: [Date.parse('2026-07-02T12:00:00Z'), Date.parse('2026-07-02T12:01:00Z')],
+      series: [{
+        target_id: 'google',
+        target_name: 'Google',
+        median_ms: [1.3, 1.4],
+        avg_ms: [1.4, 1.5],
+        loss_percent: [0, 0],
+      }],
+    }
+    const same = structuredClone(input)
+    const changed = structuredClone(input)
+    changed.series[0].avg_ms[0] = 1.400_000_1
+    const changedMedian = structuredClone(input)
+    changedMedian.series[0].median_ms[0] = 8.8
+
+    expect(nodeLatencySnapshotKey(same)).toBe(nodeLatencySnapshotKey(input))
+    expect(nodeLatencySnapshotKey(changed)).not.toBe(nodeLatencySnapshotKey(input))
+    expect(nodeLatencySnapshotKey(changedMedian)).not.toBe(nodeLatencySnapshotKey(input))
+    expect(normalizeNodeLatency(input).snapshotKey).toBe(nodeLatencySnapshotKey(input))
+  })
+
+  it('fingerprints the same legacy points branch used by normalization', () => {
+    const input = {
+      node_id: 'legacy-node',
+      range: '1h',
+      series: [],
+      points: [{
+        ts: '2026-07-02T12:00:00Z',
+        target_id: 'google',
+        target_name: 'Google',
+        median_ms: 1.2,
+        avg_ms: 1.4,
+        loss_percent: 0,
+      }],
+    }
+    const changed = structuredClone(input)
+    changed.points[0].median_ms = 8.8
+
+    expect(nodeLatencySnapshotKey(changed)).not.toBe(nodeLatencySnapshotKey(input))
   })
 })
 

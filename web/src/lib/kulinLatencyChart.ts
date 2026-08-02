@@ -95,18 +95,19 @@ export function buildKulinTargetSeries(points: LatencyPoint[]): KulinTargetSerie
   }
 
   return order.map((targetId) => {
-    const targetPoints = [...byTarget.get(targetId)!].sort((a, b) => a.ts.localeCompare(b.ts))
+    const targetPoints = orderedLatencyPoints(byTarget.get(targetId)!)
     const delays = targetPoints.map((point) => latencyDelay(point))
-    const calculatedPacketLoss = calculateKulinPacketLoss(delays)
+    const needsCalculatedPacketLoss = targetPoints.some((point) => !Number.isFinite(point.lossPercent))
+    const calculatedPacketLoss = needsCalculatedPacketLoss ? calculateKulinPacketLoss(delays) : null
 
     return {
       targetId,
       targetName: targetPoints[0]?.targetName ?? targetId,
       points: targetPoints.map((point, index) => {
-        const delay = latencyDelay(point)
-        const reportedLoss = Number.isFinite(point.lossPercent) ? point.lossPercent : calculatedPacketLoss[index]
+        const delay = delays[index]
+        const reportedLoss = Number.isFinite(point.lossPercent) ? point.lossPercent : calculatedPacketLoss?.[index] ?? 0
         return {
-          created_at: Date.parse(point.ts),
+          created_at: latencyPointTimestamp(point),
           avg_delay: delay,
           // A grid bucket with neither latency nor loss is missing data, not a
           // successful zero-loss probe. Keep both chart dimensions empty.
@@ -115,6 +116,19 @@ export function buildKulinTargetSeries(points: LatencyPoint[]): KulinTargetSerie
       }),
     }
   })
+}
+
+function latencyPointTimestamp(point: LatencyPoint): number {
+  return typeof point.tsMs === 'number' && Number.isFinite(point.tsMs) ? point.tsMs : Date.parse(point.ts)
+}
+
+function orderedLatencyPoints(points: LatencyPoint[]): LatencyPoint[] {
+  for (let index = 1; index < points.length; index += 1) {
+    if (latencyPointTimestamp(points[index - 1]) > latencyPointTimestamp(points[index])) {
+      return [...points].sort((left, right) => latencyPointTimestamp(left) - latencyPointTimestamp(right))
+    }
+  }
+  return points
 }
 
 function latencyDelay(point: LatencyPoint): number | null {

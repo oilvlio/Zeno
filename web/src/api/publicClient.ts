@@ -3,7 +3,7 @@ import { adminCookieSessionMarker } from '../lib/adminToken'
 import { normalizeNodeLatency, normalizeNodeState, normalizeServiceLatency, normalizeSettings, normalizeSummary } from './publicNormalizers'
 import type { ApiLatencyResponse, ApiServiceLatencyResponse, ApiSettings, ApiStateResponse, ApiSummaryResponse, NodeLatencyData, NodeStateData, ServiceLatencyData, SummaryData } from './apiTypes'
 export type { ApiLatencyResponse, ApiServiceLatencyResponse, ApiStateResponse, ApiSummaryResponse, NodeLatencyData, NodeStateData, ServiceLatencyData, SummaryData } from './apiTypes'
-export { normalizeNodeLatency, normalizeNodeState, normalizeServiceLatency, normalizeSettings, normalizeSummary } from './publicNormalizers'
+export { nodeLatencySnapshotKey, normalizeNodeLatency, normalizeNodeState, normalizeServiceLatency, normalizeSettings, normalizeSummary } from './publicNormalizers'
 
 export type LiveWebSocketStatus = 'connecting' | 'open' | 'reconnecting' | 'closed'
 
@@ -101,12 +101,82 @@ function optionalAdminHeaders(adminToken?: string): HeadersInit {
   return adminToken && adminToken !== adminCookieSessionMarker ? { Accept: 'application/json', 'X-Admin-Token': adminToken } : { Accept: 'application/json' }
 }
 
-export async function fetchNodeLatency(nodeId: string, range = '1h', adminToken?: string, signal?: AbortSignal): Promise<NodeLatencyData> {
+const nodeLatencyPrefetchRetentionMs = 5_000
+const nodeLatencyPrefetchTimeoutMs = 10_000
+interface NodeLatencyPrefetch {
+  promise: Promise<NodeLatencyData>
+  consumed: boolean
+}
+const nodeLatencyPrefetches = new Map<string, NodeLatencyPrefetch>()
+
+function nodeLatencyPrefetchKey(nodeId: string, range: string): string {
+  return `${nodeId}:${range}`
+}
+
+async function requestNodeLatency(nodeId: string, range: string, adminToken?: string, signal?: AbortSignal): Promise<NodeLatencyData> {
   const response = await fetch(`/api/public/v1/nodes/${encodeURIComponent(nodeId)}/latency?range=${encodeURIComponent(range)}`, { signal, headers: optionalAdminHeaders(adminToken) })
   if (!response.ok) {
     throw new Error(`latency request failed: ${response.status}`)
   }
   return normalizeNodeLatency(await response.json() as ApiLatencyResponse)
+}
+
+function awaitPrefetchedNodeLatency(prefetch: Promise<NodeLatencyData>, signal?: AbortSignal): Promise<NodeLatencyData> {
+  if (!signal) return prefetch
+  if (signal.aborted) return Promise.reject(signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'))
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'))
+    signal.addEventListener('abort', abort, { once: true })
+    prefetch.then(
+      (data) => {
+        signal.removeEventListener('abort', abort)
+        resolve(data)
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', abort)
+        reject(error)
+      },
+    )
+  })
+}
+
+export function prefetchNodeLatency(nodeId: string, range = '1d'): Promise<NodeLatencyData> {
+  const key = nodeLatencyPrefetchKey(nodeId, range)
+  const existing = nodeLatencyPrefetches.get(key)
+  if (existing) return existing.promise
+
+  const controller = new AbortController()
+  const request = requestNodeLatency(nodeId, range, undefined, controller.signal)
+  const entry: NodeLatencyPrefetch = { promise: request, consumed: false }
+  const timeoutId = setTimeout(() => controller.abort(), nodeLatencyPrefetchTimeoutMs)
+  nodeLatencyPrefetches.set(key, entry)
+  request.then(
+    () => {
+      clearTimeout(timeoutId)
+      setTimeout(() => {
+        if (nodeLatencyPrefetches.get(key) === entry) nodeLatencyPrefetches.delete(key)
+      }, nodeLatencyPrefetchRetentionMs)
+    },
+    () => {
+      clearTimeout(timeoutId)
+      if (nodeLatencyPrefetches.get(key) === entry) nodeLatencyPrefetches.delete(key)
+    },
+  )
+  return request
+}
+
+export async function fetchNodeLatency(nodeId: string, range = '1h', adminToken?: string, signal?: AbortSignal): Promise<NodeLatencyData> {
+  const canReusePublicPrefetch = !adminToken || adminToken === adminCookieSessionMarker
+  const prefetched = canReusePublicPrefetch ? nodeLatencyPrefetches.get(nodeLatencyPrefetchKey(nodeId, range)) : undefined
+  if (prefetched && !prefetched.consumed) {
+    prefetched.consumed = true
+    queueMicrotask(() => {
+      const key = nodeLatencyPrefetchKey(nodeId, range)
+      if (nodeLatencyPrefetches.get(key) === prefetched) nodeLatencyPrefetches.delete(key)
+    })
+    return awaitPrefetchedNodeLatency(prefetched.promise, signal)
+  }
+  return requestNodeLatency(nodeId, range, adminToken, signal)
 }
 
 export async function fetchServiceLatency(targetId: string, range = '1h', adminToken?: string, signal?: AbortSignal): Promise<ServiceLatencyData> {
