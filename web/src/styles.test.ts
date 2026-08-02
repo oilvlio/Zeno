@@ -82,11 +82,13 @@ describe('homepage and admin shell layout', () => {
     expect(styles).toMatch(/\.theme-menu-popover \{[^}]*z-index: 80;/)
   })
 
-  it('does not leave touch-tapped header icon buttons in the desktop hover accent state', () => {
+  it('clears sticky touch accents without removing the desktop header hover effect', () => {
     expect(styles).toContain('@media (hover: hover) and (pointer: fine)')
     expect(styles).toContain('.nav-icon-button:hover:not(:disabled) { background: #eff6ff; color: var(--blue); transform: translateY(-1px); box-shadow: 0 6px 18px -14px var(--blue); }')
     expect(styles).toContain('.nav-icon-button:disabled { cursor: default; opacity: .45; }')
     expect(styles).toContain('.home-top-card .nav-icon-button:not(.is-solid):hover:not(:disabled)')
+    expect(baseStyles).toContain('.login-link:hover,\n.nav-logout-button:hover { background: #eff6ff; color: var(--blue); box-shadow: 0 6px 18px -14px var(--blue); transform: translateY(-1px); }')
+    expect(adminShellStyles).toMatch(/@media \(max-width: 767px\) and \(hover: none\), \(max-width: 767px\) and \(pointer: coarse\)\s*\{[\s\S]*?\.admin-panel--login \.login-link:hover,[\s\S]*?\.admin-panel--login \.login-link:active\s*\{[^}]*background: var\(--control-bg\);[^}]*color: var\(--foreground\);[^}]*box-shadow: 0 1px 2px rgba\(15, 23, 42, \.04\);[^}]*transform: none;/)
   })
 
   it('keeps mobile homepage server cards aligned to the top card width', () => {

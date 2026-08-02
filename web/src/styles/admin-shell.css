@@ -5,6 +5,10 @@
 .admin-container .home-top-card.admin-panel { width: 100%; }
 .admin-panel--login { min-height: min(760px, calc(100dvh - 72px)); display: flex; flex-direction: column; }
 .admin-panel--login .admin-login-card { margin: auto auto; }
+@media (max-width: 767px) and (hover: none), (max-width: 767px) and (pointer: coarse) {
+  .admin-panel--login .login-link:hover,
+  .admin-panel--login .login-link:active { background: var(--control-bg); color: var(--foreground); box-shadow: 0 1px 2px rgba(15, 23, 42, .04); transform: none; }
+}
 .admin-login-card {
   width: min(100%, 440px);
   margin: 24px auto 0;
