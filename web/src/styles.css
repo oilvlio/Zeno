@@ -735,6 +735,7 @@ svg { display: block; }
 .usage-fill.is-danger { background: #ef4444; }
 .usage-fill.is-empty { background: color-mix(in srgb, var(--blue) 36%, transparent); }
 .node-footer-grid {
+  --node-footer-item-height: 36px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
@@ -749,7 +750,7 @@ svg { display: block; }
 .node-metric {
   --metric-accent: var(--blue);
   min-width: 0;
-  min-height: 40px;
+  min-height: var(--node-footer-item-height);
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -781,7 +782,7 @@ svg { display: block; }
 .node-health-metric {
   --metric-accent: var(--green);
   min-width: 0;
-  min-height: 40px;
+  min-height: var(--node-footer-item-height);
   display: grid;
   grid-template-columns: minmax(108px, auto) minmax(0, 1fr);
   align-items: center;
