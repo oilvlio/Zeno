@@ -160,8 +160,8 @@ export function shouldPreloadAdminRoute(routeKind: DashboardRoute['kind'], summa
   return routeKind === 'home' && summaryReady && adminToken !== ''
 }
 
-export function shouldPreloadNodeDetailRoute(routeKind: DashboardRoute['kind'], summaryReady: boolean): boolean {
-  return routeKind === 'home' && summaryReady
+export function shouldPreloadNodeDetailRoute(routeKind: DashboardRoute['kind'], _summaryReady: boolean): boolean {
+  return routeKind === 'home'
 }
 
 export function App() {
@@ -341,11 +341,11 @@ export function App() {
       })
   }
   const preloadAdminIntent = () => { void preloadAdmin().catch(() => {}) }
-  const preloadNodeIntent = (nodeId: string) => {
+  const preloadNodeIntent = useCallback((nodeId: string) => {
     // Prime the module cache without replacing an already mounted lazy route.
     void preloadNodeDetailRoute().catch(() => {})
     void prefetchNodeLatency(nodeId, '1d').catch(() => {})
-  }
+  }, [])
   const handleAdminReadyStateChange = useCallback((ready: boolean) => {
     adminSurfaceReadyRef.current = ready
     setAdminSurfaceReady(ready)

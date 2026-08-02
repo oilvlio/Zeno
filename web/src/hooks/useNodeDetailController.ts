@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { fetchNodeLatency, fetchNodeState, subscribeNodeLatency, subscribeNodeState, type NodeLatencyData, type NodeStateData, type SummaryData } from '../api/publicClient'
+import { fetchNodeLatency, fetchNodeState, peekPrefetchedNodeLatency, subscribeNodeLatency, subscribeNodeState, type NodeLatencyData, type NodeStateData, type SummaryData } from '../api/publicClient'
 import { captureAdminTokenIdentity, type AdminTokenIdentity } from '../lib/adminToken'
 import { DetailMemoryCache, loadCachedDetailData, nodeLatencyCachePrefix, nodeStateCachePrefix, rememberDetailData } from '../lib/detailCache'
 import { coerceHistoryRange, isHTTPUnauthorizedError, rangeRequiresAdmin } from '../lib/historyRange'
@@ -46,22 +46,37 @@ function validateNodeStateData(value: unknown): NodeStateData | null {
   return data as NodeStateData
 }
 
-function seedNodeLatencyFromSummary(summary: SummaryData | null, nodeId: string, range: string): NodeLatencyData | null {
+export function seedNodeLatencyFromSummary(summary: SummaryData | null, nodeId: string, range: string): NodeLatencyData | null {
   const node = summary?.nodes.find((item) => item.id === nodeId)
   if (!node) return null
   const summaries = node.latencySummaries && node.latencySummaries.length > 0 ? node.latencySummaries : node.latencySummary ? [node.latencySummary] : []
   if (summaries.length === 0) return null
-  return {
-    nodeId,
-    range,
-    points: summaries.map((item) => ({
+  const primary = node.latencySummary
+  const hourlyPreview = primary?.hourlyHistory?.flatMap((item) => {
+    if (item.startedAt.trim() === '') return []
+    return [{
+      ts: item.startedAt,
+      targetId: primary.targetId,
+      targetName: primary.targetName,
+      medianMs: item.latencyMs,
+      avgMs: item.latencyMs,
+      lossPercent: item.lossPercent ?? 0,
+    }]
+  }) ?? []
+  const latestPoints = summaries
+    .filter((item) => hourlyPreview.length === 0 || item.targetId !== primary?.targetId)
+    .map((item) => ({
       ts: item.updatedAt || new Date().toISOString(),
       targetId: item.targetId,
       targetName: item.targetName,
       medianMs: item.medianMs,
       avgMs: item.avgMs ?? null,
       lossPercent: item.lossPercent ?? 0,
-    })),
+    }))
+  return {
+    nodeId,
+    range,
+    points: [...hourlyPreview, ...latestPoints],
   }
 }
 
@@ -102,8 +117,16 @@ interface NodeDetailControllerOptions {
 export function useNodeDetailController({ nodeId, summary, adminToken, expireAdminSession }: NodeDetailControllerOptions) {
   const [nodeLatencyRange, setNodeLatencyRange] = useState('1d')
   const [stateRange, setStateRange] = useState('1h')
-  const [latencyState, setLatencyState] = useState<LatencyLoadState>({ kind: 'idle' })
-  const [stateHistoryState, setStateHistoryState] = useState<StateHistoryLoadState>({ kind: 'idle' })
+  const [latencyState, setLatencyState] = useState<LatencyLoadState>(() => {
+    if (nodeId === null) return { kind: 'idle' }
+    const seeded = seedNodeLatencyFromSummary(summary, nodeId, '1d')
+    return seeded ? { kind: 'ready', data: seeded } : { kind: 'idle' }
+  })
+  const [stateHistoryState, setStateHistoryState] = useState<StateHistoryLoadState>(() => {
+    if (nodeId === null) return { kind: 'idle' }
+    const seeded = seedNodeStateFromSummary(summary, nodeId, '1h')
+    return seeded ? { kind: 'ready', data: seeded } : { kind: 'idle' }
+  })
   const nodeLatencyCacheRef = useRef(new DetailMemoryCache<NodeLatencyData>())
   const nodeStateCacheRef = useRef(new DetailMemoryCache<NodeStateData>())
   const nodeLatencySnapshotRef = useRef(new Map<string, string>())
@@ -126,7 +149,7 @@ export function useNodeDetailController({ nodeId, summary, adminToken, expireAdm
     const memoryCached = nodeLatencyCacheRef.current.getCached(cacheKey)
     const sessionCached = memoryCached ? null : loadCachedDetailData(nodeLatencyCachePrefix, nodeId, nodeLatencyRange, validateNodeLatencyData)
     const cached = memoryCached?.data ?? sessionCached?.data ?? null
-    const seeded = cached ?? seedNodeLatencyFromSummary(summary, nodeId, nodeLatencyRange)
+    const seeded = cached ?? peekPrefetchedNodeLatency(nodeId, nodeLatencyRange) ?? seedNodeLatencyFromSummary(summary, nodeId, nodeLatencyRange)
     if (sessionCached) nodeLatencyCacheRef.current.set(cacheKey, sessionCached.data, sessionCached.storedAt)
     if (cached?.snapshotKey) shouldApplyNodeLatencySnapshot(nodeLatencySnapshotRef.current, cacheKey, cached.snapshotKey)
     if (seeded) setLatencyState({ kind: 'ready', data: seeded })

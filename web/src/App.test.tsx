@@ -79,7 +79,7 @@ describe('HomeTopPanel', () => {
 
   it('preloads the shared server detail surface after the home summary is ready', async () => {
     expect(shouldPreloadNodeDetailRoute('home', true)).toBe(true)
-    expect(shouldPreloadNodeDetailRoute('home', false)).toBe(false)
+    expect(shouldPreloadNodeDetailRoute('home', false)).toBe(true)
     expect(shouldPreloadNodeDetailRoute('node', true)).toBe(false)
     await expect(preloadNodeDetailRoute()).resolves.toBeUndefined()
   })

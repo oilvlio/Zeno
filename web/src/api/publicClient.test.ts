@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchNodeLatency, fetchServiceLatency, nodeLatencySnapshotKey, normalizeSettings, normalizeNodeLatency, normalizeNodeState, normalizeServiceLatency, normalizeSummary, prefetchNodeLatency } from './client'
+import { fetchNodeLatency, fetchServiceLatency, nodeLatencySnapshotKey, normalizeSettings, normalizeNodeLatency, normalizeNodeState, normalizeServiceLatency, normalizeSummary, peekPrefetchedNodeLatency, prefetchNodeLatency } from './client'
 
 describe('normalizeSummary', () => {
   it('maps controller snake_case JSON into frontend camelCase models', () => {
@@ -238,6 +238,7 @@ describe('prefetchNodeLatency', () => {
 
     await expect(prefetched).resolves.toEqual(expect.objectContaining({ nodeId: 'prefetched-node', range: '1d' }))
     await expect(requested).resolves.toEqual(expect.objectContaining({ nodeId: 'prefetched-node', range: '1d' }))
+    expect(peekPrefetchedNodeLatency('prefetched-node', '1d')).toEqual(expect.objectContaining({ nodeId: 'prefetched-node', range: '1d' }))
 
     const reopened = fetchNodeLatency('prefetched-node', '1d')
     expect(fetchMock).toHaveBeenCalledTimes(2)

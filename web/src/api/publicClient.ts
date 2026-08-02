@@ -101,16 +101,36 @@ function optionalAdminHeaders(adminToken?: string): HeadersInit {
   return adminToken && adminToken !== adminCookieSessionMarker ? { Accept: 'application/json', 'X-Admin-Token': adminToken } : { Accept: 'application/json' }
 }
 
-const nodeLatencyPrefetchRetentionMs = 5_000
+const nodeLatencyPrefetchRetentionMs = 60 * 1000
 const nodeLatencyPrefetchTimeoutMs = 10_000
+const nodeLatencyPrefetchMaxEntries = 4
 interface NodeLatencyPrefetch {
   promise: Promise<NodeLatencyData>
   consumed: boolean
+  data?: NodeLatencyData
 }
-const nodeLatencyPrefetches = new Map<string, NodeLatencyPrefetch>()
+type NodeLatencyPrefetchGlobal = typeof globalThis & {
+  __zenoNodeLatencyPrefetchesV1?: Map<string, NodeLatencyPrefetch>
+}
+const nodeLatencyPrefetchGlobal = globalThis as NodeLatencyPrefetchGlobal
+const nodeLatencyPrefetches = nodeLatencyPrefetchGlobal.__zenoNodeLatencyPrefetchesV1 ?? new Map<string, NodeLatencyPrefetch>()
+nodeLatencyPrefetchGlobal.__zenoNodeLatencyPrefetchesV1 = nodeLatencyPrefetches
 
 function nodeLatencyPrefetchKey(nodeId: string, range: string): string {
   return `${nodeId}:${range}`
+}
+
+function touchNodeLatencyPrefetch(key: string, entry: NodeLatencyPrefetch): void {
+  nodeLatencyPrefetches.delete(key)
+  nodeLatencyPrefetches.set(key, entry)
+}
+
+function pruneNodeLatencyPrefetches(): void {
+  while (nodeLatencyPrefetches.size > nodeLatencyPrefetchMaxEntries) {
+    const oldestKey = nodeLatencyPrefetches.keys().next().value as string | undefined
+    if (oldestKey === undefined) break
+    nodeLatencyPrefetches.delete(oldestKey)
+  }
 }
 
 async function requestNodeLatency(nodeId: string, range: string, adminToken?: string, signal?: AbortSignal): Promise<NodeLatencyData> {
@@ -143,16 +163,21 @@ function awaitPrefetchedNodeLatency(prefetch: Promise<NodeLatencyData>, signal?:
 export function prefetchNodeLatency(nodeId: string, range = '1d'): Promise<NodeLatencyData> {
   const key = nodeLatencyPrefetchKey(nodeId, range)
   const existing = nodeLatencyPrefetches.get(key)
-  if (existing) return existing.promise
+  if (existing) {
+    touchNodeLatencyPrefetch(key, existing)
+    return existing.promise
+  }
 
   const controller = new AbortController()
   const request = requestNodeLatency(nodeId, range, undefined, controller.signal)
   const entry: NodeLatencyPrefetch = { promise: request, consumed: false }
   const timeoutId = setTimeout(() => controller.abort(), nodeLatencyPrefetchTimeoutMs)
   nodeLatencyPrefetches.set(key, entry)
+  pruneNodeLatencyPrefetches()
   request.then(
-    () => {
+    (data) => {
       clearTimeout(timeoutId)
+      entry.data = data
       setTimeout(() => {
         if (nodeLatencyPrefetches.get(key) === entry) nodeLatencyPrefetches.delete(key)
       }, nodeLatencyPrefetchRetentionMs)
@@ -165,15 +190,20 @@ export function prefetchNodeLatency(nodeId: string, range = '1d'): Promise<NodeL
   return request
 }
 
+export function peekPrefetchedNodeLatency(nodeId: string, range = '1d'): NodeLatencyData | null {
+  const key = nodeLatencyPrefetchKey(nodeId, range)
+  const entry = nodeLatencyPrefetches.get(key)
+  if (!entry?.data) return null
+  touchNodeLatencyPrefetch(key, entry)
+  return entry.data
+}
+
 export async function fetchNodeLatency(nodeId: string, range = '1h', adminToken?: string, signal?: AbortSignal): Promise<NodeLatencyData> {
   const canReusePublicPrefetch = !adminToken || adminToken === adminCookieSessionMarker
   const prefetched = canReusePublicPrefetch ? nodeLatencyPrefetches.get(nodeLatencyPrefetchKey(nodeId, range)) : undefined
   if (prefetched && !prefetched.consumed) {
     prefetched.consumed = true
-    queueMicrotask(() => {
-      const key = nodeLatencyPrefetchKey(nodeId, range)
-      if (nodeLatencyPrefetches.get(key) === prefetched) nodeLatencyPrefetches.delete(key)
-    })
+    touchNodeLatencyPrefetch(nodeLatencyPrefetchKey(nodeId, range), prefetched)
     return awaitPrefetchedNodeLatency(prefetched.promise, signal)
   }
   return requestNodeLatency(nodeId, range, adminToken, signal)
