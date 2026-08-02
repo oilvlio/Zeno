@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react'
 import type { AdminAccountData } from '../../api/adminSession'
-import { AdminFormSection, AdminModalActions } from './AdminPrimitives'
+import { AdminFormSection, AdminActionFooter } from './AdminPrimitives'
 
 export interface AdminAccountSectionProps {
   account: AdminAccountData
@@ -76,9 +76,9 @@ export default function AdminAccountSection({ account, onUpdate }: AdminAccountS
             </label>
           </div>
         </AdminFormSection>
-        <AdminModalActions>
+        <AdminActionFooter>
           <button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存账户'}</button>
-        </AdminModalActions>
+        </AdminActionFooter>
         {message && <p className={`admin-install-error${message.kind === 'success' ? ' is-success' : ''}`}>{message.text}</p>}
       </form>
     </section>

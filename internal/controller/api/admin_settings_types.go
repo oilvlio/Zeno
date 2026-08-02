@@ -73,7 +73,11 @@ type AdminSettingsUpdateRequest struct {
 	CustomCode           *string  `json:"custom_code,omitempty"`
 }
 
-const maxSettingsCustomCodeRunes = 60000
+const (
+	maxSettingsCustomCodeRunes = 60000
+	defaultCardOpacity         = 0.82
+	legacyDefaultCardOpacity   = 0.72
+)
 
 var settingsThemeColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
@@ -88,7 +92,7 @@ func defaultSiteSettings() SiteSettings {
 		DesktopBackgroundURL: "",
 		MobileBackgroundURL:  "",
 		AppearancePreset:     "default",
-		CardOpacity:          0.72,
+		CardOpacity:          defaultCardOpacity,
 		CardBlur:             0,
 		CardRadius:           20,
 		BorderStrength:       0.26,

@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { AdminModalActions, AdminRowActions } from './AdminPrimitives'
+import { AdminActionFooter, AdminRowActions } from './AdminPrimitives'
 
 describe('AdminRowActions', () => {
   it('keeps shared edit and delete actions visually and accessibly consistent', () => {
@@ -22,16 +22,16 @@ describe('AdminRowActions', () => {
   })
 })
 
-describe('AdminModalActions', () => {
+describe('AdminActionFooter', () => {
   it('uses one shared footer for errors and actions', () => {
     const html = renderToStaticMarkup(
-      <AdminModalActions error="保存失败" className="extra-actions">
+      <AdminActionFooter error="保存失败" className="extra-actions">
         <button type="submit">保存</button>
-      </AdminModalActions>,
+      </AdminActionFooter>,
     )
 
-    expect(html).toContain('class="admin-modal-actions extra-actions"')
-    expect(html).toContain('class="admin-inline-note admin-modal-action-note is-error"')
+    expect(html).toContain('class="admin-action-footer extra-actions"')
+    expect(html).toContain('class="admin-inline-note admin-action-footer-note is-error"')
     expect(html).toContain('保存失败')
     expect(html).toContain('<button type="submit">保存</button>')
   })

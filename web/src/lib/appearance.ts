@@ -1,6 +1,19 @@
 import { type CSSProperties, useLayoutEffect } from 'react'
 import type { AdminSettings, AdminTheme, AppearancePreset } from '../types'
 
+export type AppearanceValues = Pick<AdminSettings, 'appearancePreset' | 'cardOpacity' | 'cardBlur' | 'cardRadius' | 'borderStrength' | 'shadowStrength' | 'backgroundOverlay' | 'themeColor'>
+
+const defaultAppearancePreset: AppearanceValues = {
+  appearancePreset: 'default',
+  cardOpacity: 0.82,
+  cardBlur: 0,
+  cardRadius: 20,
+  borderStrength: 0.26,
+  shadowStrength: 0.22,
+  backgroundOverlay: 0,
+  themeColor: '#2563eb',
+}
+
 export const defaultSettings: AdminSettings = {
   siteTitle: 'Zeno',
   siteSubtitle: '服务器运行概览',
@@ -10,39 +23,20 @@ export const defaultSettings: AdminSettings = {
   backgroundUrl: '',
   desktopBackgroundUrl: '',
   mobileBackgroundUrl: '',
-  appearancePreset: 'default',
-  cardOpacity: 0.72,
-  cardBlur: 0,
-  cardRadius: 20,
-  borderStrength: 0.26,
-  shadowStrength: 0.22,
-  backgroundOverlay: 0,
-  themeColor: '#2563eb',
+  ...defaultAppearancePreset,
   customCode: '',
 }
 
-export type AppearanceValues = Pick<AdminSettings, 'appearancePreset' | 'cardOpacity' | 'cardBlur' | 'cardRadius' | 'borderStrength' | 'shadowStrength' | 'backgroundOverlay' | 'themeColor'>
-
 export const appearancePresets: Record<AppearancePreset, AppearanceValues> = {
-  default: {
-    appearancePreset: 'default',
-    cardOpacity: 0.72,
-    cardBlur: 0,
-    cardRadius: 20,
-    borderStrength: 0.26,
-    shadowStrength: 0.22,
-    backgroundOverlay: 0,
-    themeColor: '#2563eb',
-  },
+  default: defaultAppearancePreset,
   gaussian_blur: {
+    ...defaultAppearancePreset,
     appearancePreset: 'gaussian_blur',
     cardOpacity: 0.58,
     cardBlur: 18,
-    cardRadius: 24,
     borderStrength: 0.34,
     shadowStrength: 0.34,
     backgroundOverlay: 0.08,
-    themeColor: '#6366f1',
   },
 }
 
@@ -74,18 +68,6 @@ export function appearanceValuesForSettings(settings: AdminSettings): Appearance
     backgroundOverlay: clampNumber(settings.backgroundOverlay ?? fallback.backgroundOverlay, 0, 0.8),
     themeColor: /^#[0-9a-fA-F]{6}$/.test(settings.themeColor ?? '') ? settings.themeColor : fallback.themeColor,
   }
-}
-
-function usesDefaultAppearance(appearance: AppearanceValues): boolean {
-  const defaults = appearancePresets.default
-  return appearance.appearancePreset === defaults.appearancePreset
-    && appearance.cardOpacity === defaults.cardOpacity
-    && appearance.cardBlur === defaults.cardBlur
-    && appearance.cardRadius === defaults.cardRadius
-    && appearance.borderStrength === defaults.borderStrength
-    && appearance.shadowStrength === defaults.shadowStrength
-    && appearance.backgroundOverlay === defaults.backgroundOverlay
-    && appearance.themeColor.toLowerCase() === defaults.themeColor
 }
 
 function hexToRgb(value: string): { r: number; g: number; b: number } {
@@ -132,11 +114,13 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
   const desktopBackgroundUrl = (settings.desktopBackgroundUrl || settings.backgroundUrl).trim()
   const mobileBackgroundUrl = settings.mobileBackgroundUrl.trim()
   const hasDedicatedMobileBackground = mobileBackgroundUrl !== ''
+  const hasBackgroundImage = desktopBackgroundUrl !== '' || mobileBackgroundUrl !== ''
   const appearance = appearanceValuesForSettings(settings)
   const resolved = resolvedTheme(settings.theme)
   const themeColor = appearance.themeColor
   const themeRgb = hexToRgb(themeColor)
   const cardOpacity = appearance.cardOpacity
+  const secondarySurfaceOpacity = Math.max(0.16, cardOpacity - 0.1)
   const surfaceBase = resolved === 'dark' ? '15, 23, 42' : '255, 255, 255'
   const shadowBase = resolved === 'dark' ? '0, 0, 0' : '15, 23, 42'
   const shadowAlpha = 0.04 + appearance.shadowStrength * (resolved === 'dark' ? 0.44 : 0.22)
@@ -148,9 +132,9 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
     '--blue': themeColor,
     '--border': rgbaFromHex(themeColor, appearance.borderStrength),
     '--metric-shadow': rgbaFromHex(themeColor, Math.max(0.06, appearance.shadowStrength * 0.22)),
-    '--admin-secondary-surface': usesDefaultAppearance(appearance) ? `rgb(${surfaceBase})` : `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})`,
+    '--admin-secondary-surface': hasBackgroundImage ? `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})` : `rgb(${surfaceBase})`,
     '--surface-strong': `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})`,
-    '--surface': `rgba(${surfaceBase}, ${Math.max(0.16, cardOpacity - 0.1).toFixed(3)})`,
+    '--surface': `rgba(${surfaceBase}, ${secondarySurfaceOpacity.toFixed(3)})`,
     '--surface-soft': `rgba(${surfaceBase}, ${Math.max(0.12, cardOpacity - 0.34).toFixed(3)})`,
     '--secondary': `rgba(${surfaceBase}, ${Math.max(0.16, cardOpacity - 0.26).toFixed(3)})`,
     '--metric-bg': `rgba(${surfaceBase}, ${Math.max(0.18, cardOpacity - 0.2).toFixed(3)})`,
@@ -226,12 +210,16 @@ export function useDocumentTheme(settings: AdminSettings) {
     }
   }, [
     settings.theme,
+    settings.backgroundUrl,
+    settings.desktopBackgroundUrl,
+    settings.mobileBackgroundUrl,
     settings.appearancePreset,
     settings.cardOpacity,
     settings.cardBlur,
     settings.cardRadius,
     settings.borderStrength,
     settings.shadowStrength,
+    settings.backgroundOverlay,
     settings.themeColor,
   ])
 }

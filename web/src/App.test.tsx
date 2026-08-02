@@ -207,6 +207,7 @@ describe('HomeTopPanel', () => {
     expect(shellStyleForSettings({ ...settings, backgroundUrl: '', desktopBackgroundUrl: '', mobileBackgroundUrl: '' })).toMatchObject({
       '--zeno-desktop-background-image': 'none',
       '--zeno-card-blur': '18px',
+      '--admin-secondary-surface': 'rgb(15, 23, 42)',
     })
     expect(shellStyleForSettings({ ...settings, mobileBackgroundUrl: '' })).toMatchObject({
       '--zeno-mobile-background-image': 'url("https://example.com/desktop-bg.webp")',
@@ -216,7 +217,7 @@ describe('HomeTopPanel', () => {
       ...settings,
       theme: 'light' as const,
       appearancePreset: 'default' as const,
-      cardOpacity: 0.72,
+      cardOpacity: 0.82,
       cardBlur: 0,
       cardRadius: 20,
       borderStrength: 0.26,
@@ -224,9 +225,15 @@ describe('HomeTopPanel', () => {
       backgroundOverlay: 0,
       themeColor: '#2563eb',
     }
-    expect(shellStyleForSettings(defaultAppearanceSettings)).toMatchObject({ '--admin-secondary-surface': 'rgb(255, 255, 255)' })
-    expect(shellStyleForSettings({ ...defaultAppearanceSettings, theme: 'dark' })).toMatchObject({ '--admin-secondary-surface': 'rgb(15, 23, 42)' })
+    const defaultWithBackgroundStyle = shellStyleForSettings(defaultAppearanceSettings)
+    expect(defaultWithBackgroundStyle).toMatchObject({
+      '--admin-secondary-surface': 'rgba(255, 255, 255, 0.820)',
+      '--surface-strong': 'rgba(255, 255, 255, 0.820)',
+      '--surface': 'rgba(255, 255, 255, 0.720)',
+    })
+    expect(shellStyleForSettings({ ...defaultAppearanceSettings, theme: 'dark' })).toMatchObject({ '--admin-secondary-surface': 'rgba(15, 23, 42, 0.820)' })
     expect(shellStyleForSettings({ ...defaultAppearanceSettings, cardOpacity: 0.8 })).toMatchObject({ '--admin-secondary-surface': 'rgba(255, 255, 255, 0.800)' })
+    expect(shellStyleForSettings({ ...defaultAppearanceSettings, backgroundUrl: '', desktopBackgroundUrl: '', mobileBackgroundUrl: '' })).toMatchObject({ '--admin-secondary-surface': 'rgb(255, 255, 255)' })
   })
 
   it('keeps the homepage top controls inside one compact six-column summary row', () => {

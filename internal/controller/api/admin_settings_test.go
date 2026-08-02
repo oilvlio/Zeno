@@ -28,7 +28,7 @@ func TestPublicSettingsDefaultsAndReflectsAdminPatch(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewBufferString(defaultRecorder.Body.String())).Decode(&defaults); err != nil {
 		t.Fatalf("decode default settings: %v", err)
 	}
-	if defaults.SiteTitle != "Zeno" || defaults.LogoURL != "/assets/logo/id.png" || defaults.Theme != "system" || defaults.DesktopBackgroundURL != "" || defaults.MobileBackgroundURL != "" || defaults.AppearancePreset != "default" || defaults.CardOpacity != 0.72 || defaults.CardBlur != 0 || defaults.ThemeColor != "#2563eb" {
+	if defaults.SiteTitle != "Zeno" || defaults.LogoURL != "/assets/logo/id.png" || defaults.Theme != "system" || defaults.DesktopBackgroundURL != "" || defaults.MobileBackgroundURL != "" || defaults.AppearancePreset != "default" || defaults.CardOpacity != defaultCardOpacity || defaults.CardBlur != 0 || defaults.ThemeColor != "#2563eb" {
 		t.Fatalf("default settings = %+v, want Zeno defaults", defaults)
 	}
 	if strings.Contains(defaultRecorder.Body.String(), `"avatar_url"`) {
@@ -85,6 +85,82 @@ func TestPublicSettingsDefaultsAndReflectsAdminPatch(t *testing.T) {
 	}
 	if strings.Contains(publicRecorder.Body.String(), `"avatar_url"`) {
 		t.Fatalf("public settings should not expose retired avatar_url field: %s", publicRecorder.Body.String())
+	}
+}
+
+func TestLegacyDefaultCardOpacityMigratesOnReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zeno.db")
+	store, err := OpenSQLiteStore(path)
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	if _, err := store.db.Exec(`
+		INSERT INTO settings (key, value, updated_at)
+		VALUES (?, ?, 1)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+	`, settingKeyCardOpacity, "0.72"); err != nil {
+		store.Close()
+		t.Fatalf("seed legacy card opacity: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close legacy store: %v", err)
+	}
+
+	store, err = OpenSQLiteStore(path)
+	if err != nil {
+		t.Fatalf("reopen sqlite store: %v", err)
+	}
+	defer store.Close()
+	settings, err := store.PublicSettings(context.Background())
+	if err != nil {
+		t.Fatalf("public settings after migration: %v", err)
+	}
+	if settings.CardOpacity != defaultCardOpacity {
+		t.Fatalf("card opacity after migration = %.2f, want %.2f", settings.CardOpacity, defaultCardOpacity)
+	}
+	var marker int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE name = '20260803_default_card_opacity_v2'`).Scan(&marker); err != nil {
+		t.Fatalf("read opacity migration marker: %v", err)
+	}
+	if marker != 1 {
+		t.Fatalf("opacity migration markers = %d, want 1", marker)
+	}
+}
+
+func TestLegacyCardOpacityIsPreservedForCustomizedAppearance(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zeno.db")
+	store, err := OpenSQLiteStore(path)
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	for key, value := range map[string]string{
+		settingKeyCardOpacity: "0.72",
+		settingKeyThemeColor:  "#123456",
+	} {
+		if _, err := store.db.Exec(`
+			INSERT INTO settings (key, value, updated_at)
+			VALUES (?, ?, 1)
+			ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+		`, key, value); err != nil {
+			store.Close()
+			t.Fatalf("seed customized appearance %s: %v", key, err)
+		}
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close customized store: %v", err)
+	}
+
+	store, err = OpenSQLiteStore(path)
+	if err != nil {
+		t.Fatalf("reopen customized store: %v", err)
+	}
+	defer store.Close()
+	settings, err := store.PublicSettings(context.Background())
+	if err != nil {
+		t.Fatalf("public settings after reopen: %v", err)
+	}
+	if settings.CardOpacity != legacyDefaultCardOpacity {
+		t.Fatalf("customized card opacity after reopen = %.2f, want %.2f", settings.CardOpacity, legacyDefaultCardOpacity)
 	}
 }
 

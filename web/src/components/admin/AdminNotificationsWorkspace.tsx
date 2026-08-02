@@ -2,7 +2,7 @@ import { type FormEvent, useState } from 'react'
 import type { AdminAlertRuleUpdateInput, AdminNotificationChannelCreateInput, AdminNotificationChannelUpdateInput } from '../../api/adminClient'
 import type { AdminAlertRule, AdminNode, AdminNotificationChannel } from '../../types'
 import { AdminSegmentedField } from './AdminFields'
-import { AdminCredentialField, AdminFormSection, AdminModal, AdminModalActions, AdminRowActions } from './AdminPrimitives'
+import { AdminCredentialField, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions } from './AdminPrimitives'
 import { formatAlertRuleNote, formatAlertRuleScope, formatRenewalDayOption, normalizeRenewalThreshold, parseNonNegativeInt, parsePercentage, parseRenewalThreshold, renewalDayOptions } from './adminOperationalModel'
 import type { AdminNotificationsWorkspaceProps, MaybePromise } from './adminOperationalTypes'
 
@@ -181,9 +181,9 @@ function AdminAlertRuleEditModal({ rule, nodes, onUpdate, onClose }: { rule: Adm
             </div>
           </AdminFormSection>
         )}
-        <AdminModalActions error={formError}>
+        <AdminActionFooter error={formError}>
           <button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存通知类型'}</button>
-        </AdminModalActions>
+        </AdminActionFooter>
       </form>
     </AdminModal>
   )
@@ -310,10 +310,10 @@ function AdminNotificationChannelEditModal({ channel, onUpdate, onTest, onClose 
             </label>
           </div>
         </AdminFormSection>
-        <AdminModalActions error={formError}>
+        <AdminActionFooter error={formError}>
           <button type="button" onClick={() => onTest(channel.id)}>测试发送</button>
           <button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存通知渠道'}</button>
-        </AdminModalActions>
+        </AdminActionFooter>
       </form>
     </AdminModal>
   )
@@ -362,9 +362,9 @@ function AdminNotificationChannelCreateModal({ onCreate, onClose }: { onCreate: 
             </label>
           </div>
         </AdminFormSection>
-        <AdminModalActions error={formError}>
+        <AdminActionFooter error={formError}>
           <button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存通知渠道'}</button>
-        </AdminModalActions>
+        </AdminActionFooter>
       </form>
     </AdminModal>
   )

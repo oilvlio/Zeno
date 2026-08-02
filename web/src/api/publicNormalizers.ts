@@ -15,7 +15,7 @@ export function normalizeSettings(input: ApiSettings): AdminSettings {
     desktopBackgroundUrl,
     mobileBackgroundUrl: input.mobile_background_url ?? '',
     appearancePreset: input.appearance_preset ?? 'default',
-    cardOpacity: input.card_opacity ?? 0.72,
+    cardOpacity: input.card_opacity ?? 0.82,
     cardBlur: input.card_blur ?? 0,
     cardRadius: input.card_radius ?? 20,
     borderStrength: input.border_strength ?? 0.26,

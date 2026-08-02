@@ -3,7 +3,7 @@ import type { AdminProbeTargetInput, AdminProbeTargetUpdateInput } from '../../a
 import { sortAdminProbeTargets } from '../../lib/adminCollections'
 import type { AdminNode, AdminProbeTarget, ProbeType } from '../../types'
 import { AdminExpandedCheckList, AdminSegmentedField } from './AdminFields'
-import { AdminDeleteConfirmModal, AdminFormSection, AdminModal, AdminModalActions, AdminRowActions } from './AdminPrimitives'
+import { AdminDeleteConfirmModal, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions } from './AdminPrimitives'
 import { formatTargetAssignmentSummary, formatTargetEndpoint, normalizeTargetFormType, parsePositiveInt, targetAssignmentRows, targetTypeOptions } from './adminOperationalModel'
 import type { AdminTargetWorkspaceProps, MaybePromise } from './adminOperationalTypes'
 
@@ -169,9 +169,9 @@ function AdminTargetCreateModal({ nodes, onCreate, onClose }: { nodes: AdminNode
             </label>
           </div>
         </AdminFormSection>
-        <AdminModalActions error={formError}>
+        <AdminActionFooter error={formError}>
           <button type="submit" disabled={submitting}>{submitting ? '添加中…' : '添加目标'}</button>
-        </AdminModalActions>
+        </AdminActionFooter>
       </form>
     </AdminModal>
   )
@@ -262,9 +262,9 @@ function AdminTargetEditModal({ target, nodes, onUpdate, onClose }: { target: Ad
             />
           </AdminFormSection>
         )}
-        <AdminModalActions error={formError}>
+        <AdminActionFooter error={formError}>
           <button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存目标'}</button>
-        </AdminModalActions>
+        </AdminActionFooter>
       </form>
     </AdminModal>
   )

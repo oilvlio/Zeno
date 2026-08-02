@@ -26,11 +26,11 @@ export function AdminModal({ title, onClose, children, className, descriptionId,
   )
 }
 
-export function AdminModalActions({ children, error, className = '' }: { children: ReactNode; error?: string | null; className?: string }) {
-  const classes = ['admin-modal-actions', className].filter(Boolean).join(' ')
+export function AdminActionFooter({ children, error, className = '' }: { children: ReactNode; error?: string | null; className?: string }) {
+  const classes = ['admin-action-footer', className].filter(Boolean).join(' ')
   return (
     <div className={classes}>
-      {error && <span className="admin-inline-note admin-modal-action-note is-error">{error}</span>}
+      {error && <span className="admin-inline-note admin-action-footer-note is-error">{error}</span>}
       {children}
     </div>
   )
@@ -64,10 +64,10 @@ export function AdminDeleteConfirmModal({ title, subjectName, confirmLabel, onCo
             {formError ? `删除失败：${formError}` : '正在删除…'}
           </div>
         )}
-        <AdminModalActions>
+        <AdminActionFooter>
           <button type="button" disabled={submitting} onClick={onClose}>取消</button>
           <button className="is-danger" type="submit" disabled={submitting}>{submitting ? '删除中…' : confirmLabel}</button>
-        </AdminModalActions>
+        </AdminActionFooter>
       </form>
     </AdminModal>
   )

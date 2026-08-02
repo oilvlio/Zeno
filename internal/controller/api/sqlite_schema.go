@@ -364,6 +364,9 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 		}
 		return nil
 	})
+	stage.run("default-card-opacity", func() error {
+		return s.runValidatedSchemaMigration(ctx, "20260803_default_card_opacity_v2", s.defaultCardOpacityMigrationCurrent, s.migrateDefaultCardOpacity)
+	})
 	stage.run("notification-channels", func() error { return s.migrateNotificationChannels(ctx) })
 	stateSampleColumns := map[string]string{
 		"sample_id":            "TEXT",

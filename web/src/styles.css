@@ -277,8 +277,6 @@ svg { display: block; }
 .latency-panel,
 .resource-card,
 .admin-login-card,
-.admin-list,
-.admin-form-section,
 .admin-state-card,
 .admin-modal {
   -webkit-backdrop-filter: blur(var(--zeno-card-blur));

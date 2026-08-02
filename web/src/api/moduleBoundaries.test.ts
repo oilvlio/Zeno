@@ -49,4 +49,20 @@ describe('API module boundaries', () => {
     expect(readSource('components/admin/AdminAccountSection.tsx')).toContain('账号只能使用 3-64 位')
     expect(readSource('components/admin/AdminSettingsSection.tsx')).toContain('卡片透明度')
   })
+
+  it('routes every backend save area through the shared in-flow action footer', () => {
+    const expectedFooterCounts = new Map([
+      ['components/admin/AdminNodeWorkspace.tsx', 3],
+      ['components/admin/AdminTargetWorkspace.tsx', 2],
+      ['components/admin/AdminNotificationsWorkspace.tsx', 3],
+      ['components/admin/AdminAccountSection.tsx', 1],
+      ['components/admin/AdminSettingsSection.tsx', 1],
+    ])
+    for (const [path, expectedCount] of expectedFooterCounts) {
+      const source = readSource(path)
+      expect(source.match(/<AdminActionFooter\b/g) ?? [], path).toHaveLength(expectedCount)
+      expect(source, path).not.toContain('AdminModalActions')
+      expect(source, path).not.toContain('admin-modal-actions')
+    }
+  })
 })

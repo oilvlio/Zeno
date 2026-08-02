@@ -328,7 +328,7 @@ describe('AdminDashboard', () => {
       desktopBackgroundUrl: 'https://example.com/desktop.webp',
       mobileBackgroundUrl: '',
       appearancePreset: 'default' as const,
-      cardOpacity: 0.72,
+      cardOpacity: 0.82,
       cardBlur: 0,
       cardRadius: 20,
       borderStrength: 0.26,

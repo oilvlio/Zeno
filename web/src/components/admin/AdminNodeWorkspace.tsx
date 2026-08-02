@@ -5,7 +5,7 @@ import type { AdminNode, AdminNodeInstallCommand, AdminProbeTarget } from '../..
 import { ServerFlag } from '../ServerFlag'
 import { AdminDateField, AdminExpandedCheckList, AdminSegmentedField } from './AdminFields'
 import { AdminInstallCommand } from './AdminInstallCommand'
-import { AdminDeleteConfirmModal, AdminFormSection, AdminModal, AdminModalActions, AdminRowActions } from './AdminPrimitives'
+import { AdminDeleteConfirmModal, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions } from './AdminPrimitives'
 import { billingCycleOptions, billingModeOptions, formatQuotaValue, formatRenewalAmountInput, normalizeBillingCycle, parseMonthlyResetDay, parseQuota, parseRenewalAmount, quotaUnitForBytes, quotaUnitOptions, renewalCurrencyOptions } from './adminOperationalModel'
 import type { AdminNodeWorkspaceProps, MaybePromise } from './adminOperationalTypes'
 
@@ -226,10 +226,10 @@ function AdminNodeSortModal({ nodes, onSave, onClose }: { nodes: AdminNode[]; on
           <p className="sr-only" aria-live="polite" aria-atomic="true">{sortAnnouncement}</p>
         </section>
       </div>
-      <AdminModalActions className="admin-server-sort-actions" error={formError}>
+      <AdminActionFooter className="admin-server-sort-actions" error={formError}>
         <button type="button" onClick={onClose} disabled={submitting}>取消</button>
         <button className="admin-primary-action" type="button" onClick={saveOrder} disabled={submitting || !hasChanges}>{submitting ? '保存中…' : '保存排序'}</button>
-      </AdminModalActions>
+      </AdminActionFooter>
     </AdminModal>
   )
 }
@@ -325,9 +325,9 @@ function AdminNodeCreateModal({ onCreate, onInstallCommand, onClose }: { onCreat
             onInstallCommand={onInstallCommand}
           />
         )}
-        <AdminModalActions error={formError}>
+        <AdminActionFooter error={formError}>
           <button type="submit" disabled={submitting || Boolean(createdNode)}>{submitting ? '添加中…' : createdNode ? '服务器已添加' : '添加服务器'}</button>
-        </AdminModalActions>
+        </AdminActionFooter>
       </form>
     </AdminModal>
   )
@@ -436,9 +436,9 @@ function AdminNodeEditModal({ node, targets, onUpdate, onInstallCommand, onClose
           </div>
         </AdminFormSection>
         <AdminInstallCommand nodeId={node.id} onInstallCommand={onInstallCommand} />
-        <AdminModalActions error={formError}>
+        <AdminActionFooter error={formError}>
           <button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存服务器'}</button>
-        </AdminModalActions>
+        </AdminActionFooter>
       </form>
     </AdminModal>
   )

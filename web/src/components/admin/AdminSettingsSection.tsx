@@ -4,7 +4,7 @@ import { appearancePresetOptions, appearancePresets, appearanceValuesForSettings
 import { validateAdminSettingsInput } from '../../lib/adminSettings'
 import type { AdminSettings, AppearancePreset } from '../../types'
 import { AdminSegmentedField } from './AdminFields'
-import { AdminFormSection, AdminModalActions } from './AdminPrimitives'
+import { AdminFormSection, AdminActionFooter } from './AdminPrimitives'
 
 export interface AdminSettingsSectionProps {
   settings: AdminSettings
@@ -117,7 +117,7 @@ export default function AdminSettingsSection({ settings, onUpdate }: AdminSettin
           </div>
         </AdminFormSection>
         {settingsError && <p className="admin-install-error">{settingsError}</p>}
-        <AdminModalActions><button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存设置'}</button></AdminModalActions>
+        <AdminActionFooter><button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存设置'}</button></AdminActionFooter>
       </form>
     </section>
   )

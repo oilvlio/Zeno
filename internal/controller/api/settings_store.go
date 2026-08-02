@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -102,4 +104,47 @@ func (s *sqliteSettings) siteSettings(ctx context.Context) (SiteSettings, error)
 		settings.UpdatedAt = time.Unix(latest.Int64, 0).UTC().Format(time.RFC3339)
 	}
 	return settings, nil
+}
+
+func (s *sqliteSchemaStore) defaultCardOpacityMigrationCurrent(ctx context.Context) (bool, error) {
+	legacy, err := s.legacyDefaultAppearanceStored(ctx)
+	return !legacy, err
+}
+
+func (s *sqliteSchemaStore) migrateDefaultCardOpacity(ctx context.Context) error {
+	legacy, err := s.legacyDefaultAppearanceStored(ctx)
+	if err != nil || !legacy {
+		return err
+	}
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE settings
+		SET value = ?, updated_at = ?
+		WHERE key = ? AND CAST(value AS REAL) = ?
+	`, formatSettingsFloat(defaultCardOpacity), time.Now().UTC().Unix(), settingKeyCardOpacity, legacyDefaultCardOpacity)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows != 1 {
+		return fmt.Errorf("migrate default card opacity: updated %d rows, want 1", rows)
+	}
+	return nil
+}
+
+func (s *sqliteSchemaStore) legacyDefaultAppearanceStored(ctx context.Context) (bool, error) {
+	settings, err := (&sqliteSettings{db: s.db}).siteSettings(ctx)
+	if err != nil {
+		return false, err
+	}
+	return settings.AppearancePreset == "default" &&
+		settings.CardOpacity == legacyDefaultCardOpacity &&
+		settings.CardBlur == 0 &&
+		settings.CardRadius == 20 &&
+		settings.BorderStrength == 0.26 &&
+		settings.ShadowStrength == 0.22 &&
+		settings.BackgroundOverlay == 0 &&
+		strings.EqualFold(settings.ThemeColor, "#2563eb"), nil
 }
