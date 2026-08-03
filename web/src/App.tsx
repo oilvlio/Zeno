@@ -136,6 +136,7 @@ export function orderHomeNodes(nodes: HomeCardNode[]): HomeCardNode[] {
 
 function normalizeHomeRegion(countryCode: string | undefined): string {
   const code = (countryCode ?? '').trim().toUpperCase()
+  if (code === 'TW') return 'CN'
   return /^[A-Z]{2}$/.test(code) ? code : ''
 }
 

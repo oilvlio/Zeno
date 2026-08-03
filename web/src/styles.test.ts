@@ -80,6 +80,10 @@ describe('homepage and admin shell layout', () => {
   it('keeps the theme menu above later homepage sections', () => {
     expect(styles).toMatch(/\.home-top-card \{[^}]*position: relative;[^}]*z-index: 20;[^}]*overflow: visible;/)
     expect(styles).toMatch(/\.theme-menu-popover \{[^}]*z-index: 80;/)
+    expect(adminShellStyles).toContain('.admin-chrome-card { z-index: 30; }')
+    expect(adminShellStyles).toContain('.admin-content-card { z-index: 10; }')
+    expect(adminShellStyles).toMatch(/\.admin-chrome-card \.admin-toolbar\s*\{[^}]*margin-top: 0;[^}]*padding-top: 3px;[^}]*border-top: 1px solid var\(--border\);/)
+    expect(adminShellStyles).toContain('.admin-chrome-card .admin-toolbar { padding-top: 0; }')
   })
 
   it('clears sticky touch accents without removing the desktop header hover effect', () => {
@@ -87,8 +91,8 @@ describe('homepage and admin shell layout', () => {
     expect(styles).toContain('.nav-icon-button:hover:not(:disabled) { background: #eff6ff; color: var(--blue); transform: translateY(-1px); box-shadow: 0 6px 18px -14px var(--blue); }')
     expect(styles).toContain('.nav-icon-button:disabled { cursor: default; opacity: .45; }')
     expect(styles).toContain('.home-top-card .nav-icon-button:not(.is-solid):hover:not(:disabled)')
-    expect(baseStyles).toContain('.login-link:hover,\n.nav-logout-button:hover { background: #eff6ff; color: var(--blue); box-shadow: 0 6px 18px -14px var(--blue); transform: translateY(-1px); }')
-    expect(adminShellStyles).toMatch(/@media \(max-width: 767px\) and \(hover: none\), \(max-width: 767px\) and \(pointer: coarse\)\s*\{[\s\S]*?\.admin-panel--login \.login-link:hover,[\s\S]*?\.admin-panel--login \.login-link:active\s*\{[^}]*background: var\(--control-bg\);[^}]*color: var\(--foreground\);[^}]*box-shadow: 0 1px 2px rgba\(15, 23, 42, \.04\);[^}]*transform: none;/)
+    expect(baseStyles).toContain('.login-link:hover { background: #eff6ff; color: var(--blue); box-shadow: 0 6px 18px -14px var(--blue); transform: translateY(-1px); }')
+    expect(adminShellStyles).toMatch(/@media \(max-width: 767px\) and \(hover: none\), \(max-width: 767px\) and \(pointer: coarse\)\s*\{[\s\S]*?\.admin-panel--login \.login-link:hover,[\s\S]*?\.admin-chrome-card \.login-link:focus:not\(:focus-visible\)\s*\{[^}]*background: var\(--control-bg\);[^}]*color: var\(--foreground\);[^}]*box-shadow: 0 1px 2px rgba\(15, 23, 42, \.04\);[^}]*transform: none;/)
   })
 
   it('keeps mobile homepage server cards aligned to the top card width', () => {
@@ -135,7 +139,7 @@ describe('homepage and admin shell layout', () => {
     expect(styles).not.toContain('.home-summary__metric-value--status strong')
     expect(styles).not.toContain('.home-summary__metric-value--cost strong')
     expect(styles).toContain('.home-currency-menu')
-    expect(styles).toMatch(/\.home-currency-menu\s*\{[^}]*position: relative;[^}]*width: 52px;[^}]*height: 34px;[^}]*\}/)
+    expect(styles).toMatch(/\.home-currency-menu\s*\{[^}]*position: relative;[^}]*width: 52px;[^}]*height: 36px;[^}]*\}/)
     expect(styles).toMatch(/\.home-currency-select\s*\{[^}]*display: inline-flex;[^}]*flex-wrap: nowrap;[^}]*justify-content: center;[^}]*white-space: nowrap;[^}]*\}/)
     expect(styles).not.toContain('.home-currency-select__flag')
     expect(styles).not.toContain('.home-currency-select svg')
@@ -172,12 +176,12 @@ describe('homepage and admin shell layout', () => {
     expect(styles).not.toContain('.node-renewal-slot')
     expect(styles).not.toContain('.node-renewal-cost')
     expect(styles).not.toContain('.node-expiry-meta')
-    expect(styles).toMatch(/\.node-specs\s*\{[^}]*margin-top: 12px;[^}]*grid-template-columns: repeat\(3, auto\);[^}]*justify-content: center;[^}]*gap: 12px;[^}]*font-size: 11px;[^}]*\}/)
+    expect(styles).toMatch(/\.node-specs\s*\{[^}]*margin-top: 14px;[^}]*grid-template-columns: repeat\(3, auto\);[^}]*justify-content: center;[^}]*gap: 12px;[^}]*font-size: 11px;[^}]*\}/)
     expect(styles).toMatch(/\.node-spec svg\s*\{[^}]*width: 16px;[^}]*height: 16px;[^}]*\}/)
     expect(styles).toContain('.spec-cpu svg { color: #0ea5e9; }')
     expect(styles).toContain('.spec-memory svg { color: #10b981; }')
     expect(styles).toContain('.spec-disk svg { color: #8b5cf6; }')
-    expect(styles).toMatch(/\.node-usage-grid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*gap: 14px;[^}]*\}/)
+    expect(styles).toMatch(/\.node-usage-grid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*gap: 12px;[^}]*\}/)
     expect(styles).toMatch(/\.usage-row\s*\{[^}]*display: flex;[^}]*gap: 6px;[^}]*padding: 0;[^}]*\}/)
     expect(styles).toMatch(/\.usage-track\s*\{[^}]*height: 10px;[^}]*\}/)
     expect(styles).not.toContain('.usage-row__detail')
@@ -186,10 +190,10 @@ describe('homepage and admin shell layout', () => {
     expect(styles).toContain('.usage-row--memory { --resource-accent: var(--green); }')
     expect(styles).toContain('.usage-row--disk { --resource-accent: var(--purple); }')
     expect(styles).toContain('.usage-row--traffic { --resource-accent: var(--orange); }')
-    expect(styles).toMatch(/\.node-footer-grid\s*\{[^}]*--node-footer-item-height: 36px;[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*gap: 6px;[^}]*\}/)
-    expect(styles).toMatch(/\.node-metric\s*\{[^}]*min-height: var\(--node-footer-item-height\);[^}]*flex-direction: row;[^}]*justify-content: space-between;[^}]*gap: 4px;[^}]*border: 1px solid var\(--border\);[^}]*background: var\(--control-bg\);[^}]*font-size: 11px;[^}]*\}/)
-    expect(styles).not.toContain('.node-metric:nth-child(2n)')
-    expect(styles).not.toContain('.node-metric:nth-child(n + 3)')
+    expect(styles).toMatch(/\.node-footer-grid\s*\{[^}]*--node-footer-item-height: 36px;[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*gap: 0;[^}]*border-top: 1px solid var\(--border\);[^}]*\}/)
+    expect(styles).toMatch(/\.node-metric\s*\{[^}]*min-height: var\(--node-footer-item-height\);[^}]*flex-direction: row;[^}]*justify-content: space-between;[^}]*gap: 4px;[^}]*border: 0;[^}]*background: transparent;[^}]*font-size: 11px;[^}]*\}/)
+    expect(styles).toContain('.node-metric:nth-child(even) { border-left: 1px solid var(--border); }')
+    expect(styles).toContain('.node-metric:nth-child(n + 3) { border-top: 1px solid var(--border); }')
     expect(styles).toMatch(/\.server-card-list\s*\{[^}]*grid-auto-rows: auto;[^}]*align-items: start;[^}]*\}/)
     expect(styles).toMatch(/\.kulin-node-card\s*\{[^}]*min-height: 0;[^}]*height: auto;[^}]*\}/)
 
@@ -199,11 +203,11 @@ describe('homepage and admin shell layout', () => {
     // viewport, because the same viewport yields different card widths at 2 vs
     // 3 columns -- a media query cannot express that.
     expect(styles).toMatch(/\.node-usage\s*\{[^}]*container-type: inline-size;[^}]*\}/)
-    expect(styles).toMatch(/@container \(max-width: 285px\) \{\s*\.node-footer-grid \.metric-billing \{ grid-column: 1 \/ -1; \}/)
-    expect(styles).toMatch(/\.node-usage\s*\{[^}]*margin-top: 20px;[^}]*flex: none;[^}]*grid-template-rows: auto auto;[^}]*align-content: start;[^}]*gap: 14px;[^}]*\}/)
+    expect(styles).toMatch(/@container \(max-width: 285px\) \{\s*\.node-footer-grid \.node-metric\.metric-expiry,\s*\.node-footer-grid \.node-metric\.metric-billing \{[^}]*grid-column: 1 \/ -1;[^}]*border-left: 0;/)
+    expect(styles).toMatch(/\.node-usage\s*\{[^}]*margin-top: 18px;[^}]*flex: none;[^}]*grid-template-rows: auto auto;[^}]*align-content: start;[^}]*gap: 14px;[^}]*\}/)
     expect(styles).not.toContain('.node-health-history')
     expect(styles).toContain('.node-footer-grid > .node-health-metric { grid-column: 1 / -1; }')
-    expect(styles).toMatch(/\.node-health-metric\s*\{[^}]*min-height: var\(--node-footer-item-height\);[^}]*padding: 8px;[^}]*border: 1px solid var\(--border\);[^}]*background: var\(--control-bg\);[^}]*font-size: 11px;[^}]*\}/)
+    expect(styles).toMatch(/\.node-health-metric\s*\{[^}]*min-height: var\(--node-footer-item-height\);[^}]*padding: 10px 8px;[^}]*border: 0;[^}]*border-top: 1px solid var\(--border\);[^}]*background: transparent;[^}]*font-size: 11px;[^}]*\}/)
     expect(styles).not.toContain('.node-health-metric + .node-health-metric')
     expect(styles).toMatch(/\.history-cell\s*\{[^}]*height: 12px;[^}]*\}/)
     expect(styles).toMatch(/\.health-history-strip\s*\{[^}]*grid-template-columns: repeat\(12, minmax\(0, 1fr\)\);[^}]*\}/)
@@ -261,7 +265,8 @@ describe('homepage and admin shell layout', () => {
     expect(adminStyles).toMatch(/\.admin-select-popover,\s*\.admin-install-platforms\s*\{[^}]*background: var\(--admin-secondary-surface\);[^}]*\}/)
     expect(adminStyles).toMatch(/\.admin-date-popover\s*\{[^}]*background: var\(--admin-secondary-surface\);[^}]*backdrop-filter: blur\(var\(--zeno-popover-blur\)\) saturate\(1\.04\);[^}]*\}/)
     expect(styles).toMatch(/\.admin-date-option-panel\s*\{[^}]*background: transparent;[^}]*backdrop-filter: none;[^}]*\}/)
-    expect(styles).toMatch(/\.admin-expanded-checklist__list\s*\{[^}]*background: var\(--zeno-popover-bg\);[^}]*backdrop-filter: blur\(var\(--zeno-popover-blur\)\) saturate\(1\.04\);[^}]*\}/)
+    expect(styles).toMatch(/\.admin-expanded-checklist__panel\s*\{[^}]*border-top: 1px solid var\(--border\);[^}]*background: transparent;[^}]*\}/)
+    expect(styles).toMatch(/\.admin-expanded-checklist__list\s*\{[^}]*background: transparent;[^}]*backdrop-filter: none;[^}]*\}/)
   })
 
   it('styles the backend/admin shell with the same translucent card language as the front page', () => {
@@ -276,8 +281,8 @@ describe('homepage and admin shell layout', () => {
 
   it('keeps the homepage backend entry visible on phones', () => {
     expect(styles).toContain('@media (max-width: 767px)')
-    expect(styles).toContain('.login-link,')
-    expect(styles).toContain('.nav-logout-button')
+    expect(styles).toContain('.login-link {')
+    expect(styles).not.toContain('.nav-logout-button')
     expect(styles).toContain('min-height: 32px')
     expect(styles).not.toContain('.login-link { display: none; }')
   })
@@ -285,9 +290,12 @@ describe('homepage and admin shell layout', () => {
   it('keeps backend mobile navigation and every secondary action footer in the content plane', () => {
     expect(styles).toContain('@media (max-width: 767px)')
     expect(styles).toContain('.admin-section-nav {')
-    expect(styles).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))')
+    expect(adminShellStyles).toContain('.admin-chrome-card .admin-section-nav')
+    expect(adminShellStyles).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))')
     expect(styles).toContain('overflow: hidden')
-    expect(styles).toContain('.admin-section-nav button { min-width: 0; min-height: 38px; padding: 0 5px; border-radius: var(--radius-field); }')
+    expect(styles).toContain('.admin-chrome-card .admin-section-nav { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr))')
+    expect(styles).toContain('.admin-chrome-card .admin-section-nav button { min-width: 0; min-height: 34px; padding: 0 5px; border-radius: var(--radius-field); }')
+    expect(styles).toContain('.admin-chrome-card .admin-section-nav button:last-child { grid-column: 1 / -1; }')
     expect(styles).not.toContain('.admin-section-icon')
     expect(styles).not.toContain('scroll-snap-type: x proximity')
     expect(styles).toContain('.admin-modal { width: 100%; height: min(92dvh, 760px); max-height: calc(100dvh - 16px); border-radius: var(--radius-panel); padding: 0; }')
@@ -391,7 +399,7 @@ describe('homepage and admin shell layout', () => {
     expect(styles).not.toContain('--admin-modal-control-bg')
     expect(styles).not.toContain('--admin-modal-action-bg')
     expect(styles).toContain('--admin-secondary-surface: light-dark(#ffffff, rgb(15, 23, 42))')
-    expect(styles).toMatch(/\.admin-modal\s*\{[^}]*--surface-strong: transparent;[^}]*--field-bg: transparent;[^}]*--zeno-popover-bg: transparent;[^}]*--zeno-popover-blur: 0px;[^}]*background: var\(--admin-secondary-surface\);[^}]*\}/)
+    expect(styles).toMatch(/\.admin-modal\s*\{[^}]*--surface-strong: transparent;[^}]*--field-bg: transparent;[^}]*--zeno-popover-bg: transparent;[^}]*--zeno-popover-blur: 0px;[^}]*background: var\(--page-surface\);[^}]*\}/)
     expect(styles).toMatch(/\.admin-form-section\s*\{[^}]*background: transparent;[^}]*\}/)
     expect(adminStyles).toMatch(/\.admin-node-edit-form\s*\{[^}]*--surface-soft: transparent;[^}]*--field-bg: transparent;[^}]*--control-bg: transparent;[^}]*\}/)
     expect(baseStyles).not.toMatch(/\.admin-list,\s*\n\.admin-form-section,/)
@@ -464,9 +472,10 @@ describe('state history layout', () => {
 })
 
 describe('Kulin-inspired color polish', () => {
-  it('keeps the overall shell and cards pure white instead of aurora/grey backgrounds', () => {
-    expect(styles).toContain('--background: light-dark(#ffffff, #07111f)')
-    expect(styles).toContain('--card: light-dark(#ffffff, rgba(15, 23, 42, 0.62))')
+  it('keeps a quiet grey canvas with solid white page surfaces instead of aurora backgrounds', () => {
+    expect(styles).toContain('--background: light-dark(#f5f6f8, #07111f)')
+    expect(styles).toContain('--page-surface: light-dark(#ffffff, #0f172a)')
+    expect(styles).not.toContain('--card:')
     expect(styles).toContain('background-image: var(--zeno-desktop-background-image, none)')
     expect(styles).not.toContain('--zeno-glow-primary')
     expect(styles).not.toContain('radial-gradient(circle at')

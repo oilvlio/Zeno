@@ -289,6 +289,10 @@ export function AdminExpandedCheckList({ options, value, onChange, title = '已�
   const optionValues = new Set(options.map((option) => option.value))
   const normalizedValue = Array.from(new Set((Array.isArray(value) ? value : []).filter((item) => optionValues.has(item))))
   const selected = new Set(normalizedValue)
+  const selectedLabels = options.filter((option) => selected.has(option.value)).map((option) => option.label)
+  const selectedSummary = selectedLabels.length === 0
+    ? '未选择'
+    : `${selectedLabels.slice(0, 2).join('、')}${selectedLabels.length > 2 ? ` 等 ${selectedLabels.length} 项` : ''}`
   const toggleValue = (optionValue: string, checked: boolean) => {
     if (checked) {
       onChange(Array.from(new Set([...normalizedValue, optionValue])))
@@ -301,25 +305,35 @@ export function AdminExpandedCheckList({ options, value, onChange, title = '已�
     <div className="admin-expanded-checklist">
       <div className="admin-expanded-checklist__header">
         <button className="admin-expanded-checklist__trigger" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
-          <span>{title}</span>
-          <small>{normalizedValue.length}/{options.length}</small>
-          <ChevronDownIcon expanded={expanded} />
+          <span className="admin-expanded-checklist__copy">
+            <strong>{title}</strong>
+            <small title={selectedLabels.join('、')}>{selectedSummary}</small>
+          </span>
+          <span className="admin-expanded-checklist__meta">
+            <span>{normalizedValue.length}/{options.length}</span>
+            <ChevronDownIcon expanded={expanded} />
+          </span>
         </button>
-        {options.length > 0 && <AdminBulkSelectButton selectedCount={normalizedValue.length} totalCount={options.length} onSelectAll={() => onChange(options.map((option) => option.value))} onClear={() => onChange([])} />}
       </div>
       {expanded && (
-        <div className="admin-expanded-checklist__list" role="list">
-          {options.length === 0 && <div className="admin-expanded-checklist__empty">{emptyText}</div>}
-          {options.map((option) => {
-            const checked = selected.has(option.value)
-            return (
-              <div className="admin-expanded-checklist__item" role="listitem" key={option.value}>
-                <input type="checkbox" checked={checked} onChange={(event) => toggleValue(option.value, event.currentTarget.checked)} />
-                <button type="button" title={option.label} onClick={() => toggleValue(option.value, !checked)}>{option.label}</button>
-                {renderRight?.(option, checked)}
-              </div>
-            )
-          })}
+        <div className="admin-expanded-checklist__panel">
+          <div className="admin-expanded-checklist__toolbar">
+            <span>选择项目</span>
+            {options.length > 0 && <AdminBulkSelectButton selectedCount={normalizedValue.length} totalCount={options.length} onSelectAll={() => onChange(options.map((option) => option.value))} onClear={() => onChange([])} />}
+          </div>
+          <div className="admin-expanded-checklist__list" role="list">
+            {options.length === 0 && <div className="admin-expanded-checklist__empty">{emptyText}</div>}
+            {options.map((option) => {
+              const checked = selected.has(option.value)
+              return (
+                <div className="admin-expanded-checklist__item" role="listitem" data-selected={checked} key={option.value}>
+                  <input type="checkbox" aria-label={option.label} checked={checked} onChange={(event) => toggleValue(option.value, event.currentTarget.checked)} />
+                  <button type="button" title={option.label} aria-pressed={checked} onClick={() => toggleValue(option.value, !checked)}>{option.label}</button>
+                  {renderRight?.(option, checked)}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

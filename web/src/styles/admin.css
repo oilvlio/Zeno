@@ -18,17 +18,25 @@
 }
 .admin-primary-action,
 .admin-section-actions .admin-primary-action,
+.admin-node-edit-form button.admin-primary-action,
 .admin-action-footer button[type="submit"] {
   background: var(--blue);
   color: #fff;
   border-color: var(--blue);
   box-shadow: 0 8px 20px -16px var(--blue);
 }
-.admin-node-edit-form button.admin-primary-action {
-  background: var(--blue);
-  color: #fff;
-  border-color: var(--blue);
-  box-shadow: 0 8px 20px -16px var(--blue);
+.admin-action-footer .admin-account-logout-button {
+  margin-right: auto;
+  border-color: color-mix(in srgb, var(--red) 42%, var(--border));
+  background: transparent;
+  color: var(--red);
+  box-shadow: none;
+}
+.admin-action-footer .admin-account-logout-button:hover {
+  border-color: var(--red);
+  background: color-mix(in srgb, var(--red) 7%, transparent);
+  color: var(--red);
+  box-shadow: none;
 }
 .admin-primary-action:hover,
 .admin-section-actions .admin-primary-action:hover,
@@ -60,10 +68,10 @@
 .admin-notification-section,
 .admin-account-section,
 .admin-settings-section {
-  margin-top: 18px;
-  padding: 20px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
@@ -877,28 +885,25 @@
 }
 .admin-target-assignment-toggle { min-height: 34px; }
 .admin-expanded-checklist {
-  overflow: visible;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  background: transparent;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--field-bg);
 }
 .admin-expanded-checklist__header {
-  min-height: 38px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 0;
+  min-height: 52px;
+  display: block;
+  padding: 0;
   background: transparent;
 }
 .admin-expanded-checklist__trigger {
   width: 100%;
-  min-height: 30px;
+  min-height: 52px;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  padding: 0;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -908,11 +913,11 @@
   cursor: pointer;
   transition: color 150ms ease;
 }
-.admin-expanded-checklist__trigger:hover { border-color: transparent; background: transparent; color: var(--blue); box-shadow: none; transform: none; }
+.admin-expanded-checklist__trigger:hover { border-color: transparent; background: color-mix(in srgb, var(--blue) 5%, transparent); color: var(--foreground); box-shadow: none; transform: none; }
 .admin-node-edit-form .admin-expanded-checklist__trigger {
   height: auto;
-  min-height: 30px;
-  padding: 0;
+  min-height: 52px;
+  padding: 8px 12px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -925,11 +930,15 @@
 .admin-node-edit-form .admin-expanded-checklist__trigger[aria-expanded="true"] {
   outline: none;
   border: 0;
-  background: transparent;
+  background: color-mix(in srgb, var(--blue) 5%, transparent);
   box-shadow: none;
   transform: none;
 }
-.admin-expanded-checklist__trigger small { color: var(--muted); font-size: 12px; font-weight: 500; }
+.admin-expanded-checklist__copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; }
+.admin-expanded-checklist__copy strong { max-width: 100%; overflow: hidden; color: var(--foreground); font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.admin-expanded-checklist__copy small { max-width: 100%; overflow: hidden; color: var(--muted); font-size: 12px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.admin-expanded-checklist__meta { flex: none; display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+.admin-expanded-checklist__meta > span { min-width: 34px; padding: 3px 7px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--blue) 8%, transparent); color: var(--blue); font-size: 11px; font-weight: 600; line-height: 1.2; text-align: center; font-variant-numeric: tabular-nums; }
 .admin-expanded-checklist__trigger svg {
   width: 17px;
   height: 17px;
@@ -941,31 +950,50 @@
   transition: transform 150ms ease;
 }
 .admin-expanded-checklist__trigger svg.is-expanded { transform: rotate(180deg); }
+.admin-expanded-checklist__panel {
+  border-top: 1px solid var(--border);
+  background: transparent;
+}
+.admin-expanded-checklist__toolbar {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
 .admin-expanded-checklist__list {
   max-height: 260px;
   overflow: auto;
   border-top: 1px solid var(--border);
   border-radius: 0;
-  background: var(--zeno-popover-bg);
-  -webkit-backdrop-filter: blur(var(--zeno-popover-blur)) saturate(1.04);
-  backdrop-filter: blur(var(--zeno-popover-blur)) saturate(1.04);
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .admin-expanded-checklist__item {
-  min-height: 42px;
+  min-height: 46px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding: 8px 0;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
+  background: transparent;
+  transition: background-color 150ms ease;
 }
+.admin-expanded-checklist__item:hover { background: color-mix(in srgb, var(--blue) 4%, transparent); }
+.admin-expanded-checklist__item[data-selected='true'] { background: color-mix(in srgb, var(--blue) 7%, transparent); }
 .admin-expanded-checklist__item:last-child { border-bottom: 0; }
 .admin-bulk-select-button {
   min-width: 0;
-  min-height: 28px;
-  padding: 0 2px;
-  border: 0;
-  border-radius: 0;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-field);
   background: transparent;
   color: var(--blue);
   font-size: 12px;
@@ -973,31 +1001,31 @@
   cursor: pointer;
   transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease;
 }
-.admin-bulk-select-button:hover { background: transparent; border-color: transparent; color: color-mix(in srgb, var(--blue) 82%, var(--foreground)); transform: none; text-decoration: underline; text-underline-offset: 3px; }
+.admin-bulk-select-button:hover { background: color-mix(in srgb, var(--blue) 6%, transparent); border-color: color-mix(in srgb, var(--blue) 36%, var(--border)); color: var(--blue); transform: none; }
 .admin-node-edit-form .admin-bulk-select-button {
-  height: 28px;
-  min-height: 28px;
-  padding: 0 2px;
-  border: 0;
-  border-radius: 0;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-field);
   background: transparent;
   color: var(--blue);
   box-shadow: none;
   align-self: center;
 }
 .admin-node-edit-form .admin-bulk-select-button:hover {
-  background: transparent;
-  color: color-mix(in srgb, var(--blue) 82%, var(--foreground));
+  border-color: color-mix(in srgb, var(--blue) 36%, var(--border));
+  background: color-mix(in srgb, var(--blue) 6%, transparent);
+  color: var(--blue);
   box-shadow: none;
-  text-decoration: underline;
   transform: none;
 }
 .admin-node-edit-form .admin-bulk-select-button:focus,
 .admin-node-edit-form .admin-bulk-select-button:focus-visible,
 .admin-node-edit-form .admin-bulk-select-button:active {
   outline: none;
-  border: 0;
-  background: transparent;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--blue) 6%, transparent);
   box-shadow: none;
   transform: none;
 }
@@ -1204,9 +1232,9 @@
   flex-direction: column;
   overflow: hidden;
   padding: 20px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-panel);
-  background: var(--admin-secondary-surface);
+  background: var(--page-surface);
   color: var(--foreground);
   box-shadow: var(--zeno-card-shadow);
   clip-path: inset(0 round var(--radius-panel));
@@ -1511,12 +1539,7 @@
   .admin-server-sort-controls button { width: 26px; height: 26px; font-size: 14px; }
   .admin-drag-handle { font-size: 14px; }
   .admin-modal-backdrop { align-items: flex-end; padding: 8px; }
-  .admin-node-section,
-  .admin-target-section,
-  .admin-notification-section,
-  .admin-alert-rule-section,
-  .admin-account-section,
-  .admin-settings-section { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .admin-alert-rule-section { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
   .admin-modal { width: 100%; height: min(92dvh, 760px); max-height: calc(100dvh - 16px); border-radius: var(--radius-panel); padding: 0; }
   .admin-modal-header { padding: 14px; }
   .admin-modal-header h3 { font-size: 20px; }
@@ -1560,7 +1583,11 @@
   .admin-rule-scope-list { grid-template-columns: 1fr; }
   .admin-notification-type-grid,
   .admin-rule-picker-row { grid-template-columns: 1fr; }
-  .admin-expanded-checklist__list { max-height: 38dvh; }
+  .admin-expanded-checklist__trigger { min-height: 56px; padding: 9px 10px; }
+  .admin-expanded-checklist__toolbar { padding-inline: 10px; }
+  .admin-expanded-checklist__list { max-height: 42dvh; }
+  .admin-expanded-checklist__item { grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding: 9px 10px; }
+  .admin-expanded-checklist__item .admin-home-monitor-radio { grid-column: 2; justify-self: start; }
   .admin-segmented-options { grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); }
   .admin-section-heading { align-items: center; flex-direction: row; flex-wrap: nowrap; gap: 8px; margin-bottom: 10px; }
   .admin-section-heading > div { min-width: 0; }

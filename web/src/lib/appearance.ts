@@ -125,6 +125,7 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
   const shadowBase = resolved === 'dark' ? '0, 0, 0' : '15, 23, 42'
   const shadowAlpha = 0.04 + appearance.shadowStrength * (resolved === 'dark' ? 0.44 : 0.22)
   const backgroundOverlayBase = resolved === 'dark' ? '0, 0, 0' : '255, 255, 255'
+  const pageSurface = hasBackgroundImage ? `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})` : `rgb(${surfaceBase})`
   return {
     '--zeno-desktop-background-image': desktopBackgroundUrl === '' ? 'none' : backgroundImageValue(desktopBackgroundUrl),
     '--zeno-mobile-background-image': hasDedicatedMobileBackground ? backgroundImageValue(mobileBackgroundUrl) : (desktopBackgroundUrl === '' ? 'none' : backgroundImageValue(desktopBackgroundUrl)),
@@ -132,7 +133,8 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
     '--blue': themeColor,
     '--border': rgbaFromHex(themeColor, appearance.borderStrength),
     '--metric-shadow': rgbaFromHex(themeColor, Math.max(0.06, appearance.shadowStrength * 0.22)),
-    '--admin-secondary-surface': hasBackgroundImage ? `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})` : `rgb(${surfaceBase})`,
+    '--page-surface': pageSurface,
+    '--admin-secondary-surface': pageSurface,
     '--surface-strong': `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})`,
     '--surface': `rgba(${surfaceBase}, ${secondarySurfaceOpacity.toFixed(3)})`,
     '--surface-soft': `rgba(${surfaceBase}, ${Math.max(0.12, cardOpacity - 0.34).toFixed(3)})`,
@@ -157,6 +159,7 @@ const documentThemeVariableNames = [
   '--blue',
   '--border',
   '--metric-shadow',
+  '--page-surface',
   '--admin-secondary-surface',
   '--surface-strong',
   '--surface',

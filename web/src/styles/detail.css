@@ -3,9 +3,9 @@
   max-width: 1024px;
   margin: 24px auto 0;
   padding: 18px 24px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-card);
-  background: var(--surface-strong);
+  background: var(--page-surface);
   color: var(--muted);
   font-weight: 500;
 }
@@ -202,10 +202,10 @@
 
 .monitor-panel {
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-panel);
-  background: var(--surface-strong);
-  box-shadow: var(--zeno-card-shadow);
+  background: var(--page-surface);
+  box-shadow: 0 12px 28px -24px rgba(15, 23, 42, .24), 0 2px 8px -7px rgba(15, 23, 42, .18);
 }
 .monitor-heading {
   display: flex;

@@ -1,13 +1,37 @@
 /* Critical admin shell styles loaded with the public entry to prevent first-route FOUC. */
 .admin-container { display: flex; flex-direction: column; gap: 24px; }
-.admin-panel { min-height: 360px; }
+.admin-panel { width: 100%; min-height: 360px; }
+.admin-panel--authenticated { display: flex; flex-direction: column; gap: 16px; }
+.admin-chrome-card { z-index: 30; }
+.admin-content-card { z-index: 10; }
+.admin-chrome-card .admin-toolbar {
+  margin-top: 0;
+  padding-top: 3px;
+  border-top: 1px solid var(--border);
+}
+.admin-chrome-card .admin-section-nav {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.admin-chrome-card .admin-section-nav button { min-height: 36px; }
+.admin-content-card { min-height: 360px; padding: 20px; }
 .admin-container,
 .admin-container .home-top-card.admin-panel { width: 100%; }
 .admin-panel--login { min-height: min(760px, calc(100dvh - 72px)); display: flex; flex-direction: column; }
 .admin-panel--login .admin-login-card { margin: auto auto; }
 @media (max-width: 767px) and (hover: none), (max-width: 767px) and (pointer: coarse) {
   .admin-panel--login .login-link:hover,
-  .admin-panel--login .login-link:active { background: var(--control-bg); color: var(--foreground); box-shadow: 0 1px 2px rgba(15, 23, 42, .04); transform: none; }
+  .admin-panel--login .login-link:active,
+  .admin-chrome-card .login-link:hover,
+  .admin-chrome-card .login-link:active,
+  .admin-chrome-card .login-link:focus:not(:focus-visible) {
+    outline: none;
+    background: var(--control-bg);
+    color: var(--foreground);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    transform: none;
+  }
 }
 .admin-login-card {
   width: min(100%, 440px);
@@ -98,11 +122,15 @@
 @media (max-width: 767px) {
   .admin-container { gap: 14px; }
   .admin-panel { min-height: calc(100dvh - 92px); }
+  .admin-panel--authenticated { gap: 12px; }
+  .admin-chrome-card .admin-toolbar { padding-top: 0; }
+  .admin-content-card { min-height: calc(100dvh - 178px); padding: 14px; }
   .admin-panel--login { min-height: calc(100dvh - 28px); }
   .admin-login-card { grid-template-columns: 1fr; align-items: stretch; padding: 20px 16px; gap: 18px; }
   .admin-toolbar { flex-direction: column; align-items: stretch; }
-  .admin-section-nav { width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: var(--radius-card); overflow: hidden; }
-  .admin-section-nav button { min-width: 0; min-height: 38px; padding: 0 5px; border-radius: var(--radius-field); }
+  .admin-chrome-card .admin-section-nav { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 2px; border-radius: var(--radius-card); overflow: hidden; }
+  .admin-chrome-card .admin-section-nav button { min-width: 0; min-height: 34px; padding: 0 5px; border-radius: var(--radius-field); }
+  .admin-chrome-card .admin-section-nav button:last-child { grid-column: 1 / -1; }
   .admin-section-nav span { font-size: 12px; }
   .admin-state-card { min-height: 84px; margin-top: 18px; padding: 16px; }
 }

@@ -153,13 +153,16 @@ describe('HomeTopPanel', () => {
       { id: 'hk-a', countryCode: 'hk' },
       { id: 'unknown' },
       { id: 'jp', countryCode: 'JP' },
+      { id: 'tw', countryCode: 'TW' },
+      { id: 'cn', countryCode: 'cn' },
       { id: 'hk-b', countryCode: 'HK' },
       { id: 'invalid', countryCode: 'Hong Kong' },
     ] as HomeCardNode[]
 
-    expect(homeRegionOptions(nodes)).toEqual(['HK', 'JP'])
-    expect(filterHomeNodesByRegion(nodes, 'ALL').map((node) => node.id)).toEqual(['hk-a', 'unknown', 'jp', 'hk-b', 'invalid'])
+    expect(homeRegionOptions(nodes)).toEqual(['HK', 'JP', 'CN'])
+    expect(filterHomeNodesByRegion(nodes, 'ALL').map((node) => node.id)).toEqual(['hk-a', 'unknown', 'jp', 'tw', 'cn', 'hk-b', 'invalid'])
     expect(filterHomeNodesByRegion(nodes, 'HK').map((node) => node.id)).toEqual(['hk-a', 'hk-b'])
+    expect(filterHomeNodesByRegion(nodes, 'CN').map((node) => node.id)).toEqual(['tw', 'cn'])
 
     const html = renderToStaticMarkup(<HomeRegionFilter regions={['HK', 'JP']} activeRegion="ALL" onChange={() => {}} />)
     expect(html).toContain('aria-label="服务器地区筛选"')
@@ -185,6 +188,7 @@ describe('HomeTopPanel', () => {
       '--blue': '#6366f1',
       '--border': 'rgba(99, 102, 241, 0.340)',
       '--metric-shadow': 'rgba(99, 102, 241, 0.075)',
+      '--page-surface': 'rgba(15, 23, 42, 0.580)',
       '--admin-secondary-surface': 'rgba(15, 23, 42, 0.580)',
       '--surface-strong': 'rgba(15, 23, 42, 0.580)',
       '--surface': 'rgba(15, 23, 42, 0.480)',
@@ -207,6 +211,7 @@ describe('HomeTopPanel', () => {
     expect(shellStyleForSettings({ ...settings, backgroundUrl: '', desktopBackgroundUrl: '', mobileBackgroundUrl: '' })).toMatchObject({
       '--zeno-desktop-background-image': 'none',
       '--zeno-card-blur': '18px',
+      '--page-surface': 'rgb(15, 23, 42)',
       '--admin-secondary-surface': 'rgb(15, 23, 42)',
     })
     expect(shellStyleForSettings({ ...settings, mobileBackgroundUrl: '' })).toMatchObject({
@@ -227,13 +232,17 @@ describe('HomeTopPanel', () => {
     }
     const defaultWithBackgroundStyle = shellStyleForSettings(defaultAppearanceSettings)
     expect(defaultWithBackgroundStyle).toMatchObject({
+      '--page-surface': 'rgba(255, 255, 255, 0.820)',
       '--admin-secondary-surface': 'rgba(255, 255, 255, 0.820)',
       '--surface-strong': 'rgba(255, 255, 255, 0.820)',
       '--surface': 'rgba(255, 255, 255, 0.720)',
     })
     expect(shellStyleForSettings({ ...defaultAppearanceSettings, theme: 'dark' })).toMatchObject({ '--admin-secondary-surface': 'rgba(15, 23, 42, 0.820)' })
     expect(shellStyleForSettings({ ...defaultAppearanceSettings, cardOpacity: 0.8 })).toMatchObject({ '--admin-secondary-surface': 'rgba(255, 255, 255, 0.800)' })
-    expect(shellStyleForSettings({ ...defaultAppearanceSettings, backgroundUrl: '', desktopBackgroundUrl: '', mobileBackgroundUrl: '' })).toMatchObject({ '--admin-secondary-surface': 'rgb(255, 255, 255)' })
+    expect(shellStyleForSettings({ ...defaultAppearanceSettings, backgroundUrl: '', desktopBackgroundUrl: '', mobileBackgroundUrl: '' })).toMatchObject({
+      '--page-surface': 'rgb(255, 255, 255)',
+      '--admin-secondary-surface': 'rgb(255, 255, 255)',
+    })
   })
 
   it('keeps the homepage top controls inside one compact six-column summary row', () => {
@@ -271,7 +280,14 @@ describe('HomeTopPanel', () => {
     expect(html).not.toContain('home-summary__status-body')
     expect(html).not.toContain('home-summary__status-cost')
     expect(html).toContain('class="home-currency-menu"')
-    expect(html).toMatch(/<nav class="nav-actions"[^>]*><div class="home-currency-menu"[\s\S]*?<\/div><button class="login-link"/)
+    const currencyControl = html.indexOf('class="home-currency-menu"')
+    const themeControl = html.indexOf('class="theme-menu"')
+    const backgroundControl = html.indexOf('aria-pressed=')
+    const adminControl = html.indexOf('class="login-link"')
+    expect(currencyControl).toBeGreaterThan(-1)
+    expect(currencyControl).toBeLessThan(themeControl)
+    expect(themeControl).toBeLessThan(backgroundControl)
+    expect(backgroundControl).toBeLessThan(adminControl)
     expect(html).toContain('aria-label="金额单位：人民币 CNY"')
     expect(html).toContain('aria-haspopup="listbox"')
     expect(html).toContain('aria-expanded="false"')

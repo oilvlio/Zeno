@@ -3,8 +3,8 @@
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: var(--background);
   color: var(--foreground);
-  --background: light-dark(#ffffff, #07111f);
-  --card: light-dark(#ffffff, rgba(15, 23, 42, 0.62));
+  --background: light-dark(#f5f6f8, #07111f);
+  --page-surface: light-dark(#ffffff, #0f172a);
   --foreground: light-dark(#0f172a, #f8fafc);
   --muted: light-dark(#53657d, #94a3b8);
   --border: light-dark(rgba(37, 99, 235, 0.26), rgba(148, 163, 184, 0.28));
@@ -197,8 +197,8 @@ svg { display: block; }
 .theme-menu-popover button:hover { border-color: color-mix(in srgb, var(--blue) 34%, var(--border)); background: color-mix(in srgb, var(--surface-soft) 88%, var(--blue) 10%); color: var(--blue); transform: translateY(-1px); }
 .theme-menu-popover button[data-active='true'] { border-color: var(--blue); background: var(--blue); color: #fff; box-shadow: 0 8px 18px -14px var(--blue); }
 .theme-menu-popover span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
-.login-link,
-.nav-logout-button {
+.login-link {
+  height: 36px;
   min-height: 34px;
   display: inline-flex;
   align-items: center;
@@ -217,8 +217,7 @@ svg { display: block; }
   box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
   transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
-.login-link:hover,
-.nav-logout-button:hover { background: #eff6ff; color: var(--blue); box-shadow: 0 6px 18px -14px var(--blue); transform: translateY(-1px); }
+.login-link:hover { background: #eff6ff; color: var(--blue); box-shadow: 0 6px 18px -14px var(--blue); transform: translateY(-1px); }
 .nav-icon-button {
   width: 36px;
   height: 36px;
@@ -254,23 +253,15 @@ svg { display: block; }
   z-index: 20;
   overflow: visible;
   padding: 16px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-panel);
-  background: var(--surface-strong);
+  background: var(--page-surface);
   color: var(--foreground);
   box-shadow:
     0 10px 28px -24px rgba(15, 23, 42, 0.26),
-    0 1px 2px rgba(15, 23, 42, 0.035),
-    inset 0 1px 0 var(--zeno-card-highlight);
+    0 2px 8px -6px rgba(15, 23, 42, 0.16);
   -webkit-backdrop-filter: blur(var(--zeno-card-blur));
   backdrop-filter: blur(var(--zeno-card-blur));
-}
-.home-top-card::after {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  border-radius: calc(var(--radius-panel) - 1px);
-  pointer-events: none;
 }
 .home-top-card > * { position: relative; z-index: 1; }
 .kulin-node-card,
@@ -431,7 +422,7 @@ svg { display: block; }
 .home-currency-menu {
   position: relative;
   width: 52px;
-  height: 34px;
+  height: 36px;
   flex: 0 0 52px;
   display: inline-flex;
 }
@@ -534,10 +525,10 @@ svg { display: block; }
   align-items: center;
   justify-content: flex-start;
   padding: 10px 12px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: 14px;
-  background: var(--surface-strong);
-  box-shadow: 0 8px 24px -24px rgba(15, 23, 42, .22);
+  background: var(--page-surface);
+  box-shadow: 0 8px 24px -22px rgba(15, 23, 42, .18);
   backdrop-filter: blur(var(--zeno-card-blur));
 }
 .region-filter-buttons {
@@ -603,7 +594,7 @@ svg { display: block; }
   display: grid;
   grid-auto-rows: auto;
   grid-template-columns: 1fr;
-  gap: 24px;
+  gap: 18px;
   align-items: start;
 }
 @media (min-width: 768px) { .server-card-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -634,17 +625,18 @@ svg { display: block; }
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  padding: 16px;
-  border: 1px solid var(--border);
+  padding: 18px;
+  border: 0;
   border-radius: var(--radius-card);
-  background: var(--surface-strong);
+  background: var(--page-surface);
   color: var(--foreground);
-  box-shadow: var(--zeno-card-shadow);
+  box-shadow: 0 12px 28px -24px rgba(15, 23, 42, .24), 0 2px 8px -7px rgba(15, 23, 42, .18);
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, outline-color 160ms ease;
-  outline: 1px solid transparent;
+  outline: 0;
 }
-.kulin-node-card:hover { transform: translateY(-4px); box-shadow: 0 16px 38px -30px rgba(15, 23, 42, .34), 0 8px 24px -22px rgba(37, 99, 235, .22); }
+.kulin-node-card:hover { transform: translateY(-2px); box-shadow: 0 16px 34px -26px rgba(15, 23, 42, .3), 0 8px 22px -22px rgba(37, 99, 235, .2); }
+.kulin-node-card:focus-visible { outline: 2px solid color-mix(in srgb, var(--blue) 58%, transparent); outline-offset: 3px; }
 .kulin-node-card.is-offline .node-head,
 .kulin-node-card.is-offline .node-specs,
 .kulin-node-card.is-offline .node-usage {
@@ -683,7 +675,7 @@ svg { display: block; }
 .node-uptime { grid-column: 3; justify-self: end; color: var(--green); font-size: 11px; font-weight: 500; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .node-specs {
-  margin-top: 12px;
+  margin-top: 14px;
   padding: 0 4px;
   display: grid;
   grid-template-columns: repeat(3, auto);
@@ -702,7 +694,7 @@ svg { display: block; }
 .spec-disk svg { color: #8b5cf6; }
 
 .node-usage {
-  margin-top: 20px;
+  margin-top: 18px;
   display: grid;
   flex: none;
   grid-template-rows: auto auto;
@@ -715,7 +707,7 @@ svg { display: block; }
 .node-usage-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  gap: 12px;
 }
 .usage-row { --resource-accent: var(--blue); min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 0; }
 .usage-row--cpu { --resource-accent: var(--blue); }
@@ -736,14 +728,19 @@ svg { display: block; }
   --node-footer-item-height: 36px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 0;
+  margin-top: 0;
+  border-top: 1px solid var(--border);
 }
-/* The billing value is the longest string in the footer: currency, amount and
-   a cycle that can be three characters ("五年"/"三年"). Below this width a half
-   row ellipsises it, so it takes the full row instead -- a truncated price is
-   worse than a slightly taller card. Above it the compact 2x2 grid is kept. */
+/* The billing value is the longest string in the footer. On very narrow cards,
+   expiry and billing each take a full row so the grid cannot leave a half-empty
+   row before a spanning billing item. Above it the compact 2x2 grid is kept. */
 @container (max-width: 285px) {
-  .node-footer-grid .metric-billing { grid-column: 1 / -1; }
+  .node-footer-grid .node-metric.metric-expiry,
+  .node-footer-grid .node-metric.metric-billing {
+    grid-column: 1 / -1;
+    border-left: 0;
+  }
 }
 .node-metric {
   --metric-accent: var(--blue);
@@ -754,14 +751,16 @@ svg { display: block; }
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  padding: 6px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-field);
-  background: var(--control-bg);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--metric-accent);
   font-size: 11px;
 }
+.node-metric:nth-child(even) { border-left: 1px solid var(--border); }
+.node-metric:nth-child(n + 3) { border-top: 1px solid var(--border); }
 .metric-heading { min-width: 0; max-width: 100%; display: inline-flex; align-items: center; justify-content: flex-start; gap: 4px; }
 .metric-icon { width: 14px; height: 14px; flex: none; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
 .metric-icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
@@ -785,11 +784,12 @@ svg { display: block; }
   grid-template-columns: minmax(108px, auto) minmax(0, 1fr);
   align-items: center;
   gap: 10px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-field);
-  background: var(--control-bg);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+  padding: 10px 8px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   font-size: 11px;
 }
 .node-health-metric.health-loss { --metric-accent: var(--orange); }
@@ -1128,8 +1128,8 @@ svg { display: block; }
   .home-top-card .kulin-nav { padding: 0 0 9px; }
   .nav-actions { flex-wrap: nowrap; gap: 5px; }
   .nav-icon-button { width: 32px; height: 32px; padding: 8px; }
-  .login-link,
-  .nav-logout-button {
+  .login-link {
+    height: 32px;
     min-height: 32px;
     padding: 0 10px;
     border: 1px solid var(--border);

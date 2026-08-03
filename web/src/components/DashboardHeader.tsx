@@ -85,7 +85,6 @@ export function DashboardHeader({ settings = defaultSettings, onHome, onAdmin, o
       </button>
       <nav className="nav-actions" aria-label="dashboard actions">
         {leadingAction}
-        <button className="login-link" type="button" onPointerEnter={onAdminIntent} onPointerDown={onAdminIntent} onFocus={onAdminIntent} onClick={onAdmin}>{adminLabel}</button>
         <div className="theme-menu" ref={themeMenuRef}>
           <button className="nav-icon-button" type="button" aria-label={`主题：${currentThemeLabel}`} aria-haspopup="menu" aria-expanded={themeMenuOpen} onClick={() => setThemeMenuOpen((open) => !open)}>{themeMode === 'system' ? <MonitorIcon /> : currentTheme === 'dark' ? <MoonIcon /> : <SunIcon />}<span className="sr-only">切换深浅色</span></button>
           {themeMenuOpen && (
@@ -99,6 +98,7 @@ export function DashboardHeader({ settings = defaultSettings, onHome, onAdmin, o
           )}
         </div>
         <button className={`nav-icon-button${backgroundEnabled ? ' is-solid' : ''}`} type="button" aria-label={backgroundControlLabel} aria-pressed={backgroundEnabled} disabled={!onBackgroundToggle} onClick={onBackgroundToggle}><ImageMinusIcon /><span className="sr-only">开关背景图</span></button>
+        <button className="login-link" type="button" onPointerEnter={onAdminIntent} onPointerDown={onAdminIntent} onFocus={onAdminIntent} onClick={onAdmin}>{adminLabel}</button>
         {trailingAction}
       </nav>
     </header>

@@ -12,6 +12,14 @@ import { useAdminController } from '../../hooks/useAdminController'
 import '../../styles/admin.css'
 
 export type AdminSection = 'nodes' | 'targets' | 'notifications' | 'account' | 'settings'
+
+const adminSections: ReadonlyArray<{ id: AdminSection; label: string }> = [
+  { id: 'nodes', label: '服务器' },
+  { id: 'targets', label: '延迟监控' },
+  { id: 'notifications', label: '通知' },
+  { id: 'account', label: '账户' },
+  { id: 'settings', label: '设置' },
+]
 type MaybePromise<T = void> = T | Promise<T>
 
 export interface AdminDashboardProps {
@@ -140,6 +148,7 @@ export function AdminDashboard({
   const [activeSection, setActiveSection] = useState<AdminSection>(initialSection)
   const [, startSectionTransition] = useTransition()
   const OperationalWorkspace = operationalWorkspace ?? AdminOperationalWorkspace
+  const isAuthenticated = adminSessionReady && hasAdminToken
   const handleTokenSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const form = event.currentTarget
@@ -149,20 +158,32 @@ export function AdminDashboard({
     if (username === '' || password === '') return
     onAdminLogin(username, password)
   }
+  const dashboardHeader = (
+    <DashboardHeader
+      settings={chromeSettings}
+      onHome={onHome}
+      onAdmin={onHome}
+      adminLabel="前台"
+      onThemeChange={onThemeChange}
+      onBackgroundToggle={onBackgroundToggle}
+      backgroundEnabled={backgroundEnabled}
+    />
+  )
 
   return (
     <div className="kulin-container admin-container">
-      <section className={`home-top-card admin-panel${adminSessionReady && !hasAdminToken ? ' admin-panel--login' : ''}`} aria-label="admin dashboard">
-        <DashboardHeader
-          settings={chromeSettings}
-          onHome={onHome}
-          onAdmin={onHome}
-          adminLabel="前台"
-          trailingAction={hasAdminToken ? <button className="nav-logout-button" type="button" onClick={onAdminTokenClear}>退出</button> : undefined}
-          onThemeChange={onThemeChange}
-          onBackgroundToggle={onBackgroundToggle}
-          backgroundEnabled={backgroundEnabled}
-        />
+      <section className={`admin-panel${isAuthenticated ? ' admin-panel--authenticated' : ' home-top-card'}${adminSessionReady && !hasAdminToken ? ' admin-panel--login' : ''}`} aria-label="admin dashboard">
+        {isAuthenticated ? (
+          <div className="home-top-card admin-chrome-card">
+            {dashboardHeader}
+            <div className="admin-toolbar">
+              <AdminSectionNav
+                activeSection={activeSection}
+                onSectionChange={(section) => startSectionTransition(() => setActiveSection(section))}
+              />
+            </div>
+          </div>
+        ) : dashboardHeader}
 
         {adminSessionReady && !hasAdminToken && (
           <form className="admin-login-card" aria-label="admin login form" onSubmit={handleTokenSubmit}>
@@ -183,14 +204,7 @@ export function AdminDashboard({
         )}
 
         {adminSessionReady && hasAdminToken && (
-          <>
-            <div className="admin-toolbar">
-              <AdminSectionNav
-                activeSection={activeSection}
-                onSectionChange={(section) => startSectionTransition(() => setActiveSection(section))}
-              />
-            </div>
-
+          <div className="home-top-card admin-content-card">
             {authState.kind === 'error' && <div className="admin-state-card is-error">{authState.message}</div>}
             {adminState.kind === 'error' && <div className="admin-state-card is-error">Admin API 读取失败：{adminState.message}</div>}
 
@@ -219,15 +233,13 @@ export function AdminDashboard({
             )}
 
             {adminState.kind === 'ready' && activeSection === 'account' && (
-              <AdminAccountSection account={adminState.account} onUpdate={onAdminAccountUpdate} />
+              <AdminAccountSection account={adminState.account} onUpdate={onAdminAccountUpdate} onLogout={onAdminTokenClear} />
             )}
 
             {adminState.kind === 'ready' && activeSection === 'settings' && (
               <AdminSettingsSection settings={settings} onUpdate={onAdminSettingsUpdate} />
             )}
-
-
-          </>
+          </div>
         )}
       </section>
     </div>
@@ -235,17 +247,9 @@ export function AdminDashboard({
 }
 
 function AdminSectionNav({ activeSection, onSectionChange }: { activeSection: AdminSection; onSectionChange: (section: AdminSection) => void }) {
-  const sections: Array<{ id: AdminSection; label: string }> = [
-    { id: 'nodes', label: '服务器' },
-    { id: 'targets', label: '延迟监控' },
-    { id: 'notifications', label: '通知' },
-    { id: 'account', label: '账户' },
-    { id: 'settings', label: '设置' },
-  ]
-
   return (
     <nav className="admin-section-nav" aria-label="后台导航">
-      {sections.map((section) => (
+      {adminSections.map((section) => (
         <button
           key={section.id}
           type="button"

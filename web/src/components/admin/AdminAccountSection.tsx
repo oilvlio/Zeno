@@ -5,13 +5,14 @@ import { AdminFormSection, AdminActionFooter } from './AdminPrimitives'
 export interface AdminAccountSectionProps {
   account: AdminAccountData
   onUpdate: (username: string, currentPassword: string, newPassword: string) => Promise<void>
+  onLogout?: () => void
 }
 
 export function validAdminAccountUsername(username: string): boolean {
   return /^[A-Za-z0-9._-]{3,64}$/.test(username.trim())
 }
 
-export default function AdminAccountSection({ account, onUpdate }: AdminAccountSectionProps) {
+export default function AdminAccountSection({ account, onUpdate, onLogout }: AdminAccountSectionProps) {
   const [message, setMessage] = useState<{ kind: 'error' | 'success'; text: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -77,6 +78,7 @@ export default function AdminAccountSection({ account, onUpdate }: AdminAccountS
           </div>
         </AdminFormSection>
         <AdminActionFooter>
+          {onLogout && <button className="admin-account-logout-button" type="button" onClick={onLogout}>退出登录</button>}
           <button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存账户'}</button>
         </AdminActionFooter>
         {message && <p className={`admin-install-error${message.kind === 'success' ? ' is-success' : ''}`}>{message.text}</p>}

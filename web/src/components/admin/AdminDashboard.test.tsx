@@ -174,7 +174,7 @@ describe('AdminDashboard', () => {
       onAlertRuleUpdate,
     })
     expect(html.match(/class="kulin-container admin-container"/g)).toHaveLength(1)
-    expect(html).toMatch(/<section class="home-top-card admin-panel"[\s\S]*<div data-testid="operational-workspace-probe">targets:Example Node A<\/div>[\s\S]*<\/section><\/div>$/)
+    expect(html).toMatch(/<section class="admin-panel admin-panel--authenticated"[\s\S]*<div class="home-top-card admin-chrome-card">[\s\S]*<div class="home-top-card admin-content-card"><div data-testid="operational-workspace-probe">targets:Example Node A<\/div><\/div><\/section><\/div>$/)
   })
 
   it('keeps Telegram credentials masked with an accessible visibility toggle and no reflected value', () => {
@@ -201,11 +201,13 @@ describe('AdminDashboard', () => {
     expect(html).not.toContain('后台登录')
   })
 
-  it('uses the same card shell and opens backend directly on the server list', () => {
+  it('splits authenticated chrome from content and opens backend directly on the server list', () => {
     const html = renderAdmin()
 
-    expect(html).toContain('home-top-card')
-    expect(html).toContain('admin-panel')
+    expect(html.match(/home-top-card/g)).toHaveLength(2)
+    expect(html).toContain('admin-panel admin-panel--authenticated')
+    expect(html).toContain('admin-chrome-card')
+    expect(html).toContain('admin-content-card')
     expect(html).not.toContain(['Zeno', '后台'].join(' '))
     expect(html).not.toContain('控' + '制台')
     expect(html).not.toContain('列表只保留' + '关键字段')
@@ -220,7 +222,8 @@ describe('AdminDashboard', () => {
     expect(html).toContain('账户')
     expect(html).toContain('设置')
     expect(html).toContain('通知')
-    expect(html).toContain('退出')
+    expect(html).not.toContain('nav-logout-button')
+    expect(html).not.toContain('退出登录')
     expect(html).not.toContain(['刷', '新'].join(''))
     expect(html).not.toContain('修改密码</button>')
     expect(html).toContain('服务器列表')
@@ -228,10 +231,10 @@ describe('AdminDashboard', () => {
     expect(html).not.toContain('admin-overview-panel')
   })
 
-  it('keeps the logged-in dashboard visible and shows logout failures', () => {
+  it('keeps the logged-in dashboard visible and shows logout failures without restoring the old header action', () => {
     const html = renderAdmin('nodes', { kind: 'error', message: '退出失败：admin logout failed: 500' })
 
-    expect(html).toContain('nav-logout-button')
+    expect(html).not.toContain('nav-logout-button')
     expect(html).toContain('退出失败：admin logout failed: 500')
     expect(html).toContain('admin-section-nav')
     expect(html).toContain('服务器列表')
@@ -239,7 +242,7 @@ describe('AdminDashboard', () => {
 
   it('renders account settings as a dedicated account page', () => {
     const dashboard = renderAdmin('account')
-    const html = renderToStaticMarkup(<AdminAccountSection account={{ username: 'admin' }} onUpdate={() => Promise.resolve()} />)
+    const html = renderToStaticMarkup(<AdminAccountSection account={{ username: 'admin' }} onUpdate={() => Promise.resolve()} onLogout={() => {}} />)
 
     expect(dashboard).toContain('账户')
     expect(dashboard).toContain('修改账号和密码')
@@ -252,6 +255,8 @@ describe('AdminDashboard', () => {
     expect(html).toContain('value="admin"')
     expect(html).toContain('name="current-password"')
     expect(html).toContain('name="new-password"')
+    expect(html).toContain('class="admin-account-logout-button"')
+    expect(html).toContain('退出登录')
     expect(html).toContain('保存账户')
   })
 
