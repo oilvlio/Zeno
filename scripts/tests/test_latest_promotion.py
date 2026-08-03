@@ -22,5 +22,11 @@ class LatestPromotionTest(unittest.TestCase):
     def test_semver_numeric_order_not_lexical(self):
         self.assertEqual(MODULE.decision("v1.10.0", ["v1.9.99", "v1.10.0"]), (True, "v1.10.0"))
 
+    def test_renumbered_zero_major_ignores_protected_legacy_v1_tags(self):
+        self.assertEqual(
+            MODULE.decision("v0.19.10", ["v0.19.9", "v0.19.10", "v1.9.10"]),
+            (True, "v0.19.10"),
+        )
+
     def test_build_metadata_and_malformed_tags_do_not_promote(self):
         self.assertEqual(MODULE.decision("v2.0.0+build", ["v1.0.0", "v2.0.0+build"]), (False, "v1.0.0"))

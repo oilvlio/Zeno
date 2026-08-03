@@ -1,6 +1,6 @@
 # Controller probe-results 可靠接收复核
 
-基线：`v1.0.0` / `9d4de9851c2cdeb525f4be0447b6e8a73ce3c6ac`。
+基线：`v0.10.0` / `9d4de9851c2cdeb525f4be0447b6e8a73ce3c6ac`。
 
 ## 基线事实
 
