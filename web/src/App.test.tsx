@@ -189,14 +189,15 @@ describe('HomeTopPanel', () => {
       '--border': 'rgba(99, 102, 241, 0.340)',
       '--metric-shadow': 'rgba(99, 102, 241, 0.075)',
       '--page-surface': 'rgba(15, 23, 42, 0.580)',
-      '--admin-secondary-surface': 'rgba(15, 23, 42, 0.580)',
-      '--surface-strong': 'rgba(15, 23, 42, 0.580)',
-      '--surface': 'rgba(15, 23, 42, 0.480)',
-      '--surface-soft': 'rgba(15, 23, 42, 0.240)',
-      '--secondary': 'rgba(15, 23, 42, 0.320)',
-      '--metric-bg': 'rgba(15, 23, 42, 0.380)',
-      '--field-bg': 'rgba(15, 23, 42, 0.440)',
-      '--control-bg': 'rgba(15, 23, 42, 0.480)',
+      '--admin-secondary-surface': 'rgb(15, 23, 42)',
+      '--surface-strong': 'transparent',
+      '--surface': 'transparent',
+      '--surface-soft': 'transparent',
+      '--secondary': 'transparent',
+      '--metric-bg': 'transparent',
+      '--field-bg': 'transparent',
+      '--control-bg': 'transparent',
+      '--zeno-popover-bg': 'rgb(15, 23, 42)',
       '--radius-panel': '24px',
       '--radius-card': '20px',
       '--radius-field': '16px',
@@ -233,12 +234,12 @@ describe('HomeTopPanel', () => {
     const defaultWithBackgroundStyle = shellStyleForSettings(defaultAppearanceSettings)
     expect(defaultWithBackgroundStyle).toMatchObject({
       '--page-surface': 'rgba(255, 255, 255, 0.820)',
-      '--admin-secondary-surface': 'rgba(255, 255, 255, 0.820)',
-      '--surface-strong': 'rgba(255, 255, 255, 0.820)',
-      '--surface': 'rgba(255, 255, 255, 0.720)',
+      '--admin-secondary-surface': 'rgb(255, 255, 255)',
+      '--surface-strong': 'transparent',
+      '--surface': 'transparent',
     })
-    expect(shellStyleForSettings({ ...defaultAppearanceSettings, theme: 'dark' })).toMatchObject({ '--admin-secondary-surface': 'rgba(15, 23, 42, 0.820)' })
-    expect(shellStyleForSettings({ ...defaultAppearanceSettings, cardOpacity: 0.8 })).toMatchObject({ '--admin-secondary-surface': 'rgba(255, 255, 255, 0.800)' })
+    expect(shellStyleForSettings({ ...defaultAppearanceSettings, theme: 'dark' })).toMatchObject({ '--admin-secondary-surface': 'rgb(15, 23, 42)' })
+    expect(shellStyleForSettings({ ...defaultAppearanceSettings, cardOpacity: 0.8 })).toMatchObject({ '--admin-secondary-surface': 'rgb(255, 255, 255)' })
     expect(shellStyleForSettings({ ...defaultAppearanceSettings, backgroundUrl: '', desktopBackgroundUrl: '', mobileBackgroundUrl: '' })).toMatchObject({
       '--page-surface': 'rgb(255, 255, 255)',
       '--admin-secondary-surface': 'rgb(255, 255, 255)',
@@ -255,7 +256,7 @@ describe('HomeTopPanel', () => {
       />,
     )
 
-    expect(html).toContain('home-top-card')
+    expect(html).toContain('home-top-card home-overview-card')
     expect(html).toContain('dashboard actions')
     expect(html).toContain('后台')
     expect(html).not.toContain('aria-label="language"')

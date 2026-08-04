@@ -120,7 +120,6 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
   const themeColor = appearance.themeColor
   const themeRgb = hexToRgb(themeColor)
   const cardOpacity = appearance.cardOpacity
-  const secondarySurfaceOpacity = Math.max(0.16, cardOpacity - 0.1)
   const surfaceBase = resolved === 'dark' ? '15, 23, 42' : '255, 255, 255'
   const shadowBase = resolved === 'dark' ? '0, 0, 0' : '15, 23, 42'
   const shadowAlpha = 0.04 + appearance.shadowStrength * (resolved === 'dark' ? 0.44 : 0.22)
@@ -134,14 +133,15 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
     '--border': rgbaFromHex(themeColor, appearance.borderStrength),
     '--metric-shadow': rgbaFromHex(themeColor, Math.max(0.06, appearance.shadowStrength * 0.22)),
     '--page-surface': pageSurface,
-    '--admin-secondary-surface': pageSurface,
-    '--surface-strong': `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})`,
-    '--surface': `rgba(${surfaceBase}, ${secondarySurfaceOpacity.toFixed(3)})`,
-    '--surface-soft': `rgba(${surfaceBase}, ${Math.max(0.12, cardOpacity - 0.34).toFixed(3)})`,
-    '--secondary': `rgba(${surfaceBase}, ${Math.max(0.16, cardOpacity - 0.26).toFixed(3)})`,
-    '--metric-bg': `rgba(${surfaceBase}, ${Math.max(0.18, cardOpacity - 0.2).toFixed(3)})`,
-    '--field-bg': `rgba(${surfaceBase}, ${Math.max(0.18, cardOpacity - 0.14).toFixed(3)})`,
-    '--control-bg': `rgba(${surfaceBase}, ${Math.max(0.18, cardOpacity - 0.1).toFixed(3)})`,
+    '--admin-secondary-surface': `rgb(${surfaceBase})`,
+    '--surface-strong': 'transparent',
+    '--surface': 'transparent',
+    '--surface-soft': 'transparent',
+    '--secondary': 'transparent',
+    '--metric-bg': 'transparent',
+    '--field-bg': 'transparent',
+    '--control-bg': 'transparent',
+    '--zeno-popover-bg': `rgb(${surfaceBase})`,
     '--radius-panel': `${appearance.cardRadius}px`,
     '--radius-card': `${Math.max(10, appearance.cardRadius - 4)}px`,
     '--radius-field': `${Math.max(8, appearance.cardRadius - 8)}px`,
@@ -168,6 +168,7 @@ const documentThemeVariableNames = [
   '--metric-bg',
   '--field-bg',
   '--control-bg',
+  '--zeno-popover-bg',
   '--radius-panel',
   '--radius-card',
   '--radius-field',
@@ -183,7 +184,6 @@ export function useDocumentTheme(settings: AdminSettings) {
     const root = document.documentElement
     const previousTheme = root.getAttribute('data-zeno-theme')
     const previousValues = new Map(documentThemeVariableNames.map((name) => [name, root.style.getPropertyValue(name)]))
-    const previousPopoverBackground = root.style.getPropertyValue('--zeno-popover-bg')
     const media = window.matchMedia?.('(prefers-color-scheme: dark)')
     const apply = () => {
       const theme = resolvedTheme(settings.theme)
@@ -194,9 +194,6 @@ export function useDocumentTheme(settings: AdminSettings) {
         if (value === undefined || value === null || value === '') root.style.removeProperty(name)
         else root.style.setProperty(name, String(value))
       }
-      const popoverBackground = themeStyle?.['--surface-strong']
-      if (popoverBackground === undefined || popoverBackground === null || popoverBackground === '') root.style.removeProperty('--zeno-popover-bg')
-      else root.style.setProperty('--zeno-popover-bg', String(popoverBackground))
     }
     apply()
     if (settings.theme === 'system') media?.addEventListener?.('change', apply)
@@ -208,8 +205,6 @@ export function useDocumentTheme(settings: AdminSettings) {
         if (value === '') root.style.removeProperty(name)
         else root.style.setProperty(name, value)
       }
-      if (previousPopoverBackground === '') root.style.removeProperty('--zeno-popover-bg')
-      else root.style.setProperty('--zeno-popover-bg', previousPopoverBackground)
     }
   }, [
     settings.theme,

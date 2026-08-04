@@ -50,7 +50,7 @@ export function HomeTopPanel({ settings = defaultSettings, onHome, onAdmin, onAd
   const headerExchangeRates = normalizeCurrencyRates(overview.exchangeRates ?? { CNY: 1 })
   const headerCurrencyOptions = overview.currencyOptions ?? availableCurrencyOptions(headerExchangeRates)
   return (
-    <section className="home-top-card" aria-label="homepage control panel">
+    <section className="home-top-card home-overview-card" aria-label="homepage control panel">
       <DashboardHeader
         settings={settings}
         onHome={onHome}
