@@ -30,7 +30,7 @@ func (s *sqliteNotificationDomain) recordNotificationDeliveryAttemptOnce(ctx con
 
 	attempts := delivery.Attempts + 1
 	state := "pending"
-	nextAttemptAt := now.Add(notificationRetryDelay(attempts)).UTC().Unix()
+	nextAttemptAt := notificationRetryAtUnix(now, notificationRetryDelay(attempts))
 	if errors.Is(sendErr, errNotificationDeliveryOutcomeUnknown) {
 		state = "failed"
 		nextAttemptAt = notificationDeliveryManualRetryAtUnix
@@ -58,6 +58,15 @@ func (s *sqliteNotificationDomain) recordNotificationDeliveryAttemptOnce(ctx con
 	}
 	tx = nil
 	return nil
+}
+
+func notificationRetryAtUnix(now time.Time, delay time.Duration) int64 {
+	retryAt := now.UTC().Add(delay)
+	retryAtUnix := retryAt.Unix()
+	if retryAt.Nanosecond() != 0 {
+		retryAtUnix++
+	}
+	return retryAtUnix
 }
 
 func requireOneNotificationDeliveryRow(result sql.Result) error {

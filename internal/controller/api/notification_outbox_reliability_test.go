@@ -270,6 +270,24 @@ func TestNotificationOutboxFailedDeliveryKeepsLowFrequencyAutomaticRetry(t *test
 	}
 }
 
+func TestNotificationRetryAtUnixNeverExpiresBeforeTheFullDelay(t *testing.T) {
+	tests := []struct {
+		name string
+		now  time.Time
+		want int64
+	}{
+		{name: "exact second", now: time.Unix(100, 0), want: 101},
+		{name: "end of second", now: time.Unix(100, 900*time.Millisecond.Nanoseconds()), want: 102},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := notificationRetryAtUnix(test.now, time.Second); got != test.want {
+				t.Fatalf("notificationRetryAtUnix(%v, 1s) = %d, want %d", test.now, got, test.want)
+			}
+		})
+	}
+}
+
 func insertNotificationDeliveriesTxForTest(ctx context.Context, store *SQLiteStore, event notificationEvent, channel notificationDispatchChannel) error {
 	tx, err := store.db.BeginTx(ctx, nil)
 	if err != nil {
