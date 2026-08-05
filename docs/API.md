@@ -258,14 +258,13 @@ Controller 对下发给单个节点的探针配置做资源上限：最多 32 �
 
 ### GET /api/public/v1/settings
 
-读取公开站点配置。首页启动时会先读取该接口，用于品牌标题、头像/Logo、副标题、主题、Agent 接入 URL、电脑端/手机端背景图，以及管理员配置的自定义 CSS。头像/Logo 只用 `logo_url` 一个字段，不再拆出额外头像字段。图片字段只保存 URL / 站内静态路径，不存图片二进制。响应只包含公开展示字段，不包含 Admin token、Agent token、token hash、通知渠道凭据、secret 或 credential 原文。
+读取公开站点配置。首页启动时会先读取该接口，用于品牌标题、头像/Logo、主题、Agent 接入 URL、电脑端/手机端背景图，以及管理员配置的自定义 CSS。头像/Logo 只用 `logo_url` 一个字段，不再拆出额外头像字段。图片字段只保存 URL / 站内静态路径，不存图片二进制。响应只包含公开展示字段，不包含 Admin token、Agent token、token hash、通知渠道凭据、secret 或 credential 原文。
 
 默认值：
 
 ```json
 {
   "site_title": "Zeno",
-  "site_subtitle": "服务器运行概览",
   "logo_url": "/assets/logo/id.png",
   "theme": "system",
   "agent_controller_url": "",
@@ -509,7 +508,6 @@ X-Admin-Token: <admin-token>
 {
   "settings": {
     "site_title": "Zeno",
-    "site_subtitle": "服务器运行概览",
     "logo_url": "/assets/logo/id.png",
     "theme": "system",
     "agent_controller_url": "",
@@ -539,7 +537,6 @@ X-Admin-Token: <admin-token>
 ```json
 {
   "site_title": "水饺监控",
-  "site_subtitle": "VPS 状态总览",
   "logo_url": "/assets/logo/custom.png",
   "theme": "dark",
   "agent_controller_url": "https://zeno.example.com",
@@ -561,7 +558,6 @@ X-Admin-Token: <admin-token>
 约束：
 
 - `site_title` 不能为空，最长 64 个字符。
-- `site_subtitle` 可为空，最长 140 个字符。
 - `theme` 只能是 `system`、`dark` 或 `light`。
 - `agent_controller_url` 可为空；非空时不得包含用户名密码、query 或 fragment。远程地址默认使用 `https://`；真实 loopback host 可使用 `http://`，没有反向代理时也允许 `http://<直接 IP>:<显式端口>`。后台复制命令前会再次确认风险，生成的命令显式传入 `ZENO_ALLOW_INSECURE_HTTP=1`，安装器再把 runtime opt-in 持久化；enrollment/runtime bearer token 仍会明文传输。主机名 HTTP 和没有显式端口的远程 HTTP 会被拒绝。为空时可回退到当前后台地址，但仍执行同一规则。
 - `logo_url` 必须是站内绝对路径（如 `/assets/logo/id.png`）或 `https://` URL；当前首页/后台头部头像与 Logo 都使用这一字段。

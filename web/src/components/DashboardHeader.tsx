@@ -142,7 +142,7 @@ export function DashboardHeader({ settings = defaultSettings, onHome, onAdmin, o
         {trailingAction}
       </nav>
       {themeMenuOpen && themeMenuPosition && typeof document !== 'undefined' && createPortal(
-        <div ref={themePopoverRef} className={`theme-menu-popover${settings.appearancePreset === 'gaussian_blur' && backgroundEnabled ? ' is-gaussian' : ''}`} role="menu" style={themeMenuPosition}>
+        <div ref={themePopoverRef} className="theme-menu-popover" role="menu" style={themeMenuPosition}>
           {themeOptions.map((option) => (
             <button key={option.value} type="button" role="menuitemradio" aria-checked={themeMode === option.value} data-active={themeMode === option.value} onClick={() => selectTheme(option.value)}>
               <span>{option.label}</span>

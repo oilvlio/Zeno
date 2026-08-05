@@ -547,7 +547,7 @@ func TestConcurrentSparseSettingsPatchesDoNotLoseDisjointFields(t *testing.T) {
 	ctx := context.Background()
 	for iteration := 0; iteration < 20; iteration++ {
 		title := fmt.Sprintf("title-%d", iteration)
-		subtitle := fmt.Sprintf("subtitle-%d", iteration)
+		logoURL := fmt.Sprintf("/assets/logo/custom-%d.png", iteration)
 		start := make(chan struct{})
 		errorsByWorker := make(chan error, 2)
 		var workers sync.WaitGroup
@@ -561,7 +561,7 @@ func TestConcurrentSparseSettingsPatchesDoNotLoseDisjointFields(t *testing.T) {
 		go func() {
 			defer workers.Done()
 			<-start
-			_, err := store.UpdateAdminSettings(ctx, AdminSettingsUpdateRequest{SiteSubtitle: &subtitle})
+			_, err := store.UpdateAdminSettings(ctx, AdminSettingsUpdateRequest{LogoURL: &logoURL})
 			errorsByWorker <- err
 		}()
 		close(start)
@@ -576,8 +576,8 @@ func TestConcurrentSparseSettingsPatchesDoNotLoseDisjointFields(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read settings: %v", err)
 		}
-		if settings.SiteTitle != title || settings.SiteSubtitle != subtitle {
-			t.Fatalf("iteration %d lost update: title=%q subtitle=%q", iteration, settings.SiteTitle, settings.SiteSubtitle)
+		if settings.SiteTitle != title || settings.LogoURL != logoURL {
+			t.Fatalf("iteration %d lost update: title=%q logo=%q", iteration, settings.SiteTitle, settings.LogoURL)
 		}
 	}
 }

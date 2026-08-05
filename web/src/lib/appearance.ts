@@ -16,7 +16,6 @@ const defaultAppearancePreset: AppearanceValues = {
 
 export const defaultSettings: AdminSettings = {
   siteTitle: 'Zeno',
-  siteSubtitle: '服务器运行概览',
   logoUrl: 'https://cdn.jsdelivr.net/gh/shui1iao/Fly@main/ID-128.webp',
   theme: 'system',
   agentControllerUrl: '',
@@ -128,6 +127,14 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
   const shadowAlpha = 0.04 + appearance.shadowStrength * (resolved === 'dark' ? 0.44 : 0.22)
   const backgroundOverlayBase = resolved === 'dark' ? '0, 0, 0' : '255, 255, 255'
   const pageSurface = hasBackgroundImage ? `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})` : `rgb(${surfaceBase})`
+  const gaussianOverlay = appearance.appearancePreset === 'gaussian_blur'
+  const overlayOpacity = gaussianOverlay
+    ? (hasBackgroundImage ? Math.min(0.64, Math.max(0.46, cardOpacity * 0.76)) : 0.88)
+    : (hasBackgroundImage ? 0.92 : 0.96)
+  const overlayFilter = gaussianOverlay ? `blur(${Math.max(12, appearance.cardBlur)}px) saturate(1.08)` : 'none'
+  const menuSurface = gaussianOverlay
+    ? `rgba(${surfaceBase}, ${resolved === 'dark' ? '0.580' : '0.620'})`
+    : 'transparent'
   return {
     '--zeno-desktop-background-image': desktopBackgroundUrl === '' ? 'none' : backgroundImageValue(desktopBackgroundUrl),
     '--zeno-mobile-background-image': hasDedicatedMobileBackground ? backgroundImageValue(mobileBackgroundUrl) : (desktopBackgroundUrl === '' ? 'none' : backgroundImageValue(desktopBackgroundUrl)),
@@ -147,7 +154,9 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
     '--control-bg': 'transparent',
     '--usage-track-bg': highContrastGaussian ? 'rgba(148, 163, 184, 0.22)' : resolved === 'dark' ? 'rgba(148, 163, 184, 0.12)' : 'rgba(148, 163, 184, 0.08)',
     '--usage-track-border': highContrastGaussian ? 'rgba(203, 213, 225, 0.24)' : resolved === 'dark' ? 'rgba(148, 163, 184, 0.14)' : 'rgba(148, 163, 184, 0.12)',
-    '--zeno-popover-bg': `rgb(${surfaceBase})`,
+    '--zeno-overlay-surface': `rgba(${surfaceBase}, ${overlayOpacity.toFixed(3)})`,
+    '--zeno-menu-surface': menuSurface,
+    '--zeno-overlay-filter': overlayFilter,
     '--radius-panel': `${appearance.cardRadius}px`,
     '--radius-card': `${Math.max(10, appearance.cardRadius - 4)}px`,
     '--radius-field': `${Math.max(8, appearance.cardRadius - 8)}px`,
@@ -178,7 +187,9 @@ const documentThemeVariableNames = [
   '--control-bg',
   '--usage-track-bg',
   '--usage-track-border',
-  '--zeno-popover-bg',
+  '--zeno-overlay-surface',
+  '--zeno-menu-surface',
+  '--zeno-overlay-filter',
   '--radius-panel',
   '--radius-card',
   '--radius-field',

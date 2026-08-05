@@ -39,7 +39,6 @@ func TestPublicSettingsDefaultsAndReflectsAdminPatch(t *testing.T) {
 	patchRecorder := httptest.NewRecorder()
 	patchRequest := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/settings", bytes.NewBufferString(`{
 		"site_title": "  水饺监控  ",
-		"site_subtitle": "  VPS 状态总览  ",
 		"logo_url": "/assets/logo/custom.png",
 		"theme": "dark",
 		"agent_controller_url": "  https://zeno.example.com/  ",
@@ -68,11 +67,11 @@ func TestPublicSettingsDefaultsAndReflectsAdminPatch(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewBufferString(patchRecorder.Body.String())).Decode(&patchResponse); err != nil {
 		t.Fatalf("decode patched settings: %v", err)
 	}
-	if patchResponse.Settings.SiteTitle != "水饺监控" || patchResponse.Settings.SiteSubtitle != "VPS 状态总览" || patchResponse.Settings.LogoURL != "/assets/logo/custom.png" || patchResponse.Settings.Theme != "dark" || patchResponse.Settings.AgentControllerURL != "https://zeno.example.com" || patchResponse.Settings.BackgroundURL != "https://example.com/desktop-bg.webp" || patchResponse.Settings.DesktopBackgroundURL != "https://example.com/desktop-bg.webp" || patchResponse.Settings.MobileBackgroundURL != "https://example.com/mobile-bg.webp" || patchResponse.Settings.AppearancePreset != "gaussian_blur" || patchResponse.Settings.CardOpacity != 0.58 || patchResponse.Settings.CardBlur != 18 || patchResponse.Settings.CardRadius != 24 || patchResponse.Settings.BorderStrength != 0.34 || patchResponse.Settings.ShadowStrength != 0.34 || patchResponse.Settings.BackgroundOverlay != 0.08 || patchResponse.Settings.ThemeColor != "#6366f1" || patchResponse.Settings.CustomCode != "<style>.home-top-card { border-color: #2563eb; }</style><script>window.ZenoCustomLoaded = true;</script>" {
+	if patchResponse.Settings.SiteTitle != "水饺监控" || patchResponse.Settings.LogoURL != "/assets/logo/custom.png" || patchResponse.Settings.Theme != "dark" || patchResponse.Settings.AgentControllerURL != "https://zeno.example.com" || patchResponse.Settings.BackgroundURL != "https://example.com/desktop-bg.webp" || patchResponse.Settings.DesktopBackgroundURL != "https://example.com/desktop-bg.webp" || patchResponse.Settings.MobileBackgroundURL != "https://example.com/mobile-bg.webp" || patchResponse.Settings.AppearancePreset != "gaussian_blur" || patchResponse.Settings.CardOpacity != 0.58 || patchResponse.Settings.CardBlur != 18 || patchResponse.Settings.CardRadius != 24 || patchResponse.Settings.BorderStrength != 0.34 || patchResponse.Settings.ShadowStrength != 0.34 || patchResponse.Settings.BackgroundOverlay != 0.08 || patchResponse.Settings.ThemeColor != "#6366f1" || patchResponse.Settings.CustomCode != "<style>.home-top-card { border-color: #2563eb; }</style><script>window.ZenoCustomLoaded = true;</script>" {
 		t.Fatalf("patched settings = %+v, want trimmed persisted settings", patchResponse.Settings)
 	}
-	if strings.Contains(patchRecorder.Body.String(), `"avatar_url"`) {
-		t.Fatalf("patched settings should not expose retired avatar_url field: %s", patchRecorder.Body.String())
+	if strings.Contains(patchRecorder.Body.String(), `"avatar_url"`) || strings.Contains(patchRecorder.Body.String(), `"site_subtitle"`) {
+		t.Fatalf("patched settings should not expose retired settings fields: %s", patchRecorder.Body.String())
 	}
 
 	publicRecorder := httptest.NewRecorder()
@@ -124,6 +123,34 @@ func TestLegacyDefaultCardOpacityMigratesOnReopen(t *testing.T) {
 	}
 	if marker != 1 {
 		t.Fatalf("opacity migration markers = %d, want 1", marker)
+	}
+}
+
+func TestRetiredSiteSubtitleIsPrunedOnReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zeno.db")
+	store, err := OpenSQLiteStore(path)
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	if _, err := store.db.Exec(`INSERT INTO settings (key, value, updated_at) VALUES ('site_subtitle', 'legacy subtitle', 1)`); err != nil {
+		store.Close()
+		t.Fatalf("seed retired site subtitle: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close legacy store: %v", err)
+	}
+
+	store, err = OpenSQLiteStore(path)
+	if err != nil {
+		t.Fatalf("reopen sqlite store: %v", err)
+	}
+	defer store.Close()
+	var retiredRows int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM settings WHERE key = 'site_subtitle'`).Scan(&retiredRows); err != nil {
+		t.Fatalf("read retired setting count: %v", err)
+	}
+	if retiredRows != 0 {
+		t.Fatalf("retired rows=%d, want 0", retiredRows)
 	}
 }
 

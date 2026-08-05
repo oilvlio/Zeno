@@ -189,7 +189,6 @@ Agent 使用 tokenless、可替换的轻量 HTTP provider 自动发现公网 IPv
 当前公开展示字段：
 
 - `site_title`
-- `site_subtitle`
 - `logo_url`
 - `theme`
 - `desktop_background_url`

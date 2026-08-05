@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react'
 import type { AdminAccountData } from '../../api/adminSession'
-import { AdminFormSection, AdminActionFooter } from './AdminPrimitives'
+import { AdminActionFooter, AdminWorkspaceHeading } from './AdminPrimitives'
 
 export interface AdminAccountSectionProps {
   account: AdminAccountData
@@ -49,8 +49,9 @@ export default function AdminAccountSection({ account, onUpdate, onLogout }: Adm
 
   return (
     <section className="admin-account-section admin-workspace-panel" aria-label="账户设置">
+      <AdminWorkspaceHeading title="登录信息" />
       <form className="admin-account-form admin-node-edit-form is-sectioned admin-workspace-form" aria-label="修改账号和密码" onSubmit={handleSubmit}>
-        <AdminFormSection className="home-top-card admin-workspace-card" title="登录信息">
+        <section className="admin-workspace-card" aria-label="登录信息">
           <div className="admin-form-grid">
             <label>
               <span>账号</span>
@@ -60,10 +61,6 @@ export default function AdminAccountSection({ account, onUpdate, onLogout }: Adm
               <span>当前密码</span>
               <input name="current-password" type="password" autoComplete="current-password" />
             </label>
-          </div>
-        </AdminFormSection>
-        <AdminFormSection className="home-top-card admin-workspace-card" title="密码与会话">
-          <div className="admin-form-grid">
             <label>
               <span>新密码</span>
               <input name="new-password" type="password" autoComplete="new-password" placeholder="留空则不修改" />
@@ -73,12 +70,12 @@ export default function AdminAccountSection({ account, onUpdate, onLogout }: Adm
               <input name="confirm-password" type="password" autoComplete="new-password" placeholder="留空则不修改" />
             </label>
           </div>
+          {message && <p className={`admin-install-error${message.kind === 'success' ? ' is-success' : ''}`}>{message.text}</p>}
           <AdminActionFooter>
             {onLogout && <button className="admin-account-logout-button" type="button" onClick={onLogout}>退出登录</button>}
             <button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存账户'}</button>
           </AdminActionFooter>
-          {message && <p className={`admin-install-error${message.kind === 'success' ? ' is-success' : ''}`}>{message.text}</p>}
-        </AdminFormSection>
+        </section>
       </form>
     </section>
   )

@@ -88,7 +88,6 @@ describe('fetchSettings', () => {
   it('fetches public settings without admin credentials', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       site_title: '水饺监控',
-      site_subtitle: 'VPS 状态总览',
       logo_url: '/assets/logo/custom.png',
       theme: 'dark',
       agent_controller_url: 'https://zeno.example.com',
@@ -128,7 +127,6 @@ describe('fetchSettings', () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => new Response(JSON.stringify({
       settings: {
         site_title: String(url).includes('admin') ? '水饺监控' : 'Zeno',
-        site_subtitle: 'VPS 状态总览',
         logo_url: '/assets/logo/custom.png',
         theme: 'dark',
         agent_controller_url: 'https://zeno.example.com',
@@ -152,7 +150,6 @@ describe('fetchSettings', () => {
     await fetchAdminSettings('admin-pass')
     const settings = await updateAdminSettings('admin-pass', {
       siteTitle: '水饺监控',
-      siteSubtitle: 'VPS 状态总览',
       logoUrl: '/assets/logo/custom.png',
       theme: 'dark',
       agentControllerUrl: 'https://zeno.example.com',
@@ -200,7 +197,6 @@ describe('fetchSettings', () => {
       },
       body: JSON.stringify({
         site_title: '水饺监控',
-        site_subtitle: 'VPS 状态总览',
         logo_url: '/assets/logo/custom.png',
         theme: 'dark',
         agent_controller_url: 'https://zeno.example.com',

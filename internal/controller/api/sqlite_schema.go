@@ -338,6 +338,7 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			value TEXT NOT NULL,
 			updated_at INTEGER NOT NULL
 		);`,
+		`DELETE FROM settings WHERE key = 'site_subtitle';`,
 		`CREATE TABLE IF NOT EXISTS admin_sessions (
 			token_hash TEXT PRIMARY KEY,
 			created_at INTEGER NOT NULL,

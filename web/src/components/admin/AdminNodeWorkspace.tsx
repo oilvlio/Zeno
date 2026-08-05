@@ -1,11 +1,12 @@
-import { type DragEvent, type FormEvent, useState } from 'react'
+import { type FormEvent, useState } from 'react'
 import type { AdminNodeCreateInput, AdminNodeUpdateInput } from '../../api/adminClient'
 import { sortAdminNodes, sortAdminProbeTargets } from '../../lib/adminCollections'
 import type { AdminNode, AdminNodeInstallCommand, AdminProbeTarget } from '../../types'
 import { ServerFlag } from '../ServerFlag'
 import { AdminDateField, AdminExpandedCheckList, AdminSegmentedField } from './AdminFields'
 import { AdminInstallCommand } from './AdminInstallCommand'
-import { AdminDeleteConfirmModal, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions } from './AdminPrimitives'
+import { AdminNodeSortModal, applyAdminNodeOrderPatches } from './AdminNodeSortModal'
+import { AdminDeleteConfirmModal, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions, AdminWorkspaceHeading } from './AdminPrimitives'
 import { billingCycleOptions, billingModeOptions, formatQuotaValue, formatRenewalAmountInput, normalizeBillingCycle, parseMonthlyResetDay, parseQuota, parseRenewalAmount, quotaUnitForBytes, quotaUnitOptions, renewalCurrencyOptions } from './adminOperationalModel'
 import type { AdminNodeWorkspaceProps, MaybePromise } from './adminOperationalTypes'
 
@@ -15,22 +16,18 @@ export function AdminNodeWorkspace({ nodes, targets, onCreate, onUpdate, onDelet
   const [sortingNodes, setSortingNodes] = useState(false)
   const editingNode = editingNodeId ? nodes.find((node) => node.id === editingNodeId) : undefined
   const orderedNodes = sortAdminNodes(nodes)
-  const applyOrderPatches = (orderedNodes: AdminNode[]) => {
-    const patches = buildAdminNodeOrderPatches(orderedNodes)
-    return Promise.all(patches.map((patch) => Promise.resolve(onUpdate(patch.nodeId, { displayOrder: patch.displayOrder })))).then(() => undefined)
-  }
 
   return (
     <section className="admin-node-section admin-workspace-panel" aria-label="admin node list">
-      <header className="admin-section-heading">
-        <div>
-          <h3>服务器列表</h3>
-        </div>
-        <div className="admin-section-actions">
-          <button className="admin-primary-action" type="button" onClick={() => setSortingNodes(true)}>服务器排序</button>
-          <button className="admin-primary-action" type="button" onClick={() => setCreatingNode(true)}>添加服务器</button>
-        </div>
-      </header>
+      <AdminWorkspaceHeading
+        title="服务器列表"
+        actions={
+          <>
+            <button className="admin-primary-action" type="button" onClick={() => setSortingNodes(true)}>服务器排序</button>
+            <button className="admin-primary-action" type="button" onClick={() => setCreatingNode(true)}>添加服务器</button>
+          </>
+        }
+      />
 
       {nodes.length === 0 && <div className="admin-state-card">还没有节点。</div>}
       {nodes.length > 0 && <AdminNodeList nodes={orderedNodes} onEdit={setEditingNodeId} onDelete={onDelete} />}
@@ -59,7 +56,7 @@ export function AdminNodeWorkspace({ nodes, targets, onCreate, onUpdate, onDelet
           nodes={orderedNodes}
           onClose={() => setSortingNodes(false)}
           onSave={async (nextNodes) => {
-            await applyOrderPatches(nextNodes)
+            await applyAdminNodeOrderPatches(nextNodes, onUpdate)
             setSortingNodes(false)
           }}
         />
@@ -67,8 +64,6 @@ export function AdminNodeWorkspace({ nodes, targets, onCreate, onUpdate, onDelet
     </section>
   )
 }
-
-type AdminNodeOrderPatch = { nodeId: string; displayOrder: number }
 
 function AdminNodeList({ nodes, onEdit, onDelete }: { nodes: AdminNode[]; onEdit: (nodeId: string) => void; onDelete: (nodeId: string) => MaybePromise }) {
   const [pendingDelete, setPendingDelete] = useState<AdminNode | null>(null)
@@ -112,125 +107,6 @@ function AdminNodeList({ nodes, onEdit, onDelete }: { nodes: AdminNode[]; onEdit
       />
     )}
     </>
-  )
-}
-
-function buildAdminNodeOrderPatches(nodes: AdminNode[]): AdminNodeOrderPatch[] {
-  const orderedNodes = [...nodes]
-  return orderedNodes
-    .map((node, index) => ({ nodeId: node.id, displayOrder: (index + 1) * 10 }))
-    .filter((patch) => orderedNodes.find((node) => node.id === patch.nodeId)?.displayOrder !== patch.displayOrder)
-}
-
-function moveAdminNodeInOrder(nodeIds: string[], sourceId: string, targetId: string): string[] {
-  const sourceIndex = nodeIds.indexOf(sourceId)
-  const targetIndex = nodeIds.indexOf(targetId)
-  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return nodeIds
-  const nextIds = [...nodeIds]
-  const [source] = nextIds.splice(sourceIndex, 1)
-  nextIds.splice(targetIndex, 0, source)
-  return nextIds
-}
-
-function AdminNodeSortModal({ nodes, onSave, onClose }: { nodes: AdminNode[]; onSave: (nodes: AdminNode[]) => MaybePromise; onClose: () => void }) {
-  const [orderedIds, setOrderedIds] = useState(() => nodes.map((node) => node.id))
-  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null)
-  const [dropTargetNodeId, setDropTargetNodeId] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
-  const [sortAnnouncement, setSortAnnouncement] = useState('')
-  const nodeById = new Map(nodes.map((node) => [node.id, node]))
-  const orderedNodes = orderedIds.map((nodeId) => nodeById.get(nodeId)).filter((node): node is AdminNode => Boolean(node))
-  const hasChanges = orderedNodes.some((node, index) => node.id !== nodes[index]?.id)
-  const moveNode = (sourceId: string, targetId: string) => {
-    setOrderedIds((currentIds) => moveAdminNodeInOrder(currentIds, sourceId, targetId))
-  }
-  const moveNodeByStep = (nodeId: string, step: -1 | 1) => {
-    const sourceIndex = orderedIds.indexOf(nodeId)
-    const targetIndex = sourceIndex + step
-    const targetId = orderedIds[targetIndex]
-    const node = nodeById.get(nodeId)
-    if (!targetId || !node) return
-    moveNode(nodeId, targetId)
-    setSortAnnouncement(`${node.displayName} 已调整为第 ${targetIndex + 1} 位`)
-  }
-  const handleDragStart = (event: DragEvent<HTMLElement>, nodeId: string) => {
-    setDraggedNodeId(nodeId)
-    setDropTargetNodeId(null)
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', nodeId)
-  }
-  const handleDragOver = (event: DragEvent<HTMLElement>, targetId: string) => {
-    event.preventDefault()
-    const sourceId = draggedNodeId || event.dataTransfer.getData('text/plain')
-    if (!sourceId || sourceId === targetId) return
-    event.dataTransfer.dropEffect = 'move'
-    setDropTargetNodeId(targetId)
-  }
-  const handleDrop = (event: DragEvent<HTMLElement>, targetId: string) => {
-    event.preventDefault()
-    const sourceId = draggedNodeId || event.dataTransfer.getData('text/plain')
-    if (sourceId && sourceId !== targetId) {
-      moveNode(sourceId, targetId)
-      const node = nodeById.get(sourceId)
-      const targetIndex = orderedIds.indexOf(targetId)
-      if (node && targetIndex >= 0) setSortAnnouncement(`${node.displayName} 已调整为第 ${targetIndex + 1} 位`)
-    }
-    setDropTargetNodeId(null)
-  }
-  const saveOrder = () => {
-    setSubmitting(true)
-    setFormError(null)
-    Promise.resolve(onSave(orderedNodes))
-      .catch((error: unknown) => setFormError(error instanceof Error ? error.message : '保存失败'))
-      .finally(() => setSubmitting(false))
-  }
-
-  return (
-    <AdminModal title="服务器排序" className="admin-server-sort-modal" onClose={onClose}>
-      <div className="admin-server-sort-layout">
-        <section className="admin-server-sort-workspace" aria-label="调整服务器顺序">
-          <header className="admin-server-sort-intro">
-            <p>拖动服务器，或使用上下按钮调整顺序。</p>
-          </header>
-          <div className="admin-server-sort-list" role="list" aria-label="服务器排序列表">
-            {orderedNodes.map((node, index) => {
-              const isFirst = index === 0
-              const isLast = index === orderedNodes.length - 1
-              return (
-                <article
-                  className={`admin-server-sort-item${draggedNodeId === node.id ? ' is-dragging' : ''}${dropTargetNodeId === node.id ? ' is-drop-target' : ''}`}
-                  role="listitem"
-                  draggable
-                  key={node.id}
-                  aria-grabbed={draggedNodeId === node.id}
-                  onDragStart={(event) => handleDragStart(event, node.id)}
-                  onDragOver={(event) => handleDragOver(event, node.id)}
-                  onDrop={(event) => handleDrop(event, node.id)}
-                  onDragEnd={() => { setDraggedNodeId(null); setDropTargetNodeId(null) }}
-                >
-                  <span className="admin-server-sort-index" aria-label={`第 ${index + 1} 位`}>{index + 1}</span>
-                  <span className="admin-server-sort-server">
-                    <ServerFlag countryCode={node.countryCode} className="admin-server-sort-flag" />
-                    <strong>{node.displayName}</strong>
-                  </span>
-                  <div className="admin-server-sort-controls" aria-label={`${node.displayName} 的排序操作`}>
-                    <button type="button" aria-label={`将 ${node.displayName} 上移`} title="上移" disabled={isFirst} onClick={() => moveNodeByStep(node.id, -1)}>↑</button>
-                    <button type="button" aria-label={`将 ${node.displayName} 下移`} title="下移" disabled={isLast} onClick={() => moveNodeByStep(node.id, 1)}>↓</button>
-                  </div>
-                  <span className="admin-drag-handle" aria-hidden="true">⠿</span>
-                </article>
-              )
-            })}
-          </div>
-          <p className="sr-only" aria-live="polite" aria-atomic="true">{sortAnnouncement}</p>
-        </section>
-      </div>
-      <AdminActionFooter className="admin-server-sort-actions" error={formError}>
-        <button type="button" onClick={onClose} disabled={submitting}>取消</button>
-        <button className="admin-primary-action" type="button" onClick={saveOrder} disabled={submitting || !hasChanges}>{submitting ? '保存中…' : '保存排序'}</button>
-      </AdminActionFooter>
-    </AdminModal>
   )
 }
 

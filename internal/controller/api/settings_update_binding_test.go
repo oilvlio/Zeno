@@ -26,13 +26,13 @@ func TestAdminSettingsUpdateValuesIsSparse(t *testing.T) {
 }
 
 // Empty strings and zero numbers are meaningful values, not absent fields:
-// clearing a subtitle or setting opacity to 0 must persist.
+// clearing an optional asset URL or setting blur to 0 must persist.
 func TestAdminSettingsUpdateValuesKeepsZeroValues(t *testing.T) {
 	empty := ""
 	zero := 0.0
-	values := adminSettingsUpdateValues(AdminSettingsUpdateRequest{SiteSubtitle: &empty, CardBlur: &zero})
-	if got, ok := values[settingKeySiteSubtitle]; !ok || got != "" {
-		t.Fatalf("clearing the subtitle must persist an empty string, got %q ok=%v", got, ok)
+	values := adminSettingsUpdateValues(AdminSettingsUpdateRequest{LogoURL: &empty, CardBlur: &zero})
+	if got, ok := values[settingKeyLogoURL]; !ok || got != "" {
+		t.Fatalf("clearing the logo URL must persist an empty string, got %q ok=%v", got, ok)
 	}
 	if got, ok := values[settingKeyCardBlur]; !ok || got != formatSettingsFloat(0) {
 		t.Fatalf("zero blur must persist, got %q ok=%v", got, ok)

@@ -1,4 +1,5 @@
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { DashboardHeader } from './DashboardHeader'
 import { ServerFlag } from './ServerFlag'
 import { availableCurrencyOptions, formatCurrencyAmount, normalizeCurrencyCode, normalizeCurrencyRates, type CurrencyCode, type CurrencyRates } from '../lib/currency'
@@ -161,11 +162,33 @@ interface HomeCurrencyMenuProps {
   onChange?: (currency: CurrencyCode) => void
 }
 
+interface HomeCurrencyMenuPosition {
+  top: number
+  left: number
+}
+
+const homeCurrencyMenuWidth = 248
+const homeCurrencyMenuMargin = 8
+
+function resolveHomeCurrencyMenuPosition(button: HTMLButtonElement, viewportWidth: number): HomeCurrencyMenuPosition {
+  const rect = button.getBoundingClientRect()
+  const width = Math.min(homeCurrencyMenuWidth, viewportWidth - homeCurrencyMenuMargin * 2)
+  const preferredLeft = viewportWidth <= 767
+    ? rect.left + rect.width / 2 - width / 2
+    : rect.right - width
+  return {
+    top: rect.bottom + 7,
+    left: Math.max(homeCurrencyMenuMargin, Math.min(viewportWidth - width - homeCurrencyMenuMargin, preferredLeft)),
+  }
+}
+
 function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
   const [open, setOpen] = useState(false)
+  const [menuPosition, setMenuPosition] = useState<HomeCurrencyMenuPosition | null>(null)
   const menuId = useId()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value))
   const selectedOption = options[selectedIndex]
@@ -175,25 +198,38 @@ function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
     const frame = window.requestAnimationFrame(() => optionRefs.current[selectedIndex]?.focus())
     const handlePointerDown = (event: PointerEvent) => {
       if (rootRef.current?.contains(event.target as Node)) return
+      if (popoverRef.current?.contains(event.target as Node)) return
       setOpen(false)
+      setMenuPosition(null)
     }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       setOpen(false)
+      setMenuPosition(null)
       triggerRef.current?.focus()
     }
+    const updatePosition = () => {
+      const button = triggerRef.current
+      if (button) setMenuPosition(resolveHomeCurrencyMenuPosition(button, window.innerWidth))
+    }
+    updatePosition()
     document.addEventListener('pointerdown', handlePointerDown)
     document.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
     return () => {
       window.cancelAnimationFrame(frame)
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
     }
   }, [open, selectedIndex])
 
   const selectCurrency = (currency: CurrencyCode) => {
     onChange?.(currency)
     setOpen(false)
+    setMenuPosition(null)
     window.requestAnimationFrame(() => triggerRef.current?.focus())
   }
 
@@ -217,7 +253,19 @@ function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
       focusOption(options.length - 1)
     } else if (event.key === 'Tab') {
       setOpen(false)
+      setMenuPosition(null)
     }
+  }
+
+  const toggleMenu = () => {
+    if (open) {
+      setOpen(false)
+      setMenuPosition(null)
+      return
+    }
+    const button = triggerRef.current
+    if (button) setMenuPosition(resolveHomeCurrencyMenuPosition(button, window.innerWidth))
+    setOpen(true)
   }
 
   return (
@@ -231,17 +279,19 @@ function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={menuId}
-        onClick={() => setOpen((current) => !current)}
+        onClick={toggleMenu}
         onKeyDown={(event) => {
           if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
           event.preventDefault()
+          const button = triggerRef.current
+          if (button) setMenuPosition(resolveHomeCurrencyMenuPosition(button, window.innerWidth))
           setOpen(true)
         }}
       >
         <span className="home-currency-select__value">{selectedOption?.shortLabel ?? value}</span>
       </button>
-      {open && (
-        <div id={menuId} className="home-currency-popover" role="listbox" aria-label="金额单位">
+      {open && menuPosition && typeof document !== 'undefined' && createPortal(
+        <div ref={popoverRef} id={menuId} className="home-currency-popover" role="listbox" aria-label="金额单位" style={menuPosition}>
           {options.map((option, index) => (
             <button
               key={option.value}
@@ -258,7 +308,8 @@ function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
               <span className="home-currency-option__code">{option.shortLabel}</span>
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

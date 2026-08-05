@@ -34,7 +34,6 @@ type AdminAccountUpdateRequest struct {
 
 type SiteSettings struct {
 	SiteTitle            string  `json:"site_title"`
-	SiteSubtitle         string  `json:"site_subtitle"`
 	LogoURL              string  `json:"logo_url"`
 	Theme                string  `json:"theme"`
 	AgentControllerURL   string  `json:"agent_controller_url"`
@@ -55,7 +54,6 @@ type SiteSettings struct {
 
 type AdminSettingsUpdateRequest struct {
 	SiteTitle            *string  `json:"site_title,omitempty"`
-	SiteSubtitle         *string  `json:"site_subtitle,omitempty"`
 	LogoURL              *string  `json:"logo_url,omitempty"`
 	Theme                *string  `json:"theme,omitempty"`
 	AgentControllerURL   *string  `json:"agent_controller_url,omitempty"`
@@ -84,7 +82,6 @@ var settingsThemeColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 func defaultSiteSettings() SiteSettings {
 	return SiteSettings{
 		SiteTitle:            "Zeno",
-		SiteSubtitle:         "服务器运行概览",
 		LogoURL:              "/assets/logo/id.png",
 		Theme:                "system",
 		AgentControllerURL:   "",
@@ -106,7 +103,6 @@ func defaultSiteSettings() SiteSettings {
 func (request *AdminSettingsUpdateRequest) normalize() error {
 	normalizer := newPatchNormalizer(errInvalidAdminSettingsUpdate)
 	normalizer.text(&request.SiteTitle, trimRequiredMaxRunes(64))
-	normalizer.text(&request.SiteSubtitle, trimMaxRunes(140))
 	normalizer.text(&request.LogoURL, trimOptionalValid(validSettingsAssetURL))
 	normalizer.text(&request.Theme, trimLowerValid(validSettingsTheme))
 	// A trailing slash would make the stored controller URL differ from the

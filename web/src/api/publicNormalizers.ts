@@ -7,7 +7,6 @@ export function normalizeSettings(input: ApiSettings): AdminSettings {
   const desktopBackgroundUrl = input.desktop_background_url ?? input.background_url
   return {
     siteTitle: input.site_title,
-    siteSubtitle: input.site_subtitle,
     logoUrl,
     theme: input.theme ?? 'system',
     agentControllerUrl: input.agent_controller_url ?? '',

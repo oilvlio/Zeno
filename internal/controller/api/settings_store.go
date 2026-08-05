@@ -10,7 +10,6 @@ import (
 
 const (
 	settingKeySiteTitle            = "site_title"
-	settingKeySiteSubtitle         = "site_subtitle"
 	settingKeyLogoURL              = "logo_url"
 	settingKeyTheme                = "theme"
 	settingKeyAgentControllerURL   = "agent_controller_url"

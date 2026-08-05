@@ -2,7 +2,7 @@ import { type FormEvent, useState } from 'react'
 import type { AdminAlertRuleUpdateInput, AdminNotificationChannelCreateInput, AdminNotificationChannelUpdateInput } from '../../api/adminClient'
 import type { AdminAlertRule, AdminNode, AdminNotificationChannel } from '../../types'
 import { AdminSegmentedField } from './AdminFields'
-import { AdminCredentialField, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions } from './AdminPrimitives'
+import { AdminCredentialField, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions, AdminWorkspaceHeading } from './AdminPrimitives'
 import { formatAlertRuleNote, formatAlertRuleScope, formatRenewalDayOption, normalizeRenewalThreshold, parseNonNegativeInt, parsePercentage, parseRenewalThreshold, renewalDayOptions } from './adminOperationalModel'
 import type { AdminNotificationsWorkspaceProps, MaybePromise } from './adminOperationalTypes'
 
@@ -13,7 +13,7 @@ function AdminAlertRulesSection({ rules, nodes, onUpdate }: { rules: AdminAlertR
   const availableRules = rules.filter((rule) => !rule.enabled)
 
   return (
-    <section className="home-top-card admin-workspace-card admin-notification-block admin-alert-rule-section" aria-label="通知类型规则">
+    <section className="admin-notification-group admin-alert-rule-section" aria-label="通知类型规则">
       <div className="admin-block-heading">
         <h4>通知类型</h4>
         <button className="admin-primary-action" type="button" onClick={() => setAddingRule(true)}>添加通知类型</button>
@@ -195,17 +195,18 @@ export function AdminNotificationsWorkspace({ channels, rules, nodes, onChannelC
 
   return (
     <section className="admin-notification-section admin-workspace-panel admin-workspace-panel--grouped" aria-label="admin notification settings">
+      <AdminWorkspaceHeading
+        title="通知渠道"
+        actions={<button className="admin-primary-action" type="button" onClick={() => setCreatingChannel(true)}>添加通知渠道</button>}
+      />
       <div className="admin-workspace-card-list">
-        <section className="home-top-card admin-workspace-card admin-notification-block" aria-label="通知渠道">
-          <div className="admin-block-heading">
-            <h4>通知渠道</h4>
-            <button className="admin-primary-action" type="button" onClick={() => setCreatingChannel(true)}>添加通知渠道</button>
-          </div>
-          {channels.length === 0 && <div className="admin-state-card">还没有通知渠道。</div>}
-          {channels.length > 0 && <AdminNotificationChannelList channels={channels} onDelete={onChannelDelete} onEdit={setEditingChannel} />}
+        <section className="admin-workspace-card" aria-label="通知设置">
+          <section className="admin-notification-group" aria-label="通知渠道">
+            {channels.length === 0 && <div className="admin-state-card">还没有通知渠道。</div>}
+            {channels.length > 0 && <AdminNotificationChannelList channels={channels} onDelete={onChannelDelete} onEdit={setEditingChannel} />}
+          </section>
+          <AdminAlertRulesSection rules={rules} nodes={nodes} onUpdate={onRuleUpdate} />
         </section>
-
-        <AdminAlertRulesSection rules={rules} nodes={nodes} onUpdate={onRuleUpdate} />
       </div>
 
       {creatingChannel && (

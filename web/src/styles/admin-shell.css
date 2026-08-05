@@ -1,25 +1,34 @@
 /* Critical admin shell styles loaded with the public entry to prevent first-route FOUC. */
 .admin-container { display: flex; flex-direction: column; gap: 24px; }
 .admin-panel { width: 100%; min-height: 360px; }
-.admin-panel--authenticated { display: flex; flex-direction: column; gap: 16px; }
+.admin-panel--authenticated { display: block; }
 .admin-chrome-card {
   z-index: 30;
   display: flex;
   flex-direction: column;
+  min-height: 360px;
 }
-.admin-content-card { z-index: 10; min-height: 360px; padding: 20px; }
-.home-overview-card,
-.admin-chrome-card {
-  height: 135px;
-}
-.admin-chrome-card .admin-toolbar {
-  flex: 1 1 auto;
+.admin-content-card {
+  z-index: 10;
+  min-height: 360px;
   margin-top: 0;
-  padding-top: 3px;
+  padding: 12px 2px 4px;
+  border-top: 0;
+}
+.home-overview-card { height: 135px; }
+.admin-chrome-card .admin-toolbar {
+  flex: 0 0 auto;
+  align-items: center;
+  margin: 0;
+  padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 .admin-chrome-card .admin-section-nav {
+  top: 8px;
   width: 100%;
+  margin-inline: 0;
+  --selector-height: 40px;
+  --selector-radius: var(--radius-panel-inset-8);
   grid-template-columns: repeat(var(--slider-columns), minmax(0, 1fr));
 }
 .admin-container,
@@ -136,9 +145,15 @@
   .admin-chrome-card { height: auto; min-height: 0; }
   .admin-container { gap: 14px; }
   .admin-panel { min-height: calc(100dvh - 92px); }
-  .admin-panel--authenticated { gap: 12px; }
-  .admin-chrome-card .admin-toolbar { flex: 0 0 auto; justify-content: center; padding-top: 7px; padding-bottom: 0; }
-  .admin-content-card { min-height: calc(100dvh - 178px); padding: 14px; }
+  .admin-chrome-card .admin-toolbar { flex: 0 0 auto; justify-content: center; margin-inline: 0; padding-top: 7px; padding-bottom: 0; }
+  .admin-chrome-card .admin-section-nav {
+    top: 0;
+    width: 100%;
+    margin-inline: 0;
+    --selector-height: 40px;
+    --selector-radius: var(--radius-panel-inset-8);
+  }
+  .admin-content-card { min-height: calc(100dvh - 178px); margin-top: 0; padding: 10px 0 3px; }
   .admin-panel--login { min-height: calc(100dvh - 28px); }
   .admin-login-card { grid-template-columns: 1fr; align-items: stretch; padding: 20px 16px; gap: 18px; }
   .admin-toolbar { flex-direction: column; align-items: stretch; }

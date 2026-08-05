@@ -137,7 +137,6 @@ export const alertRules: AdminAlertRule[] = [
 
 export const settings: AdminSettings = {
   siteTitle: '水饺监控',
-  siteSubtitle: 'VPS 状态总览',
   logoUrl: '/assets/logo/custom.png',
   theme: 'dark',
   agentControllerUrl: 'https://zeno.example.com',

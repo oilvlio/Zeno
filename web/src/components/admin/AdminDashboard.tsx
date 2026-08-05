@@ -183,6 +183,43 @@ export function AdminDashboard({
                 onSectionChange={(section) => startSectionTransition(() => setActiveSection(section))}
               />
             </div>
+
+            <div className={`admin-content-card${activeSection === 'notifications' || activeSection === 'account' || activeSection === 'settings' ? ' admin-content-card--grouped' : ''}`}>
+              {authState.kind === 'error' && <div className="admin-state-card is-error">{authState.message}</div>}
+              {adminState.kind === 'error' && <div className="admin-state-card is-error">Admin API 读取失败：{adminState.message}</div>}
+
+              {adminState.kind === 'ready' && (activeSection === 'nodes' || activeSection === 'targets' || activeSection === 'notifications') && (
+                <AdminModuleErrorBoundary key={activeSection} fallback={<AdminOperationalWorkspaceLoadError />}>
+                  <OperationalWorkspace
+                    activeSection={activeSection}
+                    nodes={adminState.nodes}
+                    targets={adminState.targets}
+                    notificationChannels={adminState.notificationChannels}
+                    alertRules={adminState.alertRules}
+                    onNodeCreate={onAdminNodeCreate}
+                    onNodeUpdate={onAdminNodeUpdate}
+                    onNodeDelete={onAdminNodeDelete}
+                    onInstallCommand={onAdminInstallCommand}
+                    onProbeTargetCreate={onAdminProbeTargetCreate}
+                    onProbeTargetUpdate={onAdminProbeTargetUpdate}
+                    onProbeTargetDelete={onAdminProbeTargetDelete}
+                    onNotificationChannelCreate={onAdminNotificationChannelCreate}
+                    onNotificationChannelUpdate={onAdminNotificationChannelUpdate}
+                    onNotificationChannelDelete={onAdminNotificationChannelDelete}
+                    onNotificationChannelTest={onAdminNotificationChannelTest}
+                    onAlertRuleUpdate={onAdminAlertRuleUpdate}
+                  />
+                </AdminModuleErrorBoundary>
+              )}
+
+              {adminState.kind === 'ready' && activeSection === 'account' && (
+                <AdminAccountSection account={adminState.account} onUpdate={onAdminAccountUpdate} onLogout={onAdminTokenClear} />
+              )}
+
+              {adminState.kind === 'ready' && activeSection === 'settings' && (
+                <AdminSettingsSection settings={settings} onUpdate={onAdminSettingsUpdate} />
+              )}
+            </div>
           </div>
         ) : dashboardHeader}
 
@@ -202,45 +239,6 @@ export function AdminDashboard({
               <button type="submit" disabled={authState.kind === 'loading'}>{authState.kind === 'loading' ? '登录中…' : '登录后台'}</button>
               {authState.kind === 'error' && <p className="admin-login-error">{authState.message}</p>}
           </form>
-        )}
-
-        {adminSessionReady && hasAdminToken && (
-          <div className={`home-top-card admin-content-card${activeSection === 'notifications' || activeSection === 'account' || activeSection === 'settings' ? ' admin-content-card--grouped' : ''}`}>
-            {authState.kind === 'error' && <div className="admin-state-card is-error">{authState.message}</div>}
-            {adminState.kind === 'error' && <div className="admin-state-card is-error">Admin API 读取失败：{adminState.message}</div>}
-
-            {adminState.kind === 'ready' && (activeSection === 'nodes' || activeSection === 'targets' || activeSection === 'notifications') && (
-              <AdminModuleErrorBoundary key={activeSection} fallback={<AdminOperationalWorkspaceLoadError />}>
-                <OperationalWorkspace
-                  activeSection={activeSection}
-                  nodes={adminState.nodes}
-                  targets={adminState.targets}
-                  notificationChannels={adminState.notificationChannels}
-                  alertRules={adminState.alertRules}
-                  onNodeCreate={onAdminNodeCreate}
-                  onNodeUpdate={onAdminNodeUpdate}
-                  onNodeDelete={onAdminNodeDelete}
-                  onInstallCommand={onAdminInstallCommand}
-                  onProbeTargetCreate={onAdminProbeTargetCreate}
-                  onProbeTargetUpdate={onAdminProbeTargetUpdate}
-                  onProbeTargetDelete={onAdminProbeTargetDelete}
-                  onNotificationChannelCreate={onAdminNotificationChannelCreate}
-                  onNotificationChannelUpdate={onAdminNotificationChannelUpdate}
-                  onNotificationChannelDelete={onAdminNotificationChannelDelete}
-                  onNotificationChannelTest={onAdminNotificationChannelTest}
-                  onAlertRuleUpdate={onAdminAlertRuleUpdate}
-                />
-              </AdminModuleErrorBoundary>
-            )}
-
-            {adminState.kind === 'ready' && activeSection === 'account' && (
-              <AdminAccountSection account={adminState.account} onUpdate={onAdminAccountUpdate} onLogout={onAdminTokenClear} />
-            )}
-
-            {adminState.kind === 'ready' && activeSection === 'settings' && (
-              <AdminSettingsSection settings={settings} onUpdate={onAdminSettingsUpdate} />
-            )}
-          </div>
         )}
       </section>
     </div>

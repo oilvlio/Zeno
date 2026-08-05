@@ -5,7 +5,6 @@ export type AppearancePreset = 'default' | 'gaussian_blur'
 
 export interface AdminSettings {
   siteTitle: string
-  siteSubtitle: string
   logoUrl: string
   theme: AdminTheme
   agentControllerUrl: string

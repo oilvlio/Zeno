@@ -491,7 +491,6 @@ describe('normalizeSettings', () => {
   it('maps public/admin settings into frontend camelCase models', () => {
     const settings = normalizeSettings({
       site_title: '水饺监控',
-      site_subtitle: 'VPS 状态总览',
       logo_url: '/assets/logo/custom.png',
       theme: 'dark',
       agent_controller_url: 'https://zeno.example.com',
@@ -509,7 +508,6 @@ describe('normalizeSettings', () => {
     })
 
     expect(settings.siteTitle).toBe('水饺监控')
-    expect(settings.siteSubtitle).toBe('VPS 状态总览')
     expect(settings.logoUrl).toBe('/assets/logo/custom.png')
     expect(settings.theme).toBe('dark')
     expect(settings.agentControllerUrl).toBe('https://zeno.example.com')

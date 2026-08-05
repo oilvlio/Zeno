@@ -367,7 +367,6 @@ CREATE TABLE settings (
 当前主要 key：
 
 - `site_title`
-- `site_subtitle`
 - `logo_url`
 - `theme`
 - `agent_controller_url`

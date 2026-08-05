@@ -3,7 +3,6 @@ import type { CurrencyRates } from '../lib/currency'
 
 export interface ApiSettings {
   site_title: string
-  site_subtitle: string
   logo_url: string
   theme: AdminTheme
   agent_controller_url?: string
@@ -392,7 +391,6 @@ export interface AdminAlertRulesData {
 
 export interface AdminSettingsUpdateInput {
   siteTitle?: string
-  siteSubtitle?: string
   logoUrl?: string
   theme?: AdminTheme
   agentControllerUrl?: string

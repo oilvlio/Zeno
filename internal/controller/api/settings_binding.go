@@ -46,7 +46,6 @@ func assignFloat(field func(*SiteSettings) *float64) func(*SiteSettings, string)
 func siteSettingsBindings() []settingsBinding {
 	return []settingsBinding{
 		{settingKeySiteTitle, assignString(func(s *SiteSettings) *string { return &s.SiteTitle })},
-		{settingKeySiteSubtitle, assignString(func(s *SiteSettings) *string { return &s.SiteSubtitle })},
 		{settingKeyLogoURL, assignString(func(s *SiteSettings) *string { return &s.LogoURL })},
 		{settingKeyTheme, assignString(func(s *SiteSettings) *string { return &s.Theme })},
 		{settingKeyAgentControllerURL, assignString(func(s *SiteSettings) *string { return &s.AgentControllerURL })},

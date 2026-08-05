@@ -46,7 +46,6 @@ type adminSettingsFloatBinding struct {
 func adminSettingsTextBindings(update AdminSettingsUpdateRequest) []adminSettingsTextBinding {
 	return []adminSettingsTextBinding{
 		{settingKeySiteTitle, update.SiteTitle},
-		{settingKeySiteSubtitle, update.SiteSubtitle},
 		{settingKeyLogoURL, update.LogoURL},
 		{settingKeyTheme, update.Theme},
 		{settingKeyAgentControllerURL, update.AgentControllerURL},

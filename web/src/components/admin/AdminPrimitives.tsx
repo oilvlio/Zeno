@@ -82,6 +82,15 @@ export function AdminFormSection({ title, children, className = '' }: { title: s
   )
 }
 
+export function AdminWorkspaceHeading({ title, actions }: { title: string; actions?: ReactNode }) {
+  return (
+    <header className="admin-section-heading">
+      <div><h3>{title}</h3></div>
+      {actions && <div className="admin-section-actions">{actions}</div>}
+    </header>
+  )
+}
+
 export function AdminRowActions({ entityLabel, actionEntityLabel = entityLabel, name, onEdit, onDelete }: { entityLabel: string; actionEntityLabel?: string; name: string; onEdit: () => void; onDelete: () => void }) {
   const editLabel = `编辑${actionEntityLabel}`
   const deleteLabel = `删除${actionEntityLabel}`

@@ -174,7 +174,7 @@ describe('AdminDashboard', () => {
       onAlertRuleUpdate,
     })
     expect(html.match(/class="kulin-container admin-container"/g)).toHaveLength(1)
-    expect(html).toMatch(/<section class="admin-panel admin-panel--authenticated"[\s\S]*<div class="home-top-card admin-chrome-card">[\s\S]*<div class="home-top-card admin-content-card"><div data-testid="operational-workspace-probe">targets:Example Node A<\/div><\/div><\/section><\/div>$/)
+    expect(html).toMatch(/<section class="admin-panel admin-panel--authenticated"[\s\S]*<div class="home-top-card admin-chrome-card">[\s\S]*<div class="admin-content-card"><div data-testid="operational-workspace-probe">targets:Example Node A<\/div><\/div><\/div><\/section><\/div>$/)
   })
 
   it('keeps Telegram credentials masked with an accessible visibility toggle and no reflected value', () => {
@@ -201,10 +201,10 @@ describe('AdminDashboard', () => {
     expect(html).not.toContain('后台登录')
   })
 
-  it('splits authenticated chrome from content and opens backend directly on the server list', () => {
+  it('unifies authenticated chrome with its content and opens backend directly on the server list', () => {
     const html = renderAdmin()
 
-    expect(html.match(/home-top-card/g)).toHaveLength(2)
+    expect(html.match(/home-top-card/g)).toHaveLength(1)
     expect(html).toContain('admin-panel admin-panel--authenticated')
     expect(html).toContain('admin-chrome-card')
     expect(html).toContain('admin-content-card')
@@ -250,7 +250,7 @@ describe('AdminDashboard', () => {
     expect(dashboard).not.toContain('服务器列表')
     expect(html).toContain('修改账号和密码')
     expect(html).toContain('登录信息')
-    expect(html).toContain('密码与会话')
+    expect(html).not.toContain('密码与会话')
     expect(html).toContain('name="account-username"')
     expect(html).toContain('value="admin"')
     expect(html).toContain('name="current-password"')
@@ -265,18 +265,19 @@ describe('AdminDashboard', () => {
     const html = renderToStaticMarkup(<AdminSettingsSection settings={settings} onUpdate={() => {}} />)
 
     expect(dashboard).toContain('设置')
-    expect(dashboard).not.toContain('站点设置')
+    expect(dashboard).toContain('站点设置')
     expect(dashboard).not.toContain('加载中…')
     expect(dashboard).not.toContain('服务器列表')
-    expect(html).not.toContain('站点设置')
+    expect(html).toContain('站点设置')
     expect(html).toContain('外观配置')
-    expect(html).toContain('站点信息')
-    expect(html).toContain('主题与背景')
+    expect(html).toContain('界面外观')
+    expect(html).not.toContain('站点信息')
+    expect(html).not.toContain('主题与背景')
     expect(html).toContain('admin-settings-form')
     expect(html).toContain('name="site-title"')
     expect(html).toContain('水饺监控')
-    expect(html).toContain('name="site-subtitle"')
-    expect(html).toContain('VPS 状态总览')
+    expect(html).not.toContain('name="site-subtitle"')
+    expect(html).not.toContain('站点副标题')
     expect(html).toContain('name="logo-url"')
     expect(html).toContain('placeholder="可留空"')
     expect(html).not.toContain('留空显示字母 Z')
@@ -295,7 +296,7 @@ describe('AdminDashboard', () => {
     expect(html).toContain('https://example.com/desktop-bg.webp')
     expect(html).toContain('name="mobile-background-url"')
     expect(html).toContain('https://example.com/mobile-bg.webp')
-    expect(html).toContain('外观样式')
+    expect(html).not.toContain('外观样式')
     expect(html).toContain('admin-appearance-top')
     expect(html).toContain('name="appearance-preset"')
     expect(html).toContain('高斯模糊主题')
@@ -325,7 +326,6 @@ describe('AdminDashboard', () => {
   it('validates settings URL fields before saving', () => {
     const baseInput = {
       siteTitle: 'Zeno',
-      siteSubtitle: '服务器运行概览',
       logoUrl: '/assets/logo/id.png',
       theme: 'system' as const,
       agentControllerUrl: '',
