@@ -40,8 +40,8 @@ describe('seedNodeLatencyFromSummary', () => {
       services: [],
     } as never, 'node-a', '1d')
 
-    expect(seeded?.points.filter((point) => point.targetId === 'primary')).toHaveLength(2)
-    expect(seeded?.points.find((point) => point.targetId === 'primary')?.medianMs).toBe(18)
-    expect(seeded?.points.find((point) => point.targetId === 'secondary')?.medianMs).toBe(30)
+    expect(seeded?.points.map((point) => point.targetId)).toEqual(['primary', 'secondary', 'primary', 'primary'])
+    expect(seeded?.points[0]?.medianMs).toBe(20)
+    expect(seeded?.points.slice(2).map((point) => point.medianMs)).toEqual([18, 19])
   })
 })

@@ -31,7 +31,7 @@ describe('sliding history range selector', () => {
     expect(html).toContain('role="group"')
     expect(html).toContain('aria-label="history range"')
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(1)
-    expect(html).toContain('class="is-active" aria-pressed="true">实时</button>')
+    expect(html).toMatch(/data-active="true"[^>]*aria-pressed="true"[^>]*>实时<\/button>/)
     expect(html).toContain('--slider-columns:3')
     expect(html).toContain('--slider-shift:0%')
   })

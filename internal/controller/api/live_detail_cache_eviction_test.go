@@ -6,6 +6,22 @@ import (
 	"time"
 )
 
+func TestDetailCacheFreshnessFollowsRequestedWindow(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		want time.Duration
+	}{
+		{name: "1h", want: detailCacheFreshFor},
+		{name: "1d", want: detailCacheFreshFor},
+		{name: "7d", want: detailCacheSevenDayFreshFor},
+		{name: "30d", want: detailCacheThirtyDayFreshFor},
+	} {
+		if got := detailCacheFreshness(latencyWindow{Name: test.name}); got != test.want {
+			t.Fatalf("freshness %s = %s, want %s", test.name, got, test.want)
+		}
+	}
+}
+
 func TestDetailJSONCachePrunesExpiredEntriesAndEvictsKeys(t *testing.T) {
 	cache := newDetailJSONCache()
 	ctx := context.Background()
@@ -13,7 +29,7 @@ func TestDetailJSONCachePrunesExpiredEntriesAndEvictsKeys(t *testing.T) {
 		t.Fatalf("prime old entry: %v", err)
 	}
 	cache.mu.Lock()
-	cache.entries["node-state:old:1h"] = detailJSONCacheEntry{payload: []byte(`{"old":true}`), updatedAt: time.Now().Add(-2 * time.Minute)}
+	cache.entries["node-state:old:1h"] = detailJSONCacheEntry{payload: []byte(`{"old":true}`), updatedAt: time.Now().Add(-2 * time.Minute), maxAge: time.Minute}
 	cache.generations["node-state:old:1h"] = 7
 	cache.mu.Unlock()
 	if _, err := cache.get(ctx, "node-state:new:1h", time.Minute, func() ([]byte, error) { return []byte(`{"new":true}`), nil }); err != nil {

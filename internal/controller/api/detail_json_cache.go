@@ -9,6 +9,7 @@ import (
 type detailJSONCacheEntry struct {
 	payload   []byte
 	updatedAt time.Time
+	maxAge    time.Duration
 }
 
 // jsonCacheFlight is shared by the detail and full-summary caches. A flight is
@@ -43,9 +44,9 @@ func (cache *detailJSONCache) get(ctx context.Context, key string, maxAge time.D
 	for {
 		now := time.Now()
 		cache.mu.Lock()
-		cache.pruneExpiredLocked(now, maxAge)
+		cache.pruneExpiredLocked(now)
 		generation := cache.generations[key]
-		if entry, ok := cache.entries[key]; ok && maxAge > 0 && now.Sub(entry.updatedAt) <= maxAge {
+		if entry, ok := cache.entries[key]; ok && entry.maxAge > 0 && now.Sub(entry.updatedAt) <= entry.maxAge {
 			payload := append([]byte(nil), entry.payload...)
 			cache.mu.Unlock()
 			return payload, nil
@@ -74,7 +75,7 @@ func (cache *detailJSONCache) get(ctx context.Context, key string, maxAge time.D
 		currentGeneration := cache.generations[key]
 		if err == nil && currentGeneration == generation {
 			payload = append([]byte(nil), payload...)
-			cache.entries[key] = detailJSONCacheEntry{payload: payload, updatedAt: time.Now()}
+			cache.entries[key] = detailJSONCacheEntry{payload: payload, updatedAt: time.Now(), maxAge: maxAge}
 		}
 		flight.payload = payload
 		flight.err = err
@@ -93,7 +94,7 @@ func (cache *detailJSONCache) get(ctx context.Context, key string, maxAge time.D
 	}
 }
 
-func (cache *detailJSONCache) refresh(key string, load func() ([]byte, error)) ([]byte, error) {
+func (cache *detailJSONCache) refreshWithAge(key string, maxAge time.Duration, load func() ([]byte, error)) ([]byte, error) {
 	if cache == nil {
 		return load()
 	}
@@ -107,7 +108,7 @@ func (cache *detailJSONCache) refresh(key string, load func() ([]byte, error)) (
 	cache.mu.Lock()
 	if err == nil && cache.generations[key] == generation {
 		payload = append([]byte(nil), payload...)
-		cache.entries[key] = detailJSONCacheEntry{payload: payload, updatedAt: time.Now()}
+		cache.entries[key] = detailJSONCacheEntry{payload: payload, updatedAt: time.Now(), maxAge: maxAge}
 	}
 	cache.mu.Unlock()
 	return append([]byte(nil), payload...), err
@@ -127,12 +128,9 @@ func (cache *detailJSONCache) evict(key string) {
 	cache.mu.Unlock()
 }
 
-func (cache *detailJSONCache) pruneExpiredLocked(now time.Time, maxAge time.Duration) {
-	if maxAge <= 0 {
-		return
-	}
+func (cache *detailJSONCache) pruneExpiredLocked(now time.Time) {
 	for key, entry := range cache.entries {
-		if now.Sub(entry.updatedAt) <= maxAge {
+		if entry.maxAge > 0 && now.Sub(entry.updatedAt) <= entry.maxAge {
 			continue
 		}
 		delete(cache.entries, key)

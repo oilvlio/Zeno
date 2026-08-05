@@ -3,7 +3,7 @@ import { DashboardHeader } from './DashboardHeader'
 import { ServerFlag } from './ServerFlag'
 import { availableCurrencyOptions, formatCurrencyAmount, normalizeCurrencyCode, normalizeCurrencyRates, type CurrencyCode, type CurrencyRates } from '../lib/currency'
 import { defaultSettings } from '../lib/appearance'
-import { slidingSelectorStyle } from '../lib/slidingSelector'
+import { SlidingSelector } from './SlidingSelector'
 import type { AdminSettings, AdminTheme } from '../types'
 
 function compactBytes(value: number): string {
@@ -69,17 +69,21 @@ export function HomeTopPanel({ settings = defaultSettings, onHome, onAdmin, onAd
 
 export function HomeRegionFilter({ regions, activeRegion, onChange }: { regions: string[]; activeRegion: string; onChange: (region: string) => void }) {
   const options = ['ALL', ...regions]
-  const activeIndex = Math.max(0, options.indexOf(activeRegion))
   return (
     <nav className="region-filter-bar" aria-label="服务器地区筛选">
-      <div className="sliding-selector region-filter-buttons" style={slidingSelectorStyle(options.length, activeIndex)}>
-        <button className="region-filter-all" type="button" data-region="ALL" data-active={activeRegion === 'ALL'} aria-pressed={activeRegion === 'ALL'} onClick={() => onChange('ALL')}><span className="region-all-text">全部</span></button>
-        {regions.map((region) => (
-          <button key={region} type="button" data-region={region} data-active={activeRegion === region} aria-pressed={activeRegion === region} aria-label={`筛选 ${region} 地区`} title={region} onClick={() => onChange(region)}>
-            <ServerFlag countryCode={region} />
-          </button>
-        ))}
-      </div>
+      <SlidingSelector
+        ariaLabel="服务器地区"
+        className="region-filter-buttons sliding-selector--medium"
+        options={options.map((region) => ({
+          value: region,
+          className: region === 'ALL' ? 'region-filter-all' : undefined,
+          ariaLabel: region === 'ALL' ? '全部' : `筛选 ${region} 地区`,
+          title: region === 'ALL' ? undefined : region,
+          content: region === 'ALL' ? <span className="region-all-text">全部</span> : <ServerFlag countryCode={region} />,
+        }))}
+        value={activeRegion}
+        onChange={onChange}
+      />
     </nav>
   )
 }

@@ -14,14 +14,14 @@ describe('admin login surface and top-card alignment', () => {
     expect(adminShellStyles).toMatch(/\.admin-login-card input:-webkit-autofill,[\s\S]*?\.admin-login-card input:-webkit-autofill:active\s*\{[^}]*background-color: transparent !important;[^}]*background-image: none !important;[^}]*box-shadow: none !important;[^}]*\}/)
   })
 
-  it('uses one exact front-and-admin top-card height at desktop and phone widths', () => {
+  it('keeps the desktop cards aligned while letting the phone admin chrome fit its controls', () => {
     expect(adminShellStyles).toMatch(/\.home-overview-card,[\s\S]*?\.admin-chrome-card\s*\{\s*height: 135px;\s*\}/)
-    expect(adminShellStyles).toMatch(/@media \(max-width: 767px\)\s*\{[\s\S]*?\.home-overview-card,[\s\S]*?\.admin-chrome-card\s*\{\s*height: 180px;\s*\}/)
+    expect(adminShellStyles).toMatch(/@media \(max-width: 767px\)\s*\{[\s\S]*?\.home-overview-card\s*\{\s*height: 180px;\s*\}[\s\S]*?\.admin-chrome-card\s*\{\s*height: auto; min-height: 0;\s*\}/)
   })
 
   it('keeps the phone admin navigation on one five-column row', () => {
     expect(adminShellStyles).toMatch(/\.admin-chrome-card \.admin-section-nav\s*\{[^}]*width: 100%;[^}]*grid-template-columns: repeat\(var\(--slider-columns\), minmax\(0, 1fr\)\);[^}]*\}/)
-    expect(adminShellStyles).toMatch(/@media \(max-width: 767px\)\s*\{[\s\S]*?\.admin-chrome-card \.admin-section-nav button\s*\{[^}]*height: 24px;[^}]*padding: 0 2px;[^}]*\}/)
+    expect(adminShellStyles).toMatch(/@media \(max-width: 767px\)\s*\{[\s\S]*?\.admin-chrome-card \.admin-section-nav button\s*\{[^}]*height: var\(--selector-height\);[^}]*padding: 0 3px;[^}]*\}/)
     expect(adminShellStyles).not.toContain('.admin-chrome-card .admin-section-nav button:last-child')
   })
 })

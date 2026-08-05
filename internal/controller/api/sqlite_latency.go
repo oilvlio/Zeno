@@ -136,6 +136,7 @@ func (bucket latencyGridBucket) lossPercent() float64 {
 type latencyGridDimension struct {
 	filterColumn string
 	seriesColumn string
+	sourceFilter string
 	extraJoins   string
 	extraFilter  string
 	seriesQuery  string
@@ -144,6 +145,11 @@ type latencyGridDimension struct {
 var latencyGridByNode = latencyGridDimension{
 	filterColumn: "node_id",
 	seriesColumn: "target_id",
+	// Constrain each source branch to the enabled target ids before SQLite
+	// aggregates it. Besides skipping disabled history, this lets the existing
+	// (node_id, target_id, ts/bucket_start) indexes seek each target's requested
+	// time range instead of scanning the node's entire retained history.
+	sourceFilter: " AND target_id IN (SELECT target_id FROM node_probe_targets WHERE node_id = ? AND enabled = 1)",
 	seriesQuery: `
 		SELECT pt.id, pt.name
 		FROM probe_targets pt
@@ -176,11 +182,11 @@ func latencyGridQuery(dimension latencyGridDimension) string {
 			       COALESCE(median_ms, 0) AS median_sum, CASE WHEN median_ms IS NULL THEN 0 ELSE 1 END AS median_count,
 			       COALESCE(avg_ms, 0) AS avg_sum, CASE WHEN avg_ms IS NULL THEN 0 ELSE 1 END AS avg_count,
 			       loss_percent AS loss_sum, 1 AS loss_count
-			FROM probe_rounds WHERE ` + dimension.filterColumn + ` = ? AND ts >= ? AND ts < ?
+			FROM probe_rounds WHERE ` + dimension.filterColumn + ` = ? AND ts >= ? AND ts < ?` + dimension.sourceFilter + `
 			UNION ALL
 			SELECT bucket_start AS ts, node_id, target_id,
 			       median_sum, median_count, avg_sum, avg_count, loss_sum, loss_count
-			FROM latency_history_rollups WHERE ` + dimension.filterColumn + ` = ? AND bucket_start >= ? AND bucket_start < ?
+			FROM latency_history_rollups WHERE ` + dimension.filterColumn + ` = ? AND bucket_start >= ? AND bucket_start < ?` + dimension.sourceFilter + `
 		)
 		SELECT (measurements.ts / ?) * ? AS bucket_ts, measurements.` + dimension.seriesColumn + `,
 		       SUM(median_sum) / NULLIF(SUM(median_count), 0),
@@ -220,8 +226,16 @@ func latencyGridValuesFor(
 	start, end, stepSeconds := latencyGridBounds(gridWindow)
 	rangeEnd := end.Add(gridWindow.Step).Unix()
 	buckets := make(map[string]map[int64]*latencyGridBucket, len(series))
-	rows, err := s.db.QueryContext(ctx, latencyGridQuery(dimension),
-		id, start.Unix(), rangeEnd, id, start.Unix(), rangeEnd, stepSeconds, stepSeconds, id)
+	queryArgs := []any{id, start.Unix(), rangeEnd}
+	if dimension.sourceFilter != "" {
+		queryArgs = append(queryArgs, id)
+	}
+	queryArgs = append(queryArgs, id, start.Unix(), rangeEnd)
+	if dimension.sourceFilter != "" {
+		queryArgs = append(queryArgs, id)
+	}
+	queryArgs = append(queryArgs, stepSeconds, stepSeconds, id)
+	rows, err := s.db.QueryContext(ctx, latencyGridQuery(dimension), queryArgs...)
 	if err != nil {
 		return nil, err
 	}

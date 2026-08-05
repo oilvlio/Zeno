@@ -365,7 +365,7 @@ export function App() {
   }
 
   return (
-    <main className="kulin-shell" data-theme={effectiveSettings.theme} data-background={hasBackgroundImage ? 'on' : 'off'} style={shellStyleForSettings(effectiveSettings)}>
+    <main className="kulin-shell" data-theme={effectiveSettings.theme} data-appearance={effectiveSettings.appearancePreset} data-background={hasBackgroundImage ? 'on' : 'off'} style={shellStyleForSettings(effectiveSettings)}>
       {(adminSurfaceMounted || route.kind === 'admin') && (
         <div hidden={route.kind !== 'admin'} aria-hidden={route.kind !== 'admin'} data-admin-ready={adminSurfaceReady}>
           <AdminModuleErrorBoundary fallback={<AdminDashboardLoadError />}>

@@ -1,4 +1,5 @@
-import { slidingSelectorStyle } from '../lib/slidingSelector'
+import { useEffect, useRef, useState } from 'react'
+import { SlidingSelector } from './SlidingSelector'
 
 interface HistoryRangeOption {
   value: string
@@ -11,26 +12,48 @@ interface HistoryRangeSelectorProps {
   value: string
   onChange: (value: string) => void
   className?: string
+  commitDelayMs?: number
 }
 
-export function HistoryRangeSelector({ ariaLabel, options, value, onChange, className = '' }: HistoryRangeSelectorProps) {
-  const activeIndex = Math.max(0, options.findIndex((option) => option.value === value))
-  const activeValue = options[activeIndex]?.value
-  const style = slidingSelectorStyle(options.length, activeIndex)
+export function HistoryRangeSelector({ ariaLabel, options, value, onChange, className = '', commitDelayMs = 0 }: HistoryRangeSelectorProps) {
+  const [displayValue, setDisplayValue] = useState(value)
+  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (commitTimerRef.current !== null) {
+      clearTimeout(commitTimerRef.current)
+      commitTimerRef.current = null
+    }
+    setDisplayValue(value)
+  }, [value])
+
+  useEffect(() => () => {
+    if (commitTimerRef.current !== null) clearTimeout(commitTimerRef.current)
+    commitTimerRef.current = null
+  }, [])
+
+  const selectRange = (nextValue: string) => {
+    if (nextValue === displayValue) return
+    setDisplayValue(nextValue)
+    if (commitTimerRef.current !== null) clearTimeout(commitTimerRef.current)
+    if (commitDelayMs <= 0) {
+      onChange(nextValue)
+      return
+    }
+    commitTimerRef.current = setTimeout(() => {
+      commitTimerRef.current = null
+      onChange(nextValue)
+    }, commitDelayMs)
+  }
 
   return (
-    <div className={`sliding-selector detail-range-row${className ? ` ${className}` : ''}`} role="group" aria-label={ariaLabel} style={style}>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          className={activeValue === option.value ? 'is-active' : ''}
-          aria-pressed={activeValue === option.value}
-          onClick={() => onChange(option.value)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <SlidingSelector
+      ariaLabel={ariaLabel}
+      role="group"
+      className={`detail-range-row sliding-selector--compact${className ? ` ${className}` : ''}`}
+      options={options.map((option) => ({ value: option.value, content: option.label }))}
+      value={displayValue}
+      onChange={selectRange}
+    />
   )
 }

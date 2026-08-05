@@ -184,8 +184,9 @@ describe('HomeTopPanel', () => {
     expect(shellStyleForSettings(settings)).toEqual({
       '--zeno-desktop-background-image': 'url("https://example.com/desktop-bg.webp")',
       '--zeno-mobile-background-image': 'url("https://example.com/mobile-bg.webp")',
-      '--zeno-mobile-background-size': 'contain',
       '--blue': '#6366f1',
+      '--foreground': '#f8fafc',
+      '--muted': '#cbd5e1',
       '--border': 'rgba(99, 102, 241, 0.340)',
       '--metric-shadow': 'rgba(99, 102, 241, 0.075)',
       '--page-surface': 'rgba(15, 23, 42, 0.580)',
@@ -197,6 +198,8 @@ describe('HomeTopPanel', () => {
       '--metric-bg': 'transparent',
       '--field-bg': 'transparent',
       '--control-bg': 'transparent',
+      '--usage-track-bg': 'rgba(148, 163, 184, 0.22)',
+      '--usage-track-border': 'rgba(203, 213, 225, 0.24)',
       '--zeno-popover-bg': 'rgb(15, 23, 42)',
       '--radius-panel': '24px',
       '--radius-card': '20px',
@@ -217,7 +220,6 @@ describe('HomeTopPanel', () => {
     })
     expect(shellStyleForSettings({ ...settings, mobileBackgroundUrl: '' })).toMatchObject({
       '--zeno-mobile-background-image': 'url("https://example.com/desktop-bg.webp")',
-      '--zeno-mobile-background-size': 'cover',
     })
     const defaultAppearanceSettings = {
       ...settings,

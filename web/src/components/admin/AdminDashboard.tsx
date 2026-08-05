@@ -6,7 +6,7 @@ import AdminOperationalWorkspace, { type AdminOperationalWorkspaceProps } from '
 import { AdminModuleErrorBoundary, AdminOperationalWorkspaceLoadError } from './AdminDashboardBoundary'
 import AdminSettingsSection from './AdminSettingsSection'
 import { defaultSettings } from '../../lib/appearance'
-import { slidingSelectorStyle } from '../../lib/slidingSelector'
+import { SlidingSelector } from '../SlidingSelector'
 import type { AdminNode, AdminNodeInstallCommand, AdminSettings, AdminTheme } from '../../types'
 import type { AdminAuthState, AdminLoadState } from '../../lib/adminModel'
 import { useAdminController } from '../../hooks/useAdminController'
@@ -205,7 +205,7 @@ export function AdminDashboard({
         )}
 
         {adminSessionReady && hasAdminToken && (
-          <div className="home-top-card admin-content-card">
+          <div className={`home-top-card admin-content-card${activeSection === 'notifications' || activeSection === 'account' || activeSection === 'settings' ? ' admin-content-card--grouped' : ''}`}>
             {authState.kind === 'error' && <div className="admin-state-card is-error">{authState.message}</div>}
             {adminState.kind === 'error' && <div className="admin-state-card is-error">Admin API 读取失败：{adminState.message}</div>}
 
@@ -248,21 +248,16 @@ export function AdminDashboard({
 }
 
 function AdminSectionNav({ activeSection, onSectionChange }: { activeSection: AdminSection; onSectionChange: (section: AdminSection) => void }) {
-  const activeIndex = Math.max(0, adminSections.findIndex((section) => section.id === activeSection))
   return (
-    <nav className="sliding-selector admin-section-nav" aria-label="后台导航" style={slidingSelectorStyle(adminSections.length, activeIndex)}>
-      {adminSections.map((section) => (
-        <button
-          key={section.id}
-          type="button"
-          data-active={activeSection === section.id}
-          aria-current={activeSection === section.id ? 'page' : undefined}
-          onClick={() => onSectionChange(section.id)}
-        >
-          <span>{section.label}</span>
-        </button>
-      ))}
-    </nav>
+    <SlidingSelector
+      as="nav"
+      ariaLabel="后台导航"
+      selectionMode="current"
+      className="admin-section-nav sliding-selector--medium"
+      options={adminSections.map((section) => ({ value: section.id, content: <span>{section.label}</span> }))}
+      value={activeSection}
+      onChange={onSectionChange}
+    />
   )
 }
 

@@ -108,11 +108,15 @@ export function LatencyDetail({
           <div className="monitor-heading-title">
             <div className="monitor-title-row">
               <h3>网络延迟</h3>
-              <label className="peak-switch">
-                <input type="checkbox" aria-label="平滑" checked={peakCut} onChange={(event) => setPeakCut(event.target.checked)} />
-                <span />
+              <button
+                type="button"
+                className={`peak-switch sliding-selector--compact${peakCut ? ' is-active' : ''}`}
+                aria-pressed={peakCut}
+                onClick={() => setPeakCut((current) => !current)}
+              >
+                <span aria-hidden="true" />
                 <b>平滑</b>
-              </label>
+              </button>
             </div>
             <p>{showLatencySkeleton ? '同步监控服务…' : `${targetSummaries.length} 个监控服务`}</p>
           </div>
@@ -122,6 +126,7 @@ export function LatencyDetail({
               options={rangeOptions}
               value={range}
               onChange={onRangeChange}
+              commitDelayMs={190}
             />
           </div>
         </header>

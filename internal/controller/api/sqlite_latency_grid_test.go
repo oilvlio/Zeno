@@ -336,7 +336,7 @@ func TestLatencyGridPointsPropagatesQueryErrors(t *testing.T) {
 	}
 }
 
-func TestLatencyGridQueryMatchesPreMergeSQL(t *testing.T) {
+func TestLatencyGridQueryKeepsDimensionFilters(t *testing.T) {
 	nodeQuery := latencyGridQuery(latencyGridByNode)
 	for _, want := range []string{
 		"FROM probe_rounds WHERE node_id = ? AND ts >= ? AND ts < ?",
@@ -352,6 +352,10 @@ func TestLatencyGridQueryMatchesPreMergeSQL(t *testing.T) {
 	if strings.Contains(nodeQuery, "JOIN nodes n") || strings.Contains(nodeQuery, "n.disabled = 0") {
 		t.Fatalf("node grid query must not join nodes:\n%s", nodeQuery)
 	}
+	const enabledTargetSourceFilter = "AND target_id IN (SELECT target_id FROM node_probe_targets WHERE node_id = ? AND enabled = 1)"
+	if got := strings.Count(nodeQuery, enabledTargetSourceFilter); got != 2 {
+		t.Fatalf("node grid source filter count = %d, want 2\n%s", got, nodeQuery)
+	}
 
 	serviceQuery := latencyGridQuery(latencyGridByTarget)
 	for _, want := range []string{
@@ -366,6 +370,9 @@ func TestLatencyGridQueryMatchesPreMergeSQL(t *testing.T) {
 		if !strings.Contains(serviceQuery, want) {
 			t.Fatalf("service grid query missing %q\n%s", want, serviceQuery)
 		}
+	}
+	if strings.Contains(serviceQuery, enabledTargetSourceFilter) {
+		t.Fatalf("service grid query must not use node source filter:\n%s", serviceQuery)
 	}
 	// Both dimensions keep the enabled-link join and the probe_targets join.
 	for name, query := range map[string]string{"node": nodeQuery, "service": serviceQuery} {

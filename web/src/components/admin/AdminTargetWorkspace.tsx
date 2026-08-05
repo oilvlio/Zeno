@@ -146,6 +146,7 @@ function AdminTargetCreateModal({ nodes, onCreate, onClose }: { nodes: AdminNode
           <AdminFormSection title="启用服务器">
             <AdminExpandedCheckList
               title="已启用服务器"
+              panelLabel="选择服务器"
               emptyText="暂无服务器"
               options={nodes.map((node) => ({ value: node.id, label: node.displayName || node.id }))}
               value={assignmentNodeIds}
@@ -214,7 +215,7 @@ function AdminTargetEditModal({ target, nodes, onUpdate, onClose }: { target: Ad
   }
 
   return (
-    <AdminModal title={`编辑延迟监控 · ${target.name}`} onClose={onClose}>
+    <AdminModal title="编辑延迟监控" onClose={onClose}>
       <form className="admin-target-edit-form admin-node-edit-form is-sectioned" aria-label={`${target.name} 探针目标编辑`} onSubmit={handleSubmit}>
         <AdminFormSection title="目标信息">
           <div className="admin-form-grid">
@@ -255,6 +256,7 @@ function AdminTargetEditModal({ target, nodes, onUpdate, onClose }: { target: Ad
           <AdminFormSection title="按服务器启用">
             <AdminExpandedCheckList
               title="已启用服务器"
+              panelLabel="选择服务器"
               emptyText="暂无服务器"
               options={assignmentRows.map((assignment) => ({ value: assignment.nodeId, label: assignment.nodeDisplayName || assignment.nodeId }))}
               value={assignmentNodeIds}

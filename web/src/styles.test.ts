@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 const stylesDirectory = dirname(fileURLToPath(import.meta.url))
@@ -11,17 +12,47 @@ const adminShellStyles = readFileSync(join(stylesDirectory, 'styles/admin-shell.
 const adminStyles = readFileSync(join(stylesDirectory, 'styles/admin.css'), 'utf8')
 const styles = [baseStyles, detailStyles, adminShellStyles, adminStyles].join('\n')
 
+function duplicateSelectors(source: string, from: string): string[] {
+  const occurrences = new Map<string, number[]>()
+  postcss.parse(source, { from }).walkRules((rule) => {
+    const context: string[] = []
+    for (let parent = rule.parent; parent && parent.type !== 'root'; parent = parent.parent) {
+      if (parent.type === 'atrule') context.unshift(`@${parent.name} ${parent.params}`.trim())
+    }
+    const selector = rule.selector.replace(/\s+/g, ' ').trim()
+    const key = `${context.join(' > ')} :: ${selector}`
+    const lines = occurrences.get(key) ?? []
+    lines.push(rule.source?.start?.line ?? 0)
+    occurrences.set(key, lines)
+  })
+  return [...occurrences]
+    .filter(([, lines]) => lines.length > 1)
+    .map(([selector, lines]) => `${from}:${lines.join(',')} ${selector}`)
+}
+
+describe('stylesheet structure', () => {
+  it('keeps selectors unique within the same at-rule scope', () => {
+    expect([
+      ...duplicateSelectors(baseStyles, 'styles.css'),
+      ...duplicateSelectors(detailStyles, 'styles/detail.css'),
+      ...duplicateSelectors(adminShellStyles, 'styles/admin-shell.css'),
+      ...duplicateSelectors(adminStyles, 'styles/admin.css'),
+    ]).toEqual([])
+  })
+})
+
 
 describe('mobile latency target layout', () => {
-  it('keeps latency targets in a separator grid without an outer perimeter', () => {
+  it('keeps every latency target fully bordered while overlapping shared dividers', () => {
     expect(styles).toContain('@media (max-width: 767px)')
     expect(baseStyles).toMatch(/\.kulin-shell\s*\{[^}]*overflow-x: clip;[^}]*\}/)
     expect(styles).toContain('.latency-target-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 0 12px; padding: 0; }')
     expect(styles).toMatch(/\.latency-target-grid\s*\{[^}]*margin: 0 24px;[^}]*border: 0;[^}]*\}/)
-    expect(styles).toMatch(/\.latency-target-grid button\s*\{[^}]*margin: 0;[^}]*border: 0;[^}]*border-radius: 0;[^}]*\}/)
+    expect(styles).toMatch(/\.latency-target-grid button\s*\{[^}]*margin: 0;[^}]*border: 0;[^}]*border-top: 1px solid var\(--divider\);[^}]*border-bottom: 1px solid var\(--divider\);[^}]*border-radius: 0;[^}]*\}/)
     expect(baseStyles).toMatch(/\.latency-target-grid button:not\(:nth-child\(7n \+ 1\)\)\s*\{[^}]*border-left: 1px solid/)
-    expect(baseStyles).toMatch(/\.latency-target-grid button:nth-child\(n \+ 8\)\s*\{[^}]*border-top: 1px solid/)
-    expect(baseStyles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.latency-target-grid button:not\(:nth-child\(7n \+ 1\)\) \{ border-left: 0; \}[\s\S]*?\.latency-target-grid button:nth-child\(n \+ 8\) \{ border-top: 0; \}[\s\S]*?\.latency-target-grid button:not\(:nth-child\(3n \+ 1\)\)[\s\S]*?border-left: 1px solid[\s\S]*?\.latency-target-grid button:nth-child\(n \+ 4\)[\s\S]*?border-top: 1px solid/)
+    expect(baseStyles).toMatch(/\.latency-target-grid button:last-child:not\(:nth-child\(7n\)\)\s*\{[^}]*border-right: 1px solid/)
+    expect(baseStyles).toContain('.latency-target-grid button:nth-child(n + 8) {\n  border-top: 0;\n}')
+    expect(baseStyles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.latency-target-grid button:not\(:nth-child\(7n \+ 1\)\) \{ border-left: 0; \}[\s\S]*?\.latency-target-grid button:last-child \{ border-right: 0; \}[\s\S]*?\.latency-target-grid button:not\(:nth-child\(3n \+ 1\)\)[\s\S]*?border-left: 1px solid[\s\S]*?\.latency-target-grid button:last-child:not\(:nth-child\(3n\)\)[\s\S]*?border-right: 1px solid/)
     expect(baseStyles).not.toContain(".latency-target-grid button[data-active='true'] { border-color:")
     expect(baseStyles).not.toContain(".latency-target-grid button:hover:not([data-active='true']) { border-color:")
     expect(styles).toContain('.latency-target-grid.is-loading button')
@@ -89,7 +120,7 @@ describe('homepage and admin shell layout', () => {
     expect(adminShellStyles).toMatch(/\.admin-chrome-card\s*\{[^}]*z-index: 30;[^}]*display: flex;[^}]*flex-direction: column;[^}]*\}/)
     expect(adminShellStyles).toMatch(/\.admin-content-card\s*\{[^}]*z-index: 10;[^}]*min-height: 360px;[^}]*padding: 20px;[^}]*\}/)
     expect(adminShellStyles).toMatch(/\.admin-chrome-card \.admin-toolbar\s*\{[^}]*margin-top: 0;[^}]*padding-top: 3px;[^}]*border-top: 1px solid var\(--border\);/)
-    expect(adminShellStyles).toContain('.admin-chrome-card .admin-toolbar { justify-content: center; padding-top: 5px; padding-bottom: 2px; }')
+    expect(adminShellStyles).toContain('.admin-chrome-card .admin-toolbar { flex: 0 0 auto; justify-content: center; padding-top: 7px; padding-bottom: 0; }')
   })
 
   it('keeps top controls transparent in desktop and touch interaction states', () => {
@@ -103,16 +134,19 @@ describe('homepage and admin shell layout', () => {
 
   it('keeps mobile homepage server cards aligned to the top card width', () => {
     expect(styles).toContain('@media (max-width: 767px)')
-    expect(styles).toContain('.kulin-node-card { max-width: none; min-height: 0; height: auto; }')
+    expect(styles).toMatch(/\.kulin-node-card\s*\{[^}]*max-width: none;[^}]*min-height: 0;[^}]*height: auto;[^}]*padding: 16px 16px 12px;[^}]*\}/)
   })
 
-  it('fits dedicated mobile backgrounds without cropping them against long page content', () => {
+  it('covers the mobile viewport with a fixed full-bleed background', () => {
     expect(styles).toContain('@media (max-width: 767px)')
     expect(styles).toContain('.kulin-shell[data-background=\'on\']::before')
     expect(styles).toContain('var(--zeno-mobile-background-image, var(--zeno-desktop-background-image, none))')
-    expect(styles).toContain('background-size: var(--zeno-mobile-background-size, cover)')
+    expect(styles).toContain('background-size: cover')
     expect(styles).toContain('box-shadow: inset 0 0 0 100vmax var(--zeno-background-overlay-color)')
     expect(styles).toContain('background-attachment: scroll')
+    expect(styles).toContain('-webkit-filter: none')
+    expect(styles).toContain('transform: none')
+    expect(styles).not.toContain('--zeno-mobile-background-size')
   })
 
   it('uses one unboxed desktop row and a no-scroll mobile two-column summary', () => {
@@ -124,7 +158,7 @@ describe('homepage and admin shell layout', () => {
     expect(styles).toContain('.home-summary__metric-value')
     expect(styles).toContain('.home-summary__metric--upload')
     expect(styles).toContain('.home-summary__metric--download')
-    expect(styles).toMatch(/\.home-top-card \.home-summary\s*\{[^}]*grid-template-columns: repeat\(6, minmax\(0, 1fr\)\);[^}]*padding: 12px 0 0;[^}]*border-top: 1px solid color-mix\(in srgb, var\(--border\) 82%, transparent\);[^}]*\}/)
+    expect(styles).toMatch(/\.home-top-card \.home-summary\s*\{[^}]*grid-template-columns: repeat\(6, minmax\(0, 1fr\)\);[^}]*padding: 12px 0 0;[^}]*border-top: 1px solid var\(--divider-strong\);[^}]*\}/)
     expect(styles).not.toMatch(/\.home-top-card \.home-summary\s*\{[^}]*border: 1px solid var\(--border\)/)
     expect(styles).not.toMatch(/\.home-top-card \.home-summary\s*\{[^}]*background:/)
     expect(styles).not.toMatch(/\.home-top-card \.home-summary\s*\{[^}]*border-radius:/)
@@ -190,7 +224,7 @@ describe('homepage and admin shell layout', () => {
     expect(styles).toContain('.spec-disk svg { color: #8b5cf6; }')
     expect(styles).toMatch(/\.node-usage-grid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*gap: 0;[^}]*\}/)
     expect(styles).toMatch(/\.usage-row\s*\{[^}]*display: flex;[^}]*gap: 6px;[^}]*padding: 6px 0;[^}]*\}/)
-    expect(styles).toContain('.usage-row + .usage-row { border-top: 1px solid')
+    expect(styles).not.toContain('.usage-row + .usage-row')
     expect(styles).toMatch(/\.usage-track\s*\{[^}]*height: 10px;[^}]*\}/)
     expect(styles).not.toContain('.usage-row__detail')
     expect(styles).not.toContain('.usage-row__icon')
@@ -259,7 +293,7 @@ describe('homepage and admin shell layout', () => {
     expect(styles).not.toContain('.home-summary__compact')
   })
 
-  it('keeps the theme menu aligned with the active card theme while utility popovers stay opaque', () => {
+  it('keeps theme and utility popovers legible on their themed translucent surfaces', () => {
     expect(styles).toContain(':root[data-zeno-theme="light"]')
     expect(styles).toContain(':root[data-zeno-theme="dark"]')
     expect(styles).toMatch(/:root\[data-zeno-theme="light"\]\s*\{[^}]*color-scheme: light;/)
@@ -267,15 +301,15 @@ describe('homepage and admin shell layout', () => {
     expect(styles).toContain('--zeno-popover-bg: light-dark(rgb(255, 255, 255), rgb(15, 23, 42))')
     expect(baseStyles).toMatch(/\.theme-menu-popover\s*\{[^}]*background: var\(--page-surface\);[^}]*color: var\(--foreground\);[^}]*\}/)
     expect(baseStyles).toMatch(/\.theme-menu-popover\s*\{[^}]*box-shadow: var\(--zeno-card-shadow\);[^}]*backdrop-filter: blur\(var\(--zeno-card-blur\)\);[^}]*\}/)
-    expect(baseStyles).toMatch(/\.theme-menu-popover\.is-gaussian\s*\{[^}]*background: color-mix\(in srgb, var\(--page-surface\) 30%, transparent\);[^}]*\}/)
+    expect(baseStyles).toMatch(/\.theme-menu-popover\.is-gaussian\s*\{[^}]*background: color-mix\(in srgb, var\(--page-surface\) 78%, var\(--zeno-popover-bg\)\);[^}]*\}/)
     expect(styles).not.toContain('--zeno-popover-blur')
     expect(baseStyles).toMatch(/\.admin-select-popover,\s*\.admin-install-platforms\s*\{[^}]*background: var\(--zeno-popover-bg\);[^}]*backdrop-filter: none;[^}]*\}/)
     expect(styles).toMatch(/\.home-currency-popover\s*\{[^}]*background: var\(--zeno-popover-bg\);[^}]*backdrop-filter: none;[^}]*\}/)
-    expect(adminStyles).toMatch(/\.admin-select-popover,\s*\.admin-install-platforms\s*\{[^}]*background: var\(--admin-secondary-surface\);[^}]*\}/)
-    expect(adminStyles).toMatch(/\.admin-date-popover\s*\{[^}]*background: var\(--admin-secondary-surface\);[^}]*backdrop-filter: none;[^}]*\}/)
-    expect(styles).toMatch(/\.admin-date-option-panel\s*\{[^}]*background: transparent;[^}]*backdrop-filter: none;[^}]*\}/)
-    expect(styles).toMatch(/\.admin-expanded-checklist__panel\s*\{[^}]*border-top: 1px solid var\(--border\);[^}]*background: transparent;[^}]*\}/)
-    expect(styles).toMatch(/\.admin-expanded-checklist__list\s*\{[^}]*background: transparent;[^}]*backdrop-filter: none;[^}]*\}/)
+    expect(adminStyles).toMatch(/\.admin-select-popover,\s*\.admin-install-platforms\s*\{[^}]*background: color-mix\(in srgb, var\(--page-surface\) 88%, transparent\);[^}]*backdrop-filter: blur\(16px\);[^}]*\}/)
+    expect(adminStyles).toMatch(/\.admin-date-popover\s*\{[^}]*background: color-mix\(in srgb, var\(--page-surface\) 88%, transparent\);[^}]*backdrop-filter: blur\(16px\);[^}]*\}/)
+    expect(styles).toMatch(/\.admin-date-option-panel\s*\{[^}]*background: color-mix\(in srgb, var\(--page-surface\) 52%, transparent\);[^}]*backdrop-filter: none;[^}]*\}/)
+    expect(styles).toMatch(/\.admin-assignment-field__body\s*\{[^}]*border-top: 1px solid var\(--divider\);[^}]*background: transparent;[^}]*\}/)
+    expect(styles).toMatch(/\.admin-assignment-field__list\s*\{[^}]*overflow: auto;[^}]*background: transparent;[^}]*\}/)
   })
 
   it('enforces the whole-app single-surface allowlist', () => {
@@ -290,7 +324,8 @@ describe('homepage and admin shell layout', () => {
     expect(baseStyles).toMatch(/\.home-top-card::before,\s*\.region-filter-bar::before,\s*\.state-panel::before,\s*\.kulin-node-card::before,\s*\.monitor-panel::before\s*\{[^}]*inset: -128px;[^}]*background-color: transparent;[^}]*background-image: var\(--zeno-desktop-background-image, none\);[^}]*background-attachment: fixed;[^}]*filter: blur\(var\(--zeno-card-blur\)\);[^}]*\}/)
     expect(baseStyles).toMatch(/\.home-top-card::before\s*\{[^}]*clip-path: inset\(128px round var\(--radius-panel\)\);[^}]*\}/)
     expect(baseStyles).toMatch(/\.home-top-card::after,\s*\.region-filter-bar::after,\s*\.state-panel::after,\s*\.kulin-node-card::after,\s*\.monitor-panel::after\s*\{[^}]*inset: 0;[^}]*border-radius: inherit;[^}]*background: var\(--page-surface\);[^}]*\}/)
-    expect(baseStyles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.kulin-shell\[data-background='on'\]::before\s*\{[^}]*background-image: var\(--zeno-mobile-background-image, var\(--zeno-desktop-background-image, none\)\);[^}]*filter: blur\(var\(--zeno-card-blur\)\);[^}]*transform: scale\(1\.06\);[^}]*\}/)
+    expect(baseStyles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.kulin-shell\[data-background='on'\]::before\s*\{[^}]*background-image: var\(--zeno-mobile-background-image, var\(--zeno-desktop-background-image, none\)\);[^}]*filter: none;[^}]*transform: none;[^}]*\}/)
+    expect(baseStyles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.kulin-shell\[data-appearance='gaussian_blur'\] \.home-top-card,[\s\S]*?\.monitor-panel\s*\{[^}]*backdrop-filter: blur\(var\(--zeno-card-blur\)\) saturate\(1\.06\);[^}]*\}/)
     expect(baseStyles).not.toContain('mobile-gaussian-layer')
     expect(baseStyles).not.toContain('--zeno-mobile-glass-mask')
     expect(baseStyles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.home-top-card::before,[\s\S]*?\.monitor-panel::before\s*\{[^}]*content: none;[^}]*\}/)
@@ -334,13 +369,13 @@ describe('homepage and admin shell layout', () => {
     expect(styles).toContain('overflow: hidden')
     expect(styles).toContain('.admin-chrome-card .admin-section-nav {')
     expect(styles).toContain('grid-template-columns: repeat(var(--slider-columns), minmax(0, 1fr))')
-    expect(styles).toContain('.admin-chrome-card .admin-section-nav button { height: 24px; padding: 0 2px; }')
+    expect(styles).toContain('.admin-chrome-card .admin-section-nav button { height: var(--selector-height); padding: 0 3px; }')
     expect(styles).not.toContain('.admin-chrome-card .admin-section-nav button:last-child')
     expect(styles).not.toContain('.admin-section-icon')
     expect(styles).not.toContain('scroll-snap-type: x proximity')
     expect(styles).toContain('.admin-modal { width: 100%; height: min(92dvh, 760px); max-height: calc(100dvh - 16px); border-radius: var(--radius-panel); padding: 0; }')
-    const actionFooterRules = [...adminStyles.matchAll(/\.admin-action-footer\s*\{([^}]*)\}/g)].map((match) => match[1])
-    expect(actionFooterRules.length).toBeGreaterThanOrEqual(2)
+    const actionFooterRules = [...adminStyles.matchAll(/(?:^|\n)\.admin-action-footer\s*\{([^}]*)\}/g)].map((match) => match[1])
+    expect(actionFooterRules.length).toBeGreaterThanOrEqual(1)
     expect(actionFooterRules[0]).toContain('position: static')
     expect(actionFooterRules[0]).toContain('z-index: auto')
     expect(actionFooterRules[0]).toContain('background: transparent')
@@ -469,7 +504,7 @@ describe('state history layout', () => {
     expect(styles).toContain('.detail-fact.is-wide')
     expect(styles).not.toContain('.detail-fact.is-emphasis')
     expect(detailStyles).not.toContain('--detail-inner-surface')
-    expect(detailStyles).toMatch(/\.detail-hero\s*\{[^}]*border: 0;[^}]*border-top: 1px solid color-mix\(in srgb, var\(--border\) 82%, transparent\);[^}]*border-radius: 0;[^}]*\}/)
+    expect(detailStyles).toMatch(/\.detail-hero\s*\{[^}]*border: 0;[^}]*border-top: 1px solid var\(--divider-strong\);[^}]*border-radius: 0;[^}]*\}/)
     expect(detailStyles).toMatch(/\.detail-title-button\s*\{[^}]*min-height: 24px;[^}]*align-items: center;[^}]*line-height: 24px;[^}]*\}/)
     expect(detailStyles).toMatch(/\.detail-title-flag\s*\{[^}]*width: 24px;[^}]*height: 24px;[^}]*flex: 0 0 24px;[^}]*\}/)
     expect(detailStyles).toMatch(/\.detail-title-button > span:last-child\s*\{[^}]*min-height: 24px;[^}]*display: flex;[^}]*align-items: center;[^}]*line-height: 24px;[^}]*\}/)
@@ -478,12 +513,12 @@ describe('state history layout', () => {
     expect(detailStyles).toContain('.detail-top-card .kulin-nav { padding: 0 0 9px; }')
     expect(detailStyles).toMatch(/\.detail-fact\s*\{[^}]*border: 0;[^}]*border-radius: 0;[^}]*background: transparent;[^}]*\}/)
     expect(detailStyles).toMatch(/\.detail-fact-strip--server \.detail-fact:nth-child\(n \+ 3\)\s*\{[^}]*border-top: 1px solid/)
-    expect(baseStyles).toMatch(/\.sliding-selector\s*\{[^}]*border: 1px solid var\(--border\);[^}]*background: transparent;[^}]*-webkit-tap-highlight-color: transparent;[^}]*\}/)
-    expect(baseStyles).toMatch(/\.sliding-selector::before\s*\{[^}]*top: 0;[^}]*bottom: 0;[^}]*left: 0;[^}]*border-radius: calc\(var\(--radius-field\) - 1px\);[^}]*background: var\(--blue\);[^}]*transform: translateX\(var\(--slider-shift\)\);[^}]*\}/)
+    expect(baseStyles).toMatch(/\.sliding-selector\s*\{[^}]*border: var\(--selector-border-width\) solid var\(--border\);[^}]*border-radius: var\(--selector-radius\);[^}]*background: transparent;[^}]*-webkit-tap-highlight-color: transparent;[^}]*\}/)
+    expect(baseStyles).toMatch(/\.sliding-selector::before\s*\{[^}]*top: 0;[^}]*bottom: 0;[^}]*left: 0;[^}]*border-radius: var\(--selector-inner-radius\);[^}]*background: var\(--blue\);[^}]*transform: translateX\(var\(--slider-shift\)\);[^}]*\}/)
     expect(baseStyles).not.toMatch(/\.nav-icon-button\.is-solid\s*\{[^}]*border-color:/)
     expect(detailStyles).not.toMatch(/\.detail-top-card \.nav-icon-button\.is-solid\s*\{[^}]*border-color:/)
     expect(styles).toContain('.resource-history-header h3 { margin: 0; color: var(--foreground); font-size: 20px; font-weight: 600; }')
-    expect(styles).toContain('border-top: 1px solid color-mix(in srgb, var(--border) 82%, transparent)')
+    expect(styles).toContain('border-top: 1px solid var(--divider-strong)')
     expect(styles).not.toContain('.detail-hero,\n.latency-panel,')
     expect(styles).not.toContain('.detail-info-card')
   })
@@ -491,18 +526,19 @@ describe('state history layout', () => {
   it('keeps every detail-page control and nested card on the outer single blur layer', () => {
     expect(baseStyles).toMatch(/\.nav-icon-button\s*\{[^}]*background: transparent;[^}]*box-shadow: none;[^}]*\}/)
     expect(baseStyles).toMatch(/\.login-link\s*\{[^}]*background: transparent;[^}]*box-shadow: none;[^}]*\}/)
-    expect(baseStyles).toMatch(/\.theme-menu-popover\s*\{[^}]*border: 1px solid var\(--border\);[^}]*background: var\(--page-surface\);[^}]*color: var\(--foreground\);[^}]*\}/)
+    expect(baseStyles).toMatch(/\.theme-menu-popover\s*\{[^}]*border: 0;[^}]*background: var\(--page-surface\);[^}]*color: var\(--foreground\);[^}]*\}/)
     expect(detailStyles).toMatch(/\.detail-status-pill\s*\{[^}]*border: 1px solid currentColor;[^}]*background: transparent;[^}]*\}/)
     expect(baseStyles).toMatch(/\.sliding-selector > button\s*\{[^}]*-webkit-appearance: none;[^}]*appearance: none;[^}]*touch-action: manipulation;[^}]*-webkit-tap-highlight-color: transparent;[^}]*\}/)
     expect(baseStyles).toMatch(/\.sliding-selector > button\.is-active,[\s\S]*?\.sliding-selector > button\[data-active='true'\]\s*\{[^}]*background: transparent;[^}]*color: #fff;[^}]*box-shadow: none;[^}]*\}/)
     expect(baseStyles).toMatch(/\.sliding-selector > button:active\s*\{[^}]*background: transparent;[^}]*transform: none;[^}]*\}/)
-    expect(baseStyles).toMatch(/\.sliding-selector > button:focus-visible\s*\{[^}]*border-radius: calc\(var\(--radius-field\) - 1px\);[^}]*outline: none;[^}]*box-shadow: inset 0 0 0 2px/)
+    expect(baseStyles).toMatch(/\.sliding-selector > button:focus-visible\s*\{[^}]*border-radius: var\(--selector-inner-radius\);[^}]*outline: none;[^}]*box-shadow: inset 0 0 0 2px/)
     expect(detailStyles).not.toContain('button.is-active {\n  background: transparent;\n  color: #fff;\n  border-color: transparent;')
-    expect(detailStyles).toMatch(/\.peak-switch span\s*\{[^}]*border: 1px solid var\(--border\);[^}]*background: transparent;[^}]*\}/)
-    expect(baseStyles).toMatch(/\.latency-target-grid button\[data-active='true'\]\s*\{[^}]*background: color-mix\(in srgb, var\(--blue\) 12%, transparent\);[^}]*box-shadow: none;[^}]*\}/)
-    expect(baseStyles).toMatch(/\.theme-menu-popover button\[data-active='true'\]\s*\{[^}]*background: color-mix\(in srgb, var\(--blue\) 12%, transparent\);[^}]*\}/)
+    expect(detailStyles).toMatch(/\.peak-switch span\s*\{[^}]*border: 1px solid currentColor;[^}]*background: transparent;[^}]*\}/)
+    expect(baseStyles).toMatch(/\.latency-target-grid button\[data-active='true'\]\s*\{[^}]*background: color-mix\(in srgb, var\(--blue\) 11%, transparent\);[^}]*box-shadow: none;[^}]*\}/)
+    expect(baseStyles).toMatch(/\.theme-menu-popover button\[data-active='true'\]\s*\{[^}]*background: color-mix\(in srgb, var\(--blue\) 14%, transparent\);[^}]*\}/)
     expect(adminShellStyles).toMatch(/\.admin-section-nav button\[data-active='true'\]\s*\{[^}]*background: transparent;[^}]*color: #fff;[^}]*box-shadow: none;[^}]*\}/)
-    expect(baseStyles).toMatch(/\.latency-tooltip-card\s*\{[^}]*background: color-mix\(in srgb, var\(--page-surface\) 82%, transparent\);[^}]*backdrop-filter: blur\(14px\) saturate\(1\.08\);[^}]*\}/)
+    expect(baseStyles).toMatch(/\.latency-tooltip-viewport\s*\{[^}]*height: 100%;[^}]*align-items: center;[^}]*\}/)
+    expect(baseStyles).toMatch(/\.latency-tooltip-card\s*\{[^}]*max-height: 100%;[^}]*overflow-y: auto;[^}]*border: 0;[^}]*background: color-mix\(in srgb, var\(--page-surface\) 82%, transparent\);[^}]*backdrop-filter: blur\(14px\) saturate\(1\.08\);[^}]*\}/)
     expect(baseStyles).toMatch(/\.resource-chart-tooltip\s*\{[^}]*background: transparent;[^}]*box-shadow: none;[^}]*\}/)
     expect(baseStyles).toMatch(/\.home-top-card,\s*\.region-filter-bar,\s*\.state-panel,\s*\.kulin-node-card,\s*\.monitor-panel\s*\{[^}]*backdrop-filter: none;/)
     expect(baseStyles).toMatch(/\.home-top-card::before,[\s\S]*?\.monitor-panel::before\s*\{[^}]*filter: blur\(var\(--zeno-card-blur\)\);/)
@@ -532,8 +568,8 @@ describe('state history layout', () => {
     expect(styles).toContain('border-radius: var(--radius-pill)')
   })
 
-  it('renders stationary Gaussian cards from an overscanned background image, not backdrop-filter', () => {
-    expect(baseStyles).toContain('.kulin-node-card:hover { transform: none;')
+  it('keeps desktop Gaussian cards on the stationary overscanned background while hover only changes top', () => {
+    expect(baseStyles).toMatch(/@media \(hover: hover\) and \(pointer: fine\)[\s\S]*?\.kulin-node-card:hover\s*\{[^}]*top: -5px;[^}]*transform: none;[^}]*\}/)
     expect(baseStyles).not.toContain('transition: transform 160ms ease')
     expect(baseStyles).not.toContain(".kulin-shell[data-background='on'] .kulin-node-card:hover")
     expect(baseStyles).toMatch(/\.home-top-card,\s*\.region-filter-bar,\s*\.state-panel,\s*\.kulin-node-card,\s*\.monitor-panel\s*\{[^}]*backdrop-filter: none;/)
@@ -599,7 +635,7 @@ describe('Kulin-inspired color polish', () => {
     expect(styles).toContain('.resource-card.tone-green')
     expect(styles).toContain('.resource-chart-tooltip')
     expect(styles).toContain('.server-flag__image')
-    expect(styles).toMatch(/\.region-filter-buttons\s*\{[^}]*width: fit-content;[^}]*grid-template-columns: repeat\(var\(--slider-columns\), 42px\);[^}]*border: 0;[^}]*\}/)
+    expect(styles).toMatch(/\.region-filter-buttons\s*\{[^}]*--selector-border-width: 0px;[^}]*--selector-option-width: 42px;[^}]*width: fit-content;[^}]*grid-template-columns: repeat\(var\(--slider-columns\), var\(--selector-option-width\)\);[^}]*\}/)
     expect(styles).toMatch(/\.region-filter-buttons \.server-flag \{[^}]*font-size: 16px;[^}]*\}/)
     expect(styles).not.toMatch(/\.region-filter-buttons \.server-flag \{[^}]*(?:border|box-shadow|overflow)[^}]*\}/)
     expect(styles).toContain('.latency-chart-tooltip foreignObject')

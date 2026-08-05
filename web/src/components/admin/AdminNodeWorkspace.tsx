@@ -374,7 +374,7 @@ function AdminNodeEditModal({ node, targets, onUpdate, onInstallCommand, onClose
   }
 
   return (
-    <AdminModal title={`编辑服务器 · ${node.displayName}`} onClose={onClose}>
+    <AdminModal title="编辑服务器" onClose={onClose}>
       <form className="admin-node-edit-form is-sectioned" aria-label={`${node.displayName} 节点编辑`} onSubmit={handleSubmit}>
         <AdminFormSection title="服务器名称">
           <div className="admin-form-grid">
@@ -389,20 +389,19 @@ function AdminNodeEditModal({ node, targets, onUpdate, onInstallCommand, onClose
           ) : (
             <AdminExpandedCheckList
               title="已选延迟监控"
+              panelLabel="选择监控服务"
               emptyText="暂无延迟监控"
               options={sortedTargets.map((target) => ({ value: target.id, label: target.name }))}
               value={selectedTargetIds}
               onChange={updateSelectedTargetIds}
-              renderRight={(option, checked) => (
+              renderRight={(option) => (
                 <label className="admin-home-monitor-radio">
                   <input
                     type="radio"
                     name={`home-monitor-${node.id}`}
+                    aria-label={`首页展示 ${option.label}`}
                     checked={homeTargetId === option.value}
-                    onChange={() => {
-                      if (!checked) updateSelectedTargetIds([...selectedTargetIds, option.value])
-                      setHomeTargetId(option.value)
-                    }}
+                    onChange={() => setHomeTargetId(option.value)}
                   />
                   <span>首页展示</span>
                 </label>

@@ -3,6 +3,7 @@ import type { AdminSettingsUpdateInput } from '../../api/adminClient'
 import { appearancePresetOptions, appearancePresets, appearanceValuesForSettings, themeOptions, type AppearanceValues } from '../../lib/appearance'
 import { validateAdminSettingsInput } from '../../lib/adminSettings'
 import type { AdminSettings, AppearancePreset } from '../../types'
+import { SlidingSelector } from '../SlidingSelector'
 import { AdminSegmentedField } from './AdminFields'
 import { AdminFormSection, AdminActionFooter } from './AdminPrimitives'
 
@@ -60,29 +61,26 @@ export default function AdminSettingsSection({ settings, onUpdate }: AdminSettin
 
   return (
     <section className="admin-settings-section admin-workspace-panel" aria-label="admin settings">
-      <header className="admin-section-heading">
-        <div><h3>站点设置</h3></div>
-      </header>
-      <form className="admin-settings-form admin-node-edit-form is-sectioned" aria-label="外观配置" onSubmit={handleSubmit}>
-        <AdminFormSection title="站点信息">
+      <form className="admin-settings-form admin-node-edit-form is-sectioned admin-workspace-form" aria-label="外观配置" onSubmit={handleSubmit}>
+        <AdminFormSection className="home-top-card admin-workspace-card" title="站点信息">
           <div className="admin-form-grid">
             <label><span>站点标题</span><input name="site-title" autoComplete="off" defaultValue={settings.siteTitle} /></label>
             <label><span>站点副标题</span><input name="site-subtitle" autoComplete="off" defaultValue={settings.siteSubtitle} /></label>
             <label><span>头像 / Logo URL</span><input name="logo-url" autoComplete="off" defaultValue={settings.logoUrl} placeholder="可留空" /></label>
           </div>
         </AdminFormSection>
-        <AdminFormSection title="主题与背景">
+        <AdminFormSection className="home-top-card admin-workspace-card" title="主题与背景">
           <div className="admin-form-grid">
             <AdminSegmentedField name="theme" label="主题" defaultValue={settings.theme} options={themeOptions} />
             <label><span>电脑端背景图 URL</span><input name="desktop-background-url" autoComplete="off" defaultValue={settings.desktopBackgroundUrl || settings.backgroundUrl} placeholder="可留空" /></label>
             <label><span>手机端背景图 URL</span><input name="mobile-background-url" autoComplete="off" defaultValue={settings.mobileBackgroundUrl} placeholder="可留空，默认跟随电脑端" /></label>
           </div>
         </AdminFormSection>
-        <AdminFormSection title="外观样式">
+        <AdminFormSection className="home-top-card admin-workspace-card" title="外观样式">
           <div className="admin-appearance-layout">
             <div className="admin-appearance-main">
               <div className="admin-appearance-top">
-                <AdminAppearancePresetCards value={appearance.appearancePreset} onChange={updateAppearancePreset} />
+                <AdminAppearancePresetSlider value={appearance.appearancePreset} onChange={updateAppearancePreset} />
                 <label className="admin-color-field">
                   <span>主题色</span>
                   <span className="admin-color-field__row">
@@ -103,40 +101,48 @@ export default function AdminSettingsSection({ settings, onUpdate }: AdminSettin
             <AdminAppearancePreview appearance={appearance} />
           </div>
         </AdminFormSection>
-        <AdminFormSection title="Agent 接入">
+        <AdminFormSection className="home-top-card admin-workspace-card" title="Agent 接入">
           <div className="admin-form-grid">
             <label><span>Agent 接入 URL</span><input name="agent-controller-url" autoComplete="off" defaultValue={settings.agentControllerUrl} placeholder="留空则使用当前后台访问地址" /></label>
           </div>
         </AdminFormSection>
-        <AdminFormSection title="自定义 CSS">
+        <AdminFormSection className="home-top-card admin-workspace-card" title="自定义 CSS">
           <div className="admin-form-grid">
             <label className="admin-form-span-2">
               <span>自定义 CSS</span>
               <textarea className="admin-code-field" name="custom-code" defaultValue={settings.customCode} spellCheck={false} placeholder={'<style>\n.home-top-card { border-color: #2563eb; }\n</style>'} />
             </label>
           </div>
+          {settingsError && <p className="admin-install-error">{settingsError}</p>}
+          <AdminActionFooter><button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存设置'}</button></AdminActionFooter>
         </AdminFormSection>
-        {settingsError && <p className="admin-install-error">{settingsError}</p>}
-        <AdminActionFooter><button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存设置'}</button></AdminActionFooter>
       </form>
     </section>
   )
 }
 
-function AdminAppearancePresetCards({ value, onChange }: { value: AppearancePreset; onChange: (value: string) => void }) {
+function AdminAppearancePresetSlider({ value, onChange }: { value: AppearancePreset; onChange: (value: string) => void }) {
   return (
-    <div className="admin-appearance-presets" role="radiogroup" aria-label="外观模板">
+    <div className="admin-appearance-preset-field">
+      <span>主题样式</span>
       <input type="hidden" name="appearance-preset" value={value} />
-      {appearancePresetOptions.map((option) => {
-        const preset = appearancePresets[option.value]
-        const active = value === option.value
-        return (
-          <button key={option.value} type="button" role="radio" aria-checked={active} data-active={active} onClick={() => onChange(option.value)}>
-            <span>{option.label}</span>
-            <small>{Math.round(preset.cardOpacity * 100)}% · {preset.cardBlur}px</small>
-          </button>
-        )
-      })}
+      <SlidingSelector
+        ariaLabel="外观模板"
+        role="group"
+        className="admin-appearance-preset-slider sliding-selector--large"
+        options={appearancePresetOptions.map((option) => {
+          return {
+            value: option.value,
+            content: (
+              <span className="admin-appearance-preset-option">
+                <strong>{option.label}</strong>
+              </span>
+            ),
+          }
+        })}
+        value={value}
+        onChange={onChange}
+      />
     </div>
   )
 }

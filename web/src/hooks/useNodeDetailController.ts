@@ -63,20 +63,22 @@ export function seedNodeLatencyFromSummary(summary: SummaryData | null, nodeId: 
       lossPercent: item.lossPercent ?? 0,
     }]
   }) ?? []
-  const latestPoints = summaries
-    .filter((item) => hourlyPreview.length === 0 || item.targetId !== primary?.targetId)
-    .map((item) => ({
-      ts: item.updatedAt || new Date().toISOString(),
-      targetId: item.targetId,
-      targetName: item.targetName,
-      medianMs: item.medianMs,
-      avgMs: item.avgMs ?? null,
-      lossPercent: item.lossPercent ?? 0,
-    }))
+  // Seed every target in the summary's display order before appending the
+  // primary target's preview history. The full history payload uses the same
+  // display order, so the monitor tiles no longer reorder after the request
+  // replaces this lightweight seed.
+  const latestPoints = summaries.map((item) => ({
+    ts: item.updatedAt || new Date().toISOString(),
+    targetId: item.targetId,
+    targetName: item.targetName,
+    medianMs: item.medianMs,
+    avgMs: item.avgMs ?? null,
+    lossPercent: item.lossPercent ?? 0,
+  }))
   return {
     nodeId,
     range,
-    points: [...hourlyPreview, ...latestPoints],
+    points: [...latestPoints, ...hourlyPreview],
   }
 }
 

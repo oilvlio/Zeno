@@ -49,11 +49,8 @@ export default function AdminAccountSection({ account, onUpdate, onLogout }: Adm
 
   return (
     <section className="admin-account-section admin-workspace-panel" aria-label="账户设置">
-      <header className="admin-section-heading">
-        <div><h3>账户</h3></div>
-      </header>
-      <form className="admin-account-form admin-node-edit-form is-sectioned" aria-label="修改账号和密码" onSubmit={handleSubmit}>
-        <AdminFormSection title="登录信息">
+      <form className="admin-account-form admin-node-edit-form is-sectioned admin-workspace-form" aria-label="修改账号和密码" onSubmit={handleSubmit}>
+        <AdminFormSection className="home-top-card admin-workspace-card" title="登录信息">
           <div className="admin-form-grid">
             <label>
               <span>账号</span>
@@ -65,7 +62,7 @@ export default function AdminAccountSection({ account, onUpdate, onLogout }: Adm
             </label>
           </div>
         </AdminFormSection>
-        <AdminFormSection title="修改密码">
+        <AdminFormSection className="home-top-card admin-workspace-card" title="密码与会话">
           <div className="admin-form-grid">
             <label>
               <span>新密码</span>
@@ -76,12 +73,12 @@ export default function AdminAccountSection({ account, onUpdate, onLogout }: Adm
               <input name="confirm-password" type="password" autoComplete="new-password" placeholder="留空则不修改" />
             </label>
           </div>
+          <AdminActionFooter>
+            {onLogout && <button className="admin-account-logout-button" type="button" onClick={onLogout}>退出登录</button>}
+            <button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存账户'}</button>
+          </AdminActionFooter>
+          {message && <p className={`admin-install-error${message.kind === 'success' ? ' is-success' : ''}`}>{message.text}</p>}
         </AdminFormSection>
-        <AdminActionFooter>
-          {onLogout && <button className="admin-account-logout-button" type="button" onClick={onLogout}>退出登录</button>}
-          <button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存账户'}</button>
-        </AdminActionFooter>
-        {message && <p className={`admin-install-error${message.kind === 'success' ? ' is-success' : ''}`}>{message.text}</p>}
       </form>
     </section>
   )

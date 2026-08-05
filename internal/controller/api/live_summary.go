@@ -127,14 +127,16 @@ var summaryWebSocketUpgrader = websocket.Upgrader{
 }
 
 const (
-	summaryCacheHTTPFreshFor    = 30 * time.Second
-	summaryCacheBackgroundDelay = 350 * time.Millisecond
-	summaryHTTPQueryTimeout     = 5 * time.Second
-	summaryGenerationMaxRetries = 1
-	detailCacheFreshFor         = 3 * time.Second
-	detailPublishTimeout        = 5 * time.Second
-	websocketWriteTimeout       = 5 * time.Second
-	websocketReadTimeout        = 75 * time.Second
+	summaryCacheHTTPFreshFor     = 30 * time.Second
+	summaryCacheBackgroundDelay  = 350 * time.Millisecond
+	summaryHTTPQueryTimeout      = 5 * time.Second
+	summaryGenerationMaxRetries  = 1
+	detailCacheFreshFor          = 3 * time.Second
+	detailCacheSevenDayFreshFor  = time.Minute
+	detailCacheThirtyDayFreshFor = 5 * time.Minute
+	detailPublishTimeout         = 5 * time.Second
+	websocketWriteTimeout        = 5 * time.Second
+	websocketReadTimeout         = 75 * time.Second
 )
 
 func (h *handler) handleSummaryWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -371,13 +373,24 @@ func (h *handler) loadSummaryJSON(ctx context.Context, maxAge time.Duration, all
 }
 
 func cachedDetailJSON[T any](h *handler, ctx context.Context, key, subjectID string, window latencyWindow, load func(context.Context, string, latencyWindow) (T, error)) ([]byte, error) {
-	return h.detailCache.get(ctx, key, detailCacheFreshFor, func() ([]byte, error) {
+	return h.detailCache.get(ctx, key, detailCacheFreshness(window), func() ([]byte, error) {
 		value, err := load(ctx, subjectID, window)
 		if err != nil {
 			return nil, err
 		}
 		return json.Marshal(value)
 	})
+}
+
+func detailCacheFreshness(window latencyWindow) time.Duration {
+	switch window.Name {
+	case "7d":
+		return detailCacheSevenDayFreshFor
+	case "30d":
+		return detailCacheThirtyDayFreshFor
+	default:
+		return detailCacheFreshFor
+	}
 }
 
 func (h *handler) nodeStateJSON(ctx context.Context, nodeID string, window latencyWindow) ([]byte, error) {
@@ -547,7 +560,7 @@ func publishDetail[T any](
 		if !h.liveHub.hasClients(topic) {
 			continue
 		}
-		payload, err := h.detailCache.refresh(topic, func() ([]byte, error) {
+		payload, err := h.detailCache.refreshWithAge(topic, detailCacheFreshness(window), func() ([]byte, error) {
 			value, err := load(ctx, subjectID, window)
 			if err != nil {
 				return nil, err

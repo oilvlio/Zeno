@@ -51,6 +51,27 @@ func TestDetailJSONCacheCoalescesConcurrentLoads(t *testing.T) {
 	}
 }
 
+func TestDetailJSONCachePrunesEntriesUsingStoredFreshness(t *testing.T) {
+	cache := newDetailJSONCache()
+	now := time.Now().Add(-2 * time.Minute)
+	cache.entries["short"] = detailJSONCacheEntry{payload: []byte(`{"short":true}`), updatedAt: now, maxAge: time.Minute}
+	cache.entries["long"] = detailJSONCacheEntry{payload: []byte(`{"long":true}`), updatedAt: now, maxAge: 5 * time.Minute}
+
+	if _, err := cache.get(context.Background(), "trigger", time.Minute, func() ([]byte, error) {
+		return []byte(`{"trigger":true}`), nil
+	}); err != nil {
+		t.Fatalf("trigger prune: %v", err)
+	}
+
+	cache.mu.Lock()
+	_, hasShort := cache.entries["short"]
+	_, hasLong := cache.entries["long"]
+	cache.mu.Unlock()
+	if hasShort || !hasLong {
+		t.Fatalf("stored freshness pruning short=%v long=%v, want false/true", hasShort, hasLong)
+	}
+}
+
 func TestDetailJSONCacheRefreshWinsOverOlderInflightLoad(t *testing.T) {
 	cache := newDetailJSONCache()
 	oldStarted := make(chan struct{})
@@ -70,7 +91,7 @@ func TestDetailJSONCacheRefreshWinsOverOlderInflightLoad(t *testing.T) {
 	}()
 	<-oldStarted
 
-	payload, err := cache.refresh("node-state:example-node-a:1h", func() ([]byte, error) {
+	payload, err := cache.refreshWithAge("node-state:example-node-a:1h", detailCacheFreshFor, func() ([]byte, error) {
 		return []byte(`{"value":"fresh"}`), nil
 	})
 	if err != nil {

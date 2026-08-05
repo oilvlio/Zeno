@@ -244,6 +244,7 @@ export function LatencyChart({
           aria-label={hoverColumn?.title ?? '延迟图表悬浮区域'}
           onMouseEnter={handleHoverMove}
           onMouseMove={handleHoverMove}
+          onClick={handleHoverMove}
         />
         {hoverColumn && (
           <LatencyTooltip
@@ -287,29 +288,30 @@ function useLatencyChartLayout() {
 
 function LatencyTooltip({ column, series, x: tooltipAnchorX, layout }: { column: HoverColumn; series: KulinTargetSeries[]; x: number; layout: typeof desktopLayout }) {
   const { width, height, pad } = layout
-  const tooltipColumns = column.points.length > 6 ? 2 : 1
-  const tooltipRows = Math.ceil(column.points.length / tooltipColumns)
-  const tooltipWidth = tooltipColumns === 2 ? 390 : 270
-  const rowHeight = 24
-  const tooltipHeight = 58 + tooltipRows * rowHeight
-  const tooltipX = Math.max(pad.left, Math.min(width - pad.right - tooltipWidth, tooltipAnchorX + 12))
+  const isMobile = width <= 480
+  const plotWidth = width - pad.left - pad.right
   const plotHeight = height - pad.top - pad.bottom
-  const centeredY = pad.top + Math.max(6, (plotHeight - tooltipHeight) / 2)
-  const tooltipY = Math.max(pad.top + 4, Math.min(height - pad.bottom - tooltipHeight, centeredY))
+  const tooltipColumns = column.points.length > (isMobile ? 4 : 6) ? 2 : 1
+  const preferredWidth = tooltipColumns === 2 ? 390 : 270
+  const tooltipWidth = Math.min(preferredWidth, plotWidth)
+  const tooltipViewportHeight = plotHeight - 8
+  const tooltipX = Math.max(pad.left, Math.min(width - pad.right - tooltipWidth, tooltipAnchorX + 12))
 
   return (
-    <g className="latency-chart-tooltip" transform={`translate(${tooltipX} ${tooltipY})`}>
-      <foreignObject width={tooltipWidth} height={tooltipHeight}>
-        <div className="latency-tooltip-card">
-          <time>{formatTooltipTime(column.createdAt)}</time>
-          <div className="latency-tooltip-grid" style={{ gridTemplateColumns: `repeat(${tooltipColumns}, minmax(0, 1fr))` }}>
-            {column.points.map((point) => (
-              <span key={`${point.key}-${column.createdAt}`} className="latency-tooltip-row">
-                <i style={{ backgroundColor: latencySeriesColor(paletteIndexForKey(series, point.key)) }} />
-                <b>{point.label}</b>
-                <strong>{formatLatencyValue(point.delay)}</strong>
-              </span>
-            ))}
+    <g className="latency-chart-tooltip" transform={`translate(${tooltipX} ${pad.top + 4})`}>
+      <foreignObject width={tooltipWidth} height={tooltipViewportHeight}>
+        <div className="latency-tooltip-viewport">
+          <div className="latency-tooltip-card">
+            <time>{formatTooltipTime(column.createdAt)}</time>
+            <div className="latency-tooltip-grid" style={{ gridTemplateColumns: `repeat(${tooltipColumns}, minmax(0, 1fr))` }}>
+              {column.points.map((point) => (
+                <span key={`${point.key}-${column.createdAt}`} className="latency-tooltip-row">
+                  <i style={{ backgroundColor: latencySeriesColor(paletteIndexForKey(series, point.key)) }} />
+                  <b>{point.label}</b>
+                  <strong>{formatLatencyValue(point.delay)}</strong>
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </foreignObject>

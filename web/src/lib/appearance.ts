@@ -32,7 +32,7 @@ export const appearancePresets: Record<AppearancePreset, AppearanceValues> = {
   gaussian_blur: {
     ...defaultAppearancePreset,
     appearancePreset: 'gaussian_blur',
-    cardOpacity: 0.58,
+    cardOpacity: 0.66,
     cardBlur: 18,
     borderStrength: 0.34,
     shadowStrength: 0.34,
@@ -120,6 +120,9 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
   const themeColor = appearance.themeColor
   const themeRgb = hexToRgb(themeColor)
   const cardOpacity = appearance.cardOpacity
+  const highContrastGaussian = resolved === 'dark' && appearance.appearancePreset === 'gaussian_blur'
+  const foreground = resolved === 'dark' ? '#f8fafc' : '#0f172a'
+  const muted = highContrastGaussian ? '#cbd5e1' : resolved === 'dark' ? '#94a3b8' : '#53657d'
   const surfaceBase = resolved === 'dark' ? '15, 23, 42' : '255, 255, 255'
   const shadowBase = resolved === 'dark' ? '0, 0, 0' : '15, 23, 42'
   const shadowAlpha = 0.04 + appearance.shadowStrength * (resolved === 'dark' ? 0.44 : 0.22)
@@ -128,8 +131,9 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
   return {
     '--zeno-desktop-background-image': desktopBackgroundUrl === '' ? 'none' : backgroundImageValue(desktopBackgroundUrl),
     '--zeno-mobile-background-image': hasDedicatedMobileBackground ? backgroundImageValue(mobileBackgroundUrl) : (desktopBackgroundUrl === '' ? 'none' : backgroundImageValue(desktopBackgroundUrl)),
-    '--zeno-mobile-background-size': hasDedicatedMobileBackground ? 'contain' : 'cover',
     '--blue': themeColor,
+    '--foreground': foreground,
+    '--muted': muted,
     '--border': rgbaFromHex(themeColor, appearance.borderStrength),
     '--metric-shadow': rgbaFromHex(themeColor, Math.max(0.06, appearance.shadowStrength * 0.22)),
     '--page-surface': pageSurface,
@@ -141,6 +145,8 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
     '--metric-bg': 'transparent',
     '--field-bg': 'transparent',
     '--control-bg': 'transparent',
+    '--usage-track-bg': highContrastGaussian ? 'rgba(148, 163, 184, 0.22)' : resolved === 'dark' ? 'rgba(148, 163, 184, 0.12)' : 'rgba(148, 163, 184, 0.08)',
+    '--usage-track-border': highContrastGaussian ? 'rgba(203, 213, 225, 0.24)' : resolved === 'dark' ? 'rgba(148, 163, 184, 0.14)' : 'rgba(148, 163, 184, 0.12)',
     '--zeno-popover-bg': `rgb(${surfaceBase})`,
     '--radius-panel': `${appearance.cardRadius}px`,
     '--radius-card': `${Math.max(10, appearance.cardRadius - 4)}px`,
@@ -157,6 +163,8 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
 
 const documentThemeVariableNames = [
   '--blue',
+  '--foreground',
+  '--muted',
   '--border',
   '--metric-shadow',
   '--page-surface',
@@ -168,6 +176,8 @@ const documentThemeVariableNames = [
   '--metric-bg',
   '--field-bg',
   '--control-bg',
+  '--usage-track-bg',
+  '--usage-track-border',
   '--zeno-popover-bg',
   '--radius-panel',
   '--radius-card',

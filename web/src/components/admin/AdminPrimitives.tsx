@@ -73,9 +73,9 @@ export function AdminDeleteConfirmModal({ title, subjectName, confirmLabel, onCo
   )
 }
 
-export function AdminFormSection({ title, children }: { title: string; children: ReactNode }) {
+export function AdminFormSection({ title, children, className = '' }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <section className="admin-form-section" aria-label={title}>
+    <section className={`admin-form-section${className ? ` ${className}` : ''}`} aria-label={title}>
       <h4 className="admin-form-section-title">{title}</h4>
       {children}
     </section>

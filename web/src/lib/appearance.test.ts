@@ -16,7 +16,7 @@ describe('appearance presets', () => {
       appearancePreset: 'gaussian_blur',
       cardRadius: appearancePresets.default.cardRadius,
       themeColor: appearancePresets.default.themeColor,
-      cardOpacity: 0.58,
+      cardOpacity: 0.66,
       cardBlur: 18,
       borderStrength: 0.34,
       shadowStrength: 0.34,

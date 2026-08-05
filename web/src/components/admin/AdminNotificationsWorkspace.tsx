@@ -13,7 +13,7 @@ function AdminAlertRulesSection({ rules, nodes, onUpdate }: { rules: AdminAlertR
   const availableRules = rules.filter((rule) => !rule.enabled)
 
   return (
-    <section className="admin-notification-block admin-alert-rule-section" aria-label="通知类型规则">
+    <section className="home-top-card admin-workspace-card admin-notification-block admin-alert-rule-section" aria-label="通知类型规则">
       <div className="admin-block-heading">
         <h4>通知类型</h4>
         <button className="admin-primary-action" type="button" onClick={() => setAddingRule(true)}>添加通知类型</button>
@@ -194,21 +194,19 @@ export function AdminNotificationsWorkspace({ channels, rules, nodes, onChannelC
   const [editingChannel, setEditingChannel] = useState<AdminNotificationChannel | null>(null)
 
   return (
-    <section className="admin-notification-section admin-workspace-panel" aria-label="admin notification settings">
-      <header className="admin-section-heading">
-        <div>
-          <h3>通知</h3>
-        </div>
-        <button className="admin-primary-action" type="button" onClick={() => setCreatingChannel(true)}>添加通知渠道</button>
-      </header>
+    <section className="admin-notification-section admin-workspace-panel admin-workspace-panel--grouped" aria-label="admin notification settings">
+      <div className="admin-workspace-card-list">
+        <section className="home-top-card admin-workspace-card admin-notification-block" aria-label="通知渠道">
+          <div className="admin-block-heading">
+            <h4>通知渠道</h4>
+            <button className="admin-primary-action" type="button" onClick={() => setCreatingChannel(true)}>添加通知渠道</button>
+          </div>
+          {channels.length === 0 && <div className="admin-state-card">还没有通知渠道。</div>}
+          {channels.length > 0 && <AdminNotificationChannelList channels={channels} onDelete={onChannelDelete} onEdit={setEditingChannel} />}
+        </section>
 
-      <section className="admin-notification-block" aria-label="通知渠道">
-        <h4>通知渠道</h4>
-        {channels.length === 0 && <div className="admin-state-card">还没有通知渠道。</div>}
-        {channels.length > 0 && <AdminNotificationChannelList channels={channels} onDelete={onChannelDelete} onEdit={setEditingChannel} />}
-      </section>
-
-      <AdminAlertRulesSection rules={rules} nodes={nodes} onUpdate={onRuleUpdate} />
+        <AdminAlertRulesSection rules={rules} nodes={nodes} onUpdate={onRuleUpdate} />
+      </div>
 
       {creatingChannel && (
         <AdminNotificationChannelCreateModal
@@ -288,7 +286,7 @@ function AdminNotificationChannelEditModal({ channel, onUpdate, onTest, onClose 
   }
 
   return (
-    <AdminModal title="编辑通知渠道" onClose={onClose}>
+    <AdminModal title="编辑通知渠道" className="admin-notification-channel-modal" onClose={onClose}>
       <form className="admin-notification-edit-form admin-node-edit-form is-sectioned" aria-label="编辑通知渠道" onSubmit={handleSubmit}>
         <AdminFormSection title="渠道配置">
           <div className="admin-form-grid admin-channel-form-grid">
@@ -343,7 +341,7 @@ function AdminNotificationChannelCreateModal({ onCreate, onClose }: { onCreate: 
   }
 
   return (
-    <AdminModal title="添加通知渠道" onClose={onClose}>
+    <AdminModal title="添加通知渠道" className="admin-notification-channel-modal" onClose={onClose}>
       <form className="admin-notification-create-form admin-node-edit-form is-sectioned" aria-label="添加通知渠道" onSubmit={handleSubmit}>
         <AdminFormSection title="渠道配置">
           <div className="admin-form-grid admin-channel-form-grid">

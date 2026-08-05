@@ -284,15 +284,24 @@ export function AdminSegmentedField({ name, label, options, value, defaultValue,
 
 type AdminExpandedCheckListOption = { value: string; label: string }
 
-export function AdminExpandedCheckList({ options, value, onChange, title = '已选', emptyText = '暂无可选项', renderRight }: { options: AdminExpandedCheckListOption[]; value: string[]; onChange: (value: string[]) => void; title?: string; emptyText?: string; renderRight?: (option: AdminExpandedCheckListOption, checked: boolean) => ReactNode }) {
+interface AdminExpandedCheckListProps {
+  options: AdminExpandedCheckListOption[]
+  value: string[]
+  onChange: (value: string[]) => void
+  title?: string
+  panelLabel?: string
+  emptyText?: string
+  renderRight?: (option: AdminExpandedCheckListOption) => ReactNode
+}
+
+export function AdminExpandedCheckList({ options, value, onChange, title = '已选', panelLabel = '选择项目', emptyText = '暂无可选项', renderRight }: AdminExpandedCheckListProps) {
   const [expanded, setExpanded] = useState(false)
   const optionValues = new Set(options.map((option) => option.value))
   const normalizedValue = Array.from(new Set((Array.isArray(value) ? value : []).filter((item) => optionValues.has(item))))
   const selected = new Set(normalizedValue)
   const selectedLabels = options.filter((option) => selected.has(option.value)).map((option) => option.label)
-  const selectedSummary = selectedLabels.length === 0
-    ? '未选择'
-    : `${selectedLabels.slice(0, 2).join('、')}${selectedLabels.length > 2 ? ` 等 ${selectedLabels.length} 项` : ''}`
+  const selectionSummary = selectedLabels.length > 0 ? selectedLabels.join('、') : '未选择'
+  const allSelected = options.length > 0 && normalizedValue.length === options.length
   const toggleValue = (optionValue: string, checked: boolean) => {
     if (checked) {
       onChange(Array.from(new Set([...normalizedValue, optionValue])))
@@ -302,47 +311,50 @@ export function AdminExpandedCheckList({ options, value, onChange, title = '已�
   }
 
   return (
-    <div className="admin-expanded-checklist">
-      <div className="admin-expanded-checklist__header">
-        <button className="admin-expanded-checklist__trigger" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
-          <span className="admin-expanded-checklist__copy">
-            <strong>{title}</strong>
-            <small title={selectedLabels.join('、')}>{selectedSummary}</small>
-          </span>
-          <span className="admin-expanded-checklist__meta">
-            <span>{normalizedValue.length}/{options.length}</span>
-            <ChevronDownIcon expanded={expanded} />
-          </span>
-        </button>
-      </div>
+    <section className="admin-assignment-field" data-open={expanded}>
+      <button className="admin-assignment-field__header" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
+        <span className="admin-assignment-field__heading">
+          <strong>{title}</strong>
+          <span title={selectionSummary}>{selectionSummary}</span>
+        </span>
+        <span className="admin-assignment-field__meta">
+          <span>{normalizedValue.length} / {options.length}</span>
+          <ChevronDownIcon expanded={expanded} />
+        </span>
+      </button>
       {expanded && (
-        <div className="admin-expanded-checklist__panel">
-          <div className="admin-expanded-checklist__toolbar">
-            <span>选择项目</span>
-            {options.length > 0 && <AdminBulkSelectButton selectedCount={normalizedValue.length} totalCount={options.length} onSelectAll={() => onChange(options.map((option) => option.value))} onClear={() => onChange([])} />}
+        <div className="admin-assignment-field__body">
+          <div className="admin-assignment-field__toolbar">
+            <span>{panelLabel}</span>
+            {options.length > 0 && (
+              <button className="admin-assignment-field__bulk" type="button" onClick={() => onChange(allSelected ? [] : options.map((option) => option.value))}>
+                {allSelected ? '清空' : '全选'}
+              </button>
+            )}
           </div>
-          <div className="admin-expanded-checklist__list" role="list">
-            {options.length === 0 && <div className="admin-expanded-checklist__empty">{emptyText}</div>}
+          <div className="admin-assignment-field__list" role="list">
+            {options.length === 0 && <div className="admin-assignment-field__empty">{emptyText}</div>}
             {options.map((option) => {
               const checked = selected.has(option.value)
               return (
-                <div className="admin-expanded-checklist__item" role="listitem" data-selected={checked} key={option.value}>
-                  <input type="checkbox" aria-label={option.label} checked={checked} onChange={(event) => toggleValue(option.value, event.currentTarget.checked)} />
-                  <button type="button" title={option.label} aria-pressed={checked} onClick={() => toggleValue(option.value, !checked)}>{option.label}</button>
-                  {renderRight?.(option, checked)}
+                <div className="admin-assignment-field__row" role="listitem" data-checked={checked} key={option.value}>
+                  <button className="admin-assignment-field__option" type="button" title={option.label} aria-pressed={checked} onClick={() => toggleValue(option.value, !checked)}>
+                    <span className="admin-assignment-field__check" aria-hidden="true">{checked && <SelectionCheckIcon />}</span>
+                    <span className="admin-assignment-field__label">{option.label}</span>
+                  </button>
+                  {checked && renderRight && <div className="admin-assignment-field__side">{renderRight(option)}</div>}
                 </div>
               )
             })}
           </div>
         </div>
       )}
-    </div>
+    </section>
   )
 }
 
-function AdminBulkSelectButton({ selectedCount, totalCount, onSelectAll, onClear }: { selectedCount: number; totalCount: number; onSelectAll: () => void; onClear: () => void }) {
-  const allSelected = totalCount > 0 && selectedCount === totalCount
-  return <button className="admin-bulk-select-button" type="button" onClick={allSelected ? onClear : onSelectAll}>{allSelected ? '清空' : '全选'}</button>
+function SelectionCheckIcon() {
+  return <svg viewBox="0 0 14 14"><path d="m3 7.2 2.3 2.2L11 4" /></svg>
 }
 
 const adminDateWeekdays = ['一', '二', '三', '四', '五', '六', '日']
