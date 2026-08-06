@@ -178,10 +178,68 @@ func StateAverageSelectSQL() string {
 	return strings.Join(averages, ", ")
 }
 
+// StateLatestGridSQL renders one representative state sample per display
+// bucket. Historical resource charts need a bounded number of points, not an
+// average over every high-frequency raw row in the requested window. Seeking
+// the newest raw or compacted sample in each bucket turns a 30-day read from a
+// scan of millions of wide rows into a few hundred indexed lookups while still
+// preserving the chart's configured timestamps and point count.
+func StateLatestGridSQL() string {
+	rawColumns := make([]string, 0, len(StateRollupMetrics))
+	rollupColumns := make([]string, 0, len(StateRollupMetrics))
+	selectedColumns := make([]string, 0, len(StateRollupMetrics))
+	for _, metric := range StateRollupMetrics {
+		rawColumns = append(rawColumns, "sample."+metric)
+		rollupColumns = append(rollupColumns,
+			"rollup."+metric+"_sum / NULLIF(rollup."+metric+"_count, 0) AS "+metric,
+		)
+		selectedColumns = append(selectedColumns,
+			"CASE WHEN raw_latest.source_ts IS NOT NULL AND (rollup_latest.source_ts IS NULL OR raw_latest.source_ts >= rollup_latest.source_ts) THEN raw_latest."+metric+" ELSE rollup_latest."+metric+" END",
+		)
+	}
+	return `
+		WITH RECURSIVE buckets(bucket_ts, sample_index) AS (
+			SELECT ?, 0
+			UNION ALL
+			SELECT bucket_ts + ?, sample_index + 1
+			FROM buckets
+			WHERE sample_index + 1 < ?
+		),
+		raw_latest AS (
+			SELECT buckets.bucket_ts, sample.ts AS source_ts, ` + strings.Join(rawColumns, ", ") + `
+			FROM buckets
+			LEFT JOIN state_samples AS sample ON sample.id = (
+				SELECT id
+				FROM state_samples INDEXED BY idx_state_samples_node_ts
+				WHERE node_id = ? AND ts >= buckets.bucket_ts AND ts < buckets.bucket_ts + ?
+				ORDER BY ts DESC, id DESC
+				LIMIT 1
+			)
+		),
+		rollup_latest AS (
+			SELECT buckets.bucket_ts, rollup.bucket_start AS source_ts, ` + strings.Join(rollupColumns, ", ") + `
+			FROM buckets
+			LEFT JOIN state_history_rollups AS rollup ON rollup.rowid = (
+				SELECT rowid
+				FROM state_history_rollups
+				WHERE node_id = ? AND bucket_start >= buckets.bucket_ts AND bucket_start < buckets.bucket_ts + ?
+				ORDER BY bucket_start DESC
+				LIMIT 1
+			)
+		)
+		SELECT raw_latest.bucket_ts, ` + strings.Join(selectedColumns, ", ") + `
+		FROM raw_latest
+		JOIN rollup_latest USING (bucket_ts)
+		WHERE raw_latest.source_ts IS NOT NULL OR rollup_latest.source_ts IS NOT NULL
+		ORDER BY raw_latest.bucket_ts ASC
+	`
+}
+
 // Prebuilt statements. Generation is deterministic, so building once at
 // init keeps hot read paths free of string assembly.
 var (
 	StateRollupInsertQuery = StateRollupInsertSQL()
 	StateSourceQuery       = StateSourceSQL()
 	StateAverageSelect     = StateAverageSelectSQL()
+	StateLatestGridQuery   = StateLatestGridSQL()
 )

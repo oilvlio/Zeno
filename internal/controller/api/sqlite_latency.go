@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/shui1iao/zeno/internal/controller/history"
 )
 
 type sqliteLatencyQueries struct {
@@ -134,12 +136,14 @@ func (bucket latencyGridBucket) lossPercent() float64 {
 // which column identifies each returned series, and the dimension-specific joins
 // and filters. Everything else (bucketing, window bounds, aggregation) is shared.
 type latencyGridDimension struct {
-	filterColumn string
-	seriesColumn string
-	sourceFilter string
-	extraJoins   string
-	extraFilter  string
-	seriesQuery  string
+	filterColumn       string
+	seriesColumn       string
+	sourceFilter       string
+	extraJoins         string
+	extraFilter        string
+	seriesQuery        string
+	sampleRoundFilter  string
+	sampleRollupFilter string
 }
 
 var latencyGridByNode = latencyGridDimension{
@@ -151,12 +155,15 @@ var latencyGridByNode = latencyGridDimension{
 	// time range instead of scanning the node's entire retained history.
 	sourceFilter: " AND target_id IN (SELECT target_id FROM node_probe_targets WHERE node_id = ? AND enabled = 1)",
 	seriesQuery: `
-		SELECT pt.id, pt.name
+		SELECT pt.id AS series_id, pt.name AS series_name,
+		       ROW_NUMBER() OVER (ORDER BY pt.display_order ASC, pt.name ASC, pt.id ASC) AS series_order
 		FROM probe_targets pt
 		LEFT JOIN node_probe_targets npt ON npt.target_id = pt.id AND npt.node_id = ?
 		WHERE COALESCE(npt.enabled, 0) = 1
 		ORDER BY pt.display_order ASC, pt.name ASC, pt.id ASC
 	`,
+	sampleRoundFilter:  "rounds.node_id = ? AND rounds.target_id = grid.series_id",
+	sampleRollupFilter: "rollup_rows.node_id = ? AND rollup_rows.target_id = grid.series_id",
 }
 
 var latencyGridByTarget = latencyGridDimension{
@@ -167,12 +174,95 @@ var latencyGridByTarget = latencyGridDimension{
 	extraFilter: `
 		  AND n.disabled = 0`,
 	seriesQuery: `
-		SELECT n.id, n.display_name
+		SELECT n.id AS series_id, n.display_name AS series_name,
+		       ROW_NUMBER() OVER (ORDER BY n.display_order ASC, n.display_name ASC, n.id ASC) AS series_order
 		FROM nodes n
 		LEFT JOIN node_probe_targets npt ON npt.node_id = n.id AND npt.target_id = ?
 		WHERE n.disabled = 0 AND COALESCE(npt.enabled, 0) = 1
 		ORDER BY n.display_order ASC, n.display_name ASC, n.id ASC
 	`,
+	sampleRoundFilter:  "rounds.node_id = grid.series_id AND rounds.target_id = ?",
+	sampleRollupFilter: "rollup_rows.node_id = grid.series_id AND rollup_rows.target_id = ?",
+}
+
+func useHistoricalLatencySampling(window latencyWindow) bool {
+	return window.Name == "7d" || window.Name == "30d"
+}
+
+func latencyGridSampleQuery(dimension latencyGridDimension) string {
+	return `
+		WITH RECURSIVE buckets(bucket_ts, sample_index) AS (
+			SELECT ?, 0
+			UNION ALL
+			SELECT bucket_ts + ?, sample_index + 1
+			FROM buckets
+			WHERE sample_index + 1 < ?
+		),
+		series AS (` + dimension.seriesQuery + `),
+		grid AS (
+			SELECT buckets.bucket_ts, series.series_id, series.series_name, series.series_order
+			FROM buckets CROSS JOIN series
+		)
+		SELECT grid.bucket_ts, grid.series_id, grid.series_name,
+		       CASE WHEN recent.ts IS NOT NULL AND (historical.bucket_start IS NULL OR recent.ts >= historical.bucket_start)
+		            THEN recent.median_ms ELSE historical.median_sum / NULLIF(historical.median_count, 0) END,
+		       CASE WHEN recent.ts IS NOT NULL AND (historical.bucket_start IS NULL OR recent.ts >= historical.bucket_start)
+		            THEN COALESCE(recent.avg_ms, recent.median_ms)
+		            ELSE COALESCE(historical.avg_sum / NULLIF(historical.avg_count, 0), historical.median_sum / NULLIF(historical.median_count, 0)) END,
+		       CASE WHEN recent.ts IS NOT NULL AND (historical.bucket_start IS NULL OR recent.ts >= historical.bucket_start)
+		            THEN recent.loss_percent ELSE historical.loss_sum / NULLIF(historical.loss_count, 0) END
+		FROM grid
+		LEFT JOIN probe_rounds AS recent ON recent.id = (
+			SELECT rounds.id
+			FROM probe_rounds AS rounds INDEXED BY idx_probe_rounds_node_target_ts
+			WHERE ` + dimension.sampleRoundFilter + `
+			  AND rounds.ts >= grid.bucket_ts AND rounds.ts < grid.bucket_ts + ?
+			ORDER BY rounds.ts DESC, rounds.id DESC
+			LIMIT 1
+		)
+		LEFT JOIN latency_history_rollups AS historical ON historical.rowid = (
+			SELECT rollup_rows.rowid
+			FROM latency_history_rollups AS rollup_rows
+			WHERE ` + dimension.sampleRollupFilter + `
+			  AND rollup_rows.bucket_start >= grid.bucket_ts AND rollup_rows.bucket_start < grid.bucket_ts + ?
+			ORDER BY rollup_rows.bucket_start DESC
+			LIMIT 1
+		)
+		ORDER BY grid.bucket_ts ASC, grid.series_order ASC
+	`
+}
+
+func latencyGridSampleValuesFor(ctx context.Context, s *sqliteLatencyQueries, id string, window latencyWindow, dimension latencyGridDimension) ([]latencyGridPointValue, error) {
+	start, _, stepSeconds := latencyGridBounds(window)
+	rows, err := s.db.QueryContext(ctx, latencyGridSampleQuery(dimension),
+		start.Unix(), stepSeconds, window.Samples,
+		id, id, stepSeconds, id, stepSeconds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	points := make([]latencyGridPointValue, 0, window.Samples)
+	for rows.Next() {
+		var bucketTS int64
+		var series latencyGridTarget
+		var median, avg, loss sql.NullFloat64
+		if err := rows.Scan(&bucketTS, &series.ID, &series.Name, &median, &avg, &loss); err != nil {
+			return nil, err
+		}
+		points = append(points, latencyGridPointValue{
+			TS:          time.Unix(bucketTS, 0).UTC().Format(time.RFC3339),
+			Series:      series,
+			MedianMS:    floatPtr(median),
+			AvgMS:       floatPtr(avg),
+			LossPercent: nullFloatOr(loss, 0),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return points, nil
 }
 
 func latencyGridQuery(dimension latencyGridDimension) string {
@@ -214,6 +304,9 @@ func latencyGridValuesFor(
 	gridWindow, ok := resolveLatencyGridWindow(window.Name)
 	if !ok {
 		return nil, nil
+	}
+	if useHistoricalLatencySampling(gridWindow) {
+		return latencyGridSampleValuesFor(ctx, s, id, gridWindow, dimension)
 	}
 	series, err := s.latencyGridSeries(ctx, dimension.seriesQuery, id)
 	if err != nil {
@@ -323,7 +416,8 @@ func (s *sqliteLatencyQueries) latencyGridSeries(ctx context.Context, query, id 
 	var series []latencyGridTarget
 	for rows.Next() {
 		var item latencyGridTarget
-		if err := rows.Scan(&item.ID, &item.Name); err != nil {
+		var order int
+		if err := rows.Scan(&item.ID, &item.Name, &order); err != nil {
 			return nil, err
 		}
 		series = append(series, item)
@@ -347,13 +441,37 @@ func latencyGridBounds(window latencyWindow) (time.Time, time.Time, int64) {
 }
 
 func (s *sqliteLatencyQueries) statePoints(ctx context.Context, nodeID string, window latencyWindow) ([]StatePoint, error) {
+	if window.Samples <= 0 {
+		return []StatePoint{}, nil
+	}
+	if !useHistoricalStateSampling(window) {
+		return s.aggregatedStatePoints(ctx, nodeID, window)
+	}
+	start, _, stepSeconds := latencyGridBounds(window)
+	rows, err := s.db.QueryContext(ctx, history.StateLatestGridQuery,
+		start.Unix(), stepSeconds, window.Samples,
+		nodeID, stepSeconds,
+		nodeID, stepSeconds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanStateHistoryRows(rows)
+}
+
+func useHistoricalStateSampling(window latencyWindow) bool {
+	return window.Name == "1d" || window.Name == "7d" || window.Name == "30d"
+}
+
+func (s *sqliteLatencyQueries) aggregatedStatePoints(ctx context.Context, nodeID string, window latencyWindow) ([]StatePoint, error) {
 	since := time.Now().UTC().Add(-time.Duration(window.Samples) * window.Step).Unix()
 	stepSeconds := int64(window.Step.Seconds())
 	if stepSeconds <= 0 {
 		stepSeconds = 1
 	}
-	query := `WITH measurements AS (` + stateHistorySourceQuery + `)
-		SELECT (ts / ?) * ? AS bucket_ts, ` + stateHistoryAverageSelect + `
+	query := `WITH measurements AS (` + history.StateSourceQuery + `)
+		SELECT (ts / ?) * ? AS bucket_ts, ` + history.StateAverageSelect + `
 		FROM measurements
 		GROUP BY bucket_ts
 		ORDER BY bucket_ts ASC`
@@ -362,7 +480,10 @@ func (s *sqliteLatencyQueries) statePoints(ctx context.Context, nodeID string, w
 		return nil, err
 	}
 	defer rows.Close()
+	return scanStateHistoryRows(rows)
+}
 
+func scanStateHistoryRows(rows *sql.Rows) ([]StatePoint, error) {
 	var points []StatePoint
 	for rows.Next() {
 		point, err := scanStateHistoryPoint(rows)

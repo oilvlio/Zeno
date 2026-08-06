@@ -197,6 +197,30 @@ func TestLatencyGridPointsWindowBoundaryAndValues(t *testing.T) {
 	}
 }
 
+func TestHistoricalLatencyGridUsesLatestSamplePerDisplayBucket(t *testing.T) {
+	ctx := context.Background()
+	store := newLatencyGridTestStore(t)
+	window, _ := resolveLatencyGridWindow("7d")
+	seedLatencyGridFixture(ctx, t, store, window)
+	start, _, _ := latencyGridBounds(window)
+
+	points, err := store.latencyGridPoints(ctx, "node-a", window)
+	if err != nil {
+		t.Fatalf("historical latency grid: %v", err)
+	}
+	firstTimestamp := start.Format(time.RFC3339)
+	for _, point := range points {
+		if point.TargetID != "t-1" || point.TS != firstTimestamp {
+			continue
+		}
+		assertFloatPtr(t, "latest historical median", point.MedianMS, 20)
+		assertFloatPtr(t, "latest historical avg", point.AvgMS, 24)
+		assertFloat(t, "latest historical loss", point.LossPercent, 10)
+		return
+	}
+	t.Fatalf("missing first historical point for t-1 at %s", firstTimestamp)
+}
+
 func TestServiceLatencyGridPointsHonoursNodeDimension(t *testing.T) {
 	ctx := context.Background()
 	store := newLatencyGridTestStore(t)
@@ -386,6 +410,71 @@ func TestLatencyGridQueryKeepsDimensionFilters(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestHistoricalLatencySampleQueriesUseCompositeIndexSeeks(t *testing.T) {
+	for name, dimension := range map[string]latencyGridDimension{"node": latencyGridByNode, "service": latencyGridByTarget} {
+		query := latencyGridSampleQuery(dimension)
+		for _, want := range []string{
+			"WITH RECURSIVE buckets",
+			"probe_rounds AS rounds INDEXED BY idx_probe_rounds_node_target_ts",
+			"ORDER BY rounds.ts DESC, rounds.id DESC",
+			"FROM latency_history_rollups AS rollup_rows",
+			"ORDER BY rollup_rows.bucket_start DESC",
+			"ORDER BY grid.bucket_ts ASC, grid.series_order ASC",
+		} {
+			if !strings.Contains(query, want) {
+				t.Fatalf("%s historical sample query missing %q\n%s", name, want, query)
+			}
+		}
+		if strings.Contains(query, "GROUP BY") || strings.Contains(query, "UNION ALL\n\t\t\tSELECT bucket_start") {
+			t.Fatalf("%s historical sample query must not aggregate the full retained window:\n%s", name, query)
+		}
+	}
+}
+
+func TestHistoricalLatencySampleQueryPlansSeekCompositeIndexes(t *testing.T) {
+	store := newLatencyGridTestStore(t)
+	window, _ := resolveLatencyGridWindow("30d")
+	start, _, stepSeconds := latencyGridBounds(window)
+	for name, dimension := range map[string]latencyGridDimension{"node": latencyGridByNode, "service": latencyGridByTarget} {
+		plan := explainSQLiteQueryPlan(t, store, latencyGridSampleQuery(dimension),
+			start.Unix(), stepSeconds, window.Samples,
+			"dimension-id", "dimension-id", stepSeconds, "dimension-id", stepSeconds,
+		)
+		for _, want := range []string{"idx_probe_rounds_node_target_ts", "sqlite_autoindex_latency_history_rollups_1"} {
+			if !strings.Contains(plan, want) {
+				t.Fatalf("%s historical sample plan missing %q:\n%s", name, want, plan)
+			}
+		}
+		for _, forbidden := range []string{"SCAN rounds", "SCAN rollup_rows"} {
+			if strings.Contains(plan, forbidden) {
+				t.Fatalf("%s historical sample plan contains %q:\n%s", name, forbidden, plan)
+			}
+		}
+	}
+}
+
+func explainSQLiteQueryPlan(t *testing.T, store *SQLiteStore, query string, args ...any) string {
+	t.Helper()
+	rows, err := store.db.QueryContext(context.Background(), "EXPLAIN QUERY PLAN "+query, args...)
+	if err != nil {
+		t.Fatalf("explain sqlite query: %v", err)
+	}
+	defer rows.Close()
+	var plan []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatalf("scan sqlite query plan: %v", err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("read sqlite query plan: %v", err)
+	}
+	return strings.Join(plan, "\n")
 }
 
 func assertFloatPtr(t *testing.T, name string, got *float64, want float64) {

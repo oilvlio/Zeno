@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchNodeLatency, fetchServiceLatency, nodeLatencySnapshotKey, normalizeSettings, normalizeNodeLatency, normalizeNodeState, normalizeServiceLatency, normalizeSummary, peekPrefetchedNodeLatency, prefetchNodeLatency } from './client'
+import { fetchNodeLatency, fetchNodeState, fetchServiceLatency, nodeLatencySnapshotKey, normalizeSettings, normalizeNodeLatency, normalizeNodeState, normalizeServiceLatency, normalizeSummary, peekPrefetchedNodeLatency, peekPrefetchedNodeState, prefetchNodeLatency, prefetchNodeState } from './client'
+import { clearStoredAdminToken, loadStoredAdminToken, rememberAdminToken } from '../lib/adminToken'
 
 describe('normalizeSummary', () => {
   it('maps controller snake_case JSON into frontend camelCase models', () => {
@@ -271,6 +272,81 @@ describe('prefetchNodeLatency', () => {
 
     await expect(fetchNodeLatency('timeout-node', '1d')).resolves.toEqual(expect.objectContaining({ nodeId: 'timeout-node' }))
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('prefetchNodeState', () => {
+  const originalFetch = globalThis.fetch
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    clearStoredAdminToken()
+    vi.restoreAllMocks()
+  })
+
+  it('reuses an authenticated extended-range prefetch on the first range switch', async () => {
+    let resolveFetch: ((response: Response) => void) | undefined
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { resolveFetch = resolve }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const prefetched = prefetchNodeState('prefetched-state-node', '7d', 'test-admin-token')
+    const requested = fetchNodeState('prefetched-state-node', '7d', 'test-admin-token')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith('/api/public/v1/nodes/prefetched-state-node/state?range=7d', {
+      signal: expect.any(AbortSignal),
+      headers: { Accept: 'application/json', 'X-Admin-Token': 'test-admin-token' },
+    })
+
+    resolveFetch?.(new Response(JSON.stringify({ node_id: 'prefetched-state-node', range: '7d', points: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(prefetched).resolves.toEqual(expect.objectContaining({ nodeId: 'prefetched-state-node', range: '7d' }))
+    await expect(requested).resolves.toEqual(expect.objectContaining({ nodeId: 'prefetched-state-node', range: '7d' }))
+    expect(peekPrefetchedNodeState('prefetched-state-node', '7d', 'test-admin-token')).toEqual(expect.objectContaining({ nodeId: 'prefetched-state-node' }))
+  })
+
+  it('does not reuse prefetched history across different admin credentials', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ node_id: 'isolated-state-node', range: '7d', points: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ node_id: 'isolated-state-node', range: '7d', points: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })) as unknown as typeof fetch
+
+    await prefetchNodeState('isolated-state-node', '7d', 'first-admin-token')
+    await fetchNodeState('isolated-state-node', '7d', 'second-admin-token')
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2)
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/public/v1/nodes/isolated-state-node/state?range=7d', {
+      signal: undefined,
+      headers: { Accept: 'application/json', 'X-Admin-Token': 'second-admin-token' },
+    })
+  })
+
+  it('does not reuse prefetched history after the cookie session rotates', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ node_id: 'rotated-state-node', range: '30d', points: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ node_id: 'rotated-state-node', range: '30d', points: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })) as unknown as typeof fetch
+
+    clearStoredAdminToken()
+    rememberAdminToken()
+    await prefetchNodeState('rotated-state-node', '30d', loadStoredAdminToken())
+    clearStoredAdminToken()
+    rememberAdminToken()
+    await fetchNodeState('rotated-state-node', '30d', loadStoredAdminToken())
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2)
   })
 })
 

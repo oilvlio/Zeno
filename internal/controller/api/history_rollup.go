@@ -12,12 +12,6 @@ import (
 // internal/controller/history. This file executes one compaction batch inside
 // a transaction and scans aggregated rows back into API types.
 
-// Read paths in sqlite_latency.go bind these prebuilt statements.
-var (
-	stateHistorySourceQuery   = history.StateSourceQuery
-	stateHistoryAverageSelect = history.StateAverageSelect
-)
-
 func (s *sqliteHistoryStore) compactStateHistoryBatch(ctx context.Context, before time.Time) (int64, error) {
 	return s.compactHistoryTier(ctx, before, history.StateRollupStep, history.StateRollupInsertQuery, history.PruneExpiredStateSamplesSQL)
 }

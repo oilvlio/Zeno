@@ -187,6 +187,33 @@ func TestStateSourceAndAverageShareMetricOrder(t *testing.T) {
 	}
 }
 
+func TestStateLatestGridUsesBoundedIndexedBucketSeeks(t *testing.T) {
+	query := StateLatestGridQuery
+	for _, want := range []string{
+		"WITH RECURSIVE buckets",
+		"state_samples INDEXED BY idx_state_samples_node_ts",
+		"ORDER BY ts DESC, id DESC",
+		"FROM state_history_rollups",
+		"ORDER BY bucket_start DESC",
+		"WHERE raw_latest.source_ts IS NOT NULL OR rollup_latest.source_ts IS NOT NULL",
+	} {
+		if !strings.Contains(query, want) {
+			t.Fatalf("latest state grid query missing %q\n%s", want, query)
+		}
+	}
+	if strings.Contains(query, "GROUP BY") || strings.Contains(query, "FROM measurements") {
+		t.Fatalf("latest state grid must not rescan and aggregate the full history window:\n%s", query)
+	}
+	previousIndex := -1
+	for _, metric := range StateRollupMetrics {
+		index := strings.LastIndex(query, "THEN raw_latest."+metric+" ELSE rollup_latest."+metric+" END")
+		if index <= previousIndex {
+			t.Fatalf("metric %s is missing or out of scan order", metric)
+		}
+		previousIndex = index
+	}
+}
+
 func TestStateRollupMetricsAreUnique(t *testing.T) {
 	seen := make(map[string]struct{}, len(StateRollupMetrics))
 	for _, metric := range StateRollupMetrics {
@@ -210,6 +237,9 @@ func TestPrebuiltQueriesMatchGenerators(t *testing.T) {
 	}
 	if StateAverageSelect != StateAverageSelectSQL() {
 		t.Fatal("prebuilt average projection drifted from its generator")
+	}
+	if StateLatestGridQuery != StateLatestGridSQL() {
+		t.Fatal("prebuilt latest state grid drifted from its generator")
 	}
 }
 

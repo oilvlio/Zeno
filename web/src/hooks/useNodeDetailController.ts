@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { fetchNodeLatency, fetchNodeState, peekPrefetchedNodeLatency, subscribeNodeLatency, subscribeNodeState, type NodeLatencyData, type NodeStateData, type SummaryData } from '../api/publicClient'
+import { fetchNodeLatency, fetchNodeState, peekPrefetchedNodeLatency, peekPrefetchedNodeState, prefetchNodeLatency, prefetchNodeState, subscribeNodeLatency, subscribeNodeState, type NodeLatencyData, type NodeStateData, type SummaryData } from '../api/publicClient'
 import { captureAdminTokenIdentity, type AdminTokenIdentity } from '../lib/adminToken'
 import { DetailMemoryCache, loadCachedDetailData, nodeLatencyCachePrefix, nodeStateCachePrefix, rememberDetailData } from '../lib/detailCache'
 import { detailHttpFallbackDelayMs } from '../lib/detailTiming'
@@ -151,11 +151,13 @@ export function useNodeDetailController({ nodeId, summary, adminToken, expireAdm
     const memoryCached = nodeLatencyCacheRef.current.getCached(cacheKey)
     const sessionCached = memoryCached ? null : loadCachedDetailData(nodeLatencyCachePrefix, nodeId, nodeLatencyRange, validateNodeLatencyData)
     const cached = memoryCached?.data ?? sessionCached?.data ?? null
-    const seeded = cached ?? peekPrefetchedNodeLatency(nodeId, nodeLatencyRange) ?? seedNodeLatencyFromSummary(summary, nodeId, nodeLatencyRange)
+    const requestToken = rangeRequiresAdmin(nodeLatencyRange) ? adminToken : undefined
+    const seeded = cached ?? peekPrefetchedNodeLatency(nodeId, nodeLatencyRange, requestToken) ?? seedNodeLatencyFromSummary(summary, nodeId, nodeLatencyRange)
     if (sessionCached) nodeLatencyCacheRef.current.set(cacheKey, sessionCached.data, sessionCached.storedAt)
     if (cached?.snapshotKey) shouldApplyNodeLatencySnapshot(nodeLatencySnapshotRef.current, cacheKey, cached.snapshotKey)
     if (seeded) setLatencyState({ kind: 'ready', data: seeded })
     else setLatencyState((current) => current.kind === 'ready' && current.data.nodeId === nodeId ? current : { kind: 'loading' })
+    if ((memoryCached ?? sessionCached)?.stale === false && rangeRequiresAdmin(nodeLatencyRange)) return
     const applyData = (data: NodeLatencyData) => {
       if (cancelled) return
       if (!shouldApplyNodeLatencySnapshot(nodeLatencySnapshotRef.current, cacheKey, data.snapshotKey)) return
@@ -164,7 +166,6 @@ export function useNodeDetailController({ nodeId, summary, adminToken, expireAdm
       setLatencyState({ kind: 'ready', data })
     }
     const useLiveStream = !rangeRequiresAdmin(nodeLatencyRange)
-    const requestToken = useLiveStream ? undefined : adminToken
     const requestTokenIdentity = requestToken ? captureAdminTokenIdentity(requestToken) : null
     const stop = startResilientLiveData<NodeLatencyData>({
       subscribe: useLiveStream ? (onData, onError, onStatus) => subscribeNodeLatency(nodeId, nodeLatencyRange, onData, onError, onStatus) : null,
@@ -198,16 +199,17 @@ export function useNodeDetailController({ nodeId, summary, adminToken, expireAdm
     const memoryCached = nodeStateCacheRef.current.getCached(cacheKey)
     const sessionCached = memoryCached ? null : loadCachedDetailData(nodeStateCachePrefix, nodeId, stateRange, validateNodeStateData)
     const cached = memoryCached?.data ?? sessionCached?.data ?? null
-    const seeded = cached ?? seedNodeStateFromSummary(summary, nodeId, stateRange)
+    const requestToken = rangeRequiresAdmin(stateRange) ? adminToken : undefined
+    const seeded = cached ?? peekPrefetchedNodeState(nodeId, stateRange, requestToken) ?? seedNodeStateFromSummary(summary, nodeId, stateRange)
     if (sessionCached) nodeStateCacheRef.current.set(cacheKey, sessionCached.data, sessionCached.storedAt)
     setStateHistoryState(seeded ? { kind: 'ready', data: seeded } : { kind: 'loading' })
+    if ((memoryCached ?? sessionCached)?.stale === false && rangeRequiresAdmin(stateRange)) return
     const applyData = (data: NodeStateData) => {
       nodeStateCacheRef.current.set(cacheKey, data)
       rememberDetailData(nodeStateCachePrefix, nodeId, stateRange, data)
       if (!cancelled) setStateHistoryState({ kind: 'ready', data })
     }
     const useLiveStream = !rangeRequiresAdmin(stateRange)
-    const requestToken = useLiveStream ? undefined : adminToken
     const requestTokenIdentity = requestToken ? captureAdminTokenIdentity(requestToken) : null
     const stop = startResilientLiveData<NodeStateData>({
       subscribe: useLiveStream ? (onData, onError, onStatus) => subscribeNodeState(nodeId, stateRange, onData, onError, onStatus) : null,
@@ -230,6 +232,26 @@ export function useNodeDetailController({ nodeId, summary, adminToken, expireAdm
       stop()
     }
   }, [nodeId, stateRange, adminToken, expireAdminSession])
+
+  useEffect(() => {
+    if (nodeId === null || adminToken === '') return
+    let cancelled = false
+    const prefetchExtendedHistory = async () => {
+      for (const range of ['7d', '30d']) {
+        if (cancelled) return
+        await prefetchNodeLatency(nodeId, range, adminToken).catch(() => {})
+        if (cancelled) return
+        await prefetchNodeState(nodeId, range, adminToken).catch(() => {})
+      }
+    }
+    const timer = setTimeout(() => {
+      void prefetchExtendedHistory()
+    }, 0)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [nodeId, adminToken])
 
   useEffect(() => {
     if (nodeId === null || summary === null) return

@@ -1,5 +1,5 @@
 import type { AdminSettings } from '../types'
-import { adminCookieSessionMarker } from '../lib/adminToken'
+import { adminCookieSessionMarker, captureAdminTokenIdentity } from '../lib/adminToken'
 import { normalizeNodeLatency, normalizeNodeState, normalizeServiceLatency, normalizeSettings, normalizeSummary } from './publicNormalizers'
 import type { ApiLatencyResponse, ApiServiceLatencyResponse, ApiSettings, ApiStateResponse, ApiSummaryResponse, NodeLatencyData, NodeStateData, ServiceLatencyData, SummaryData } from './apiTypes'
 export type { ApiLatencyResponse, ApiServiceLatencyResponse, ApiStateResponse, ApiSummaryResponse, NodeLatencyData, NodeStateData, ServiceLatencyData, SummaryData } from './apiTypes'
@@ -101,35 +101,34 @@ function optionalAdminHeaders(adminToken?: string): HeadersInit {
   return adminToken && adminToken !== adminCookieSessionMarker ? { Accept: 'application/json', 'X-Admin-Token': adminToken } : { Accept: 'application/json' }
 }
 
-const nodeLatencyPrefetchRetentionMs = 60 * 1000
-const nodeLatencyPrefetchTimeoutMs = 10_000
-const nodeLatencyPrefetchMaxEntries = 4
-interface NodeLatencyPrefetch {
-  promise: Promise<NodeLatencyData>
+const nodeDetailPrefetchRetentionMs = 60 * 1000
+const nodeDetailPrefetchTimeoutMs = 10_000
+const nodeDetailPrefetchMaxEntries = 4
+interface NodeDetailPrefetch<T> {
+  promise: Promise<T>
   consumed: boolean
-  data?: NodeLatencyData
+  data?: T
 }
-type NodeLatencyPrefetchGlobal = typeof globalThis & {
-  __zenoNodeLatencyPrefetchesV1?: Map<string, NodeLatencyPrefetch>
-}
-const nodeLatencyPrefetchGlobal = globalThis as NodeLatencyPrefetchGlobal
-const nodeLatencyPrefetches = nodeLatencyPrefetchGlobal.__zenoNodeLatencyPrefetchesV1 ?? new Map<string, NodeLatencyPrefetch>()
-nodeLatencyPrefetchGlobal.__zenoNodeLatencyPrefetchesV1 = nodeLatencyPrefetches
+const nodeLatencyPrefetches = new Map<string, NodeDetailPrefetch<NodeLatencyData>>()
+const nodeStatePrefetches = new Map<string, NodeDetailPrefetch<NodeStateData>>()
 
-function nodeLatencyPrefetchKey(nodeId: string, range: string): string {
-  return `${nodeId}:${range}`
-}
-
-function touchNodeLatencyPrefetch(key: string, entry: NodeLatencyPrefetch): void {
-  nodeLatencyPrefetches.delete(key)
-  nodeLatencyPrefetches.set(key, entry)
+function nodeDetailPrefetchKey(nodeId: string, range: string, adminToken?: string): string {
+  const credential = adminToken === adminCookieSessionMarker
+    ? `cookie:${captureAdminTokenIdentity(adminToken).generation}`
+    : adminToken ?? null
+  return JSON.stringify([nodeId, range, credential])
 }
 
-function pruneNodeLatencyPrefetches(): void {
-  while (nodeLatencyPrefetches.size > nodeLatencyPrefetchMaxEntries) {
-    const oldestKey = nodeLatencyPrefetches.keys().next().value as string | undefined
+function touchNodeDetailPrefetch<T>(entries: Map<string, NodeDetailPrefetch<T>>, key: string, entry: NodeDetailPrefetch<T>): void {
+  entries.delete(key)
+  entries.set(key, entry)
+}
+
+function pruneNodeDetailPrefetches<T>(entries: Map<string, NodeDetailPrefetch<T>>): void {
+  while (entries.size > nodeDetailPrefetchMaxEntries) {
+    const oldestKey = entries.keys().next().value as string | undefined
     if (oldestKey === undefined) break
-    nodeLatencyPrefetches.delete(oldestKey)
+    entries.delete(oldestKey)
   }
 }
 
@@ -141,7 +140,7 @@ async function requestNodeLatency(nodeId: string, range: string, adminToken?: st
   return normalizeNodeLatency(await response.json() as ApiLatencyResponse)
 }
 
-function awaitPrefetchedNodeLatency(prefetch: Promise<NodeLatencyData>, signal?: AbortSignal): Promise<NodeLatencyData> {
+function awaitPrefetchedNodeDetail<T>(prefetch: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return prefetch
   if (signal.aborted) return Promise.reject(signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'))
   return new Promise((resolve, reject) => {
@@ -160,52 +159,64 @@ function awaitPrefetchedNodeLatency(prefetch: Promise<NodeLatencyData>, signal?:
   })
 }
 
-export function prefetchNodeLatency(nodeId: string, range = '1d'): Promise<NodeLatencyData> {
-  const key = nodeLatencyPrefetchKey(nodeId, range)
-  const existing = nodeLatencyPrefetches.get(key)
+function prefetchNodeDetail<T>(entries: Map<string, NodeDetailPrefetch<T>>, key: string, load: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const existing = entries.get(key)
   if (existing) {
-    touchNodeLatencyPrefetch(key, existing)
+    touchNodeDetailPrefetch(entries, key, existing)
     return existing.promise
   }
 
   const controller = new AbortController()
-  const request = requestNodeLatency(nodeId, range, undefined, controller.signal)
-  const entry: NodeLatencyPrefetch = { promise: request, consumed: false }
-  const timeoutId = setTimeout(() => controller.abort(), nodeLatencyPrefetchTimeoutMs)
-  nodeLatencyPrefetches.set(key, entry)
-  pruneNodeLatencyPrefetches()
+  const request = load(controller.signal)
+  const entry: NodeDetailPrefetch<T> = { promise: request, consumed: false }
+  const timeoutId = setTimeout(() => controller.abort(), nodeDetailPrefetchTimeoutMs)
+  entries.set(key, entry)
+  pruneNodeDetailPrefetches(entries)
   request.then(
     (data) => {
       clearTimeout(timeoutId)
       entry.data = data
       setTimeout(() => {
-        if (nodeLatencyPrefetches.get(key) === entry) nodeLatencyPrefetches.delete(key)
-      }, nodeLatencyPrefetchRetentionMs)
+        if (entries.get(key) === entry) entries.delete(key)
+      }, nodeDetailPrefetchRetentionMs)
     },
     () => {
       clearTimeout(timeoutId)
-      if (nodeLatencyPrefetches.get(key) === entry) nodeLatencyPrefetches.delete(key)
+      if (entries.get(key) === entry) entries.delete(key)
     },
   )
   return request
 }
 
-export function peekPrefetchedNodeLatency(nodeId: string, range = '1d'): NodeLatencyData | null {
-  const key = nodeLatencyPrefetchKey(nodeId, range)
-  const entry = nodeLatencyPrefetches.get(key)
+function peekPrefetchedNodeDetail<T>(entries: Map<string, NodeDetailPrefetch<T>>, key: string): T | null {
+  const entry = entries.get(key)
   if (!entry?.data) return null
-  touchNodeLatencyPrefetch(key, entry)
+  touchNodeDetailPrefetch(entries, key, entry)
   return entry.data
 }
 
-export async function fetchNodeLatency(nodeId: string, range = '1h', adminToken?: string, signal?: AbortSignal): Promise<NodeLatencyData> {
-  const canReusePublicPrefetch = !adminToken || adminToken === adminCookieSessionMarker
-  const prefetched = canReusePublicPrefetch ? nodeLatencyPrefetches.get(nodeLatencyPrefetchKey(nodeId, range)) : undefined
+function consumePrefetchedNodeDetail<T>(entries: Map<string, NodeDetailPrefetch<T>>, key: string): Promise<T> | null {
+  const prefetched = entries.get(key)
   if (prefetched && !prefetched.consumed) {
     prefetched.consumed = true
-    touchNodeLatencyPrefetch(nodeLatencyPrefetchKey(nodeId, range), prefetched)
-    return awaitPrefetchedNodeLatency(prefetched.promise, signal)
+    touchNodeDetailPrefetch(entries, key, prefetched)
+    return prefetched.promise
   }
+  return null
+}
+
+export function prefetchNodeLatency(nodeId: string, range = '1d', adminToken?: string): Promise<NodeLatencyData> {
+  const key = nodeDetailPrefetchKey(nodeId, range, adminToken)
+  return prefetchNodeDetail(nodeLatencyPrefetches, key, (signal) => requestNodeLatency(nodeId, range, adminToken, signal))
+}
+
+export function peekPrefetchedNodeLatency(nodeId: string, range = '1d', adminToken?: string): NodeLatencyData | null {
+  return peekPrefetchedNodeDetail(nodeLatencyPrefetches, nodeDetailPrefetchKey(nodeId, range, adminToken))
+}
+
+export async function fetchNodeLatency(nodeId: string, range = '1h', adminToken?: string, signal?: AbortSignal): Promise<NodeLatencyData> {
+  const prefetched = consumePrefetchedNodeDetail(nodeLatencyPrefetches, nodeDetailPrefetchKey(nodeId, range, adminToken))
+  if (prefetched) return awaitPrefetchedNodeDetail(prefetched, signal)
   return requestNodeLatency(nodeId, range, adminToken, signal)
 }
 
@@ -217,10 +228,25 @@ export async function fetchServiceLatency(targetId: string, range = '1h', adminT
   return normalizeServiceLatency(await response.json() as ApiServiceLatencyResponse)
 }
 
-export async function fetchNodeState(nodeId: string, range = '1h', adminToken?: string, signal?: AbortSignal): Promise<NodeStateData> {
+async function requestNodeState(nodeId: string, range = '1h', adminToken?: string, signal?: AbortSignal): Promise<NodeStateData> {
   const response = await fetch(`/api/public/v1/nodes/${encodeURIComponent(nodeId)}/state?range=${encodeURIComponent(range)}`, { signal, headers: optionalAdminHeaders(adminToken) })
   if (!response.ok) {
     throw new Error(`state request failed: ${response.status}`)
   }
   return normalizeNodeState(await response.json() as ApiStateResponse)
+}
+
+export function prefetchNodeState(nodeId: string, range: string, adminToken?: string): Promise<NodeStateData> {
+  const key = nodeDetailPrefetchKey(nodeId, range, adminToken)
+  return prefetchNodeDetail(nodeStatePrefetches, key, (signal) => requestNodeState(nodeId, range, adminToken, signal))
+}
+
+export function peekPrefetchedNodeState(nodeId: string, range: string, adminToken?: string): NodeStateData | null {
+  return peekPrefetchedNodeDetail(nodeStatePrefetches, nodeDetailPrefetchKey(nodeId, range, adminToken))
+}
+
+export async function fetchNodeState(nodeId: string, range = '1h', adminToken?: string, signal?: AbortSignal): Promise<NodeStateData> {
+  const prefetched = consumePrefetchedNodeDetail(nodeStatePrefetches, nodeDetailPrefetchKey(nodeId, range, adminToken))
+  if (prefetched) return awaitPrefetchedNodeDetail(prefetched, signal)
+  return requestNodeState(nodeId, range, adminToken, signal)
 }
