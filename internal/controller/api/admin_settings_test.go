@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -38,6 +39,7 @@ func TestPublicSettingsDefaultsAndReflectsAdminPatch(t *testing.T) {
 
 	patchRecorder := httptest.NewRecorder()
 	patchRequest := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/settings", bytes.NewBufferString(`{
+		"expected_revision": 0,
 		"site_title": "  水饺监控  ",
 		"logo_url": "/assets/logo/custom.png",
 		"theme": "dark",
@@ -234,7 +236,8 @@ func TestAdminSettingsRequiresTokenAndRejectsInvalidValues(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
-			request := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/settings", bytes.NewBufferString(tc.body))
+			body := `{"expected_revision":0,` + strings.TrimPrefix(tc.body, "{")
+			request := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/settings", bytes.NewBufferString(body))
 			request.Header.Set("X-Admin-Token", "admin-pass")
 			handler.ServeHTTP(recorder, request)
 			if recorder.Code != http.StatusBadRequest {
@@ -262,7 +265,7 @@ func TestAdminSettingsAllowsBlankLogoURL(t *testing.T) {
 	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/settings", strings.NewReader(`{"logo_url":"   "}`))
+	request := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/settings", strings.NewReader(`{"expected_revision":0,"logo_url":"   "}`))
 	request.Header.Set("X-Admin-Token", "admin-pass")
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
@@ -284,6 +287,86 @@ func TestAdminSettingsAllowsBlankLogoURL(t *testing.T) {
 	}
 	if settings.LogoURL != "" {
 		t.Fatalf("persisted blank logo URL = %q, want empty", settings.LogoURL)
+	}
+}
+
+func TestAdminSettingsRevisionRejectsStaleWritesWithoutPartialChanges(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	initial, err := store.AdminSettings(ctx)
+	if err != nil {
+		t.Fatalf("read initial settings: %v", err)
+	}
+	if initial.Revision != 0 {
+		t.Fatalf("initial revision = %d, want 0", initial.Revision)
+	}
+
+	expectedZero := int64(0)
+	title := "First writer"
+	first, err := store.UpdateAdminSettings(ctx, AdminSettingsUpdateRequest{ExpectedRevision: &expectedZero, SiteTitle: &title})
+	if err != nil {
+		t.Fatalf("first settings update: %v", err)
+	}
+	if first.Revision != 1 || first.SiteTitle != title {
+		t.Fatalf("first settings = %+v, want revision 1 and updated title", first)
+	}
+
+	logo := "/assets/logo/stale.png"
+	if _, err := store.UpdateAdminSettings(ctx, AdminSettingsUpdateRequest{ExpectedRevision: &expectedZero, LogoURL: &logo}); !errors.Is(err, errAdminSettingsConflict) {
+		t.Fatalf("stale settings update error = %v, want conflict", err)
+	}
+	afterConflict, err := store.AdminSettings(ctx)
+	if err != nil {
+		t.Fatalf("read settings after conflict: %v", err)
+	}
+	if afterConflict.Revision != 1 || afterConflict.SiteTitle != title || afterConflict.LogoURL == logo {
+		t.Fatalf("settings after conflict = %+v, want first update preserved without stale logo", afterConflict)
+	}
+
+	expectedOne := int64(1)
+	second, err := store.UpdateAdminSettings(ctx, AdminSettingsUpdateRequest{ExpectedRevision: &expectedOne, LogoURL: &logo})
+	if err != nil {
+		t.Fatalf("second settings update: %v", err)
+	}
+	if second.Revision != 2 || second.LogoURL != logo {
+		t.Fatalf("second settings = %+v, want revision 2 and updated logo", second)
+	}
+}
+
+func TestAdminSettingsPatchRequiresExpectedRevisionAndReturnsConflict(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
+
+	missing := httptest.NewRecorder()
+	missingRequest := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/settings", strings.NewReader(`{"site_title":"missing revision"}`))
+	missingRequest.Header.Set("X-Admin-Token", "admin-pass")
+	handler.ServeHTTP(missing, missingRequest)
+	if missing.Code != http.StatusBadRequest {
+		t.Fatalf("missing revision status = %d, want 400; body=%s", missing.Code, missing.Body.String())
+	}
+
+	first := httptest.NewRecorder()
+	firstRequest := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/settings", strings.NewReader(`{"expected_revision":0,"site_title":"first"}`))
+	firstRequest.Header.Set("X-Admin-Token", "admin-pass")
+	handler.ServeHTTP(first, firstRequest)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first revision status = %d, want 200; body=%s", first.Code, first.Body.String())
+	}
+
+	stale := httptest.NewRecorder()
+	staleRequest := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/settings", strings.NewReader(`{"expected_revision":0,"logo_url":"/assets/logo/stale.png"}`))
+	staleRequest.Header.Set("X-Admin-Token", "admin-pass")
+	handler.ServeHTTP(stale, staleRequest)
+	if stale.Code != http.StatusConflict || !strings.Contains(stale.Body.String(), "settings changed") {
+		t.Fatalf("stale revision status = %d, want 409; body=%s", stale.Code, stale.Body.String())
 	}
 }
 

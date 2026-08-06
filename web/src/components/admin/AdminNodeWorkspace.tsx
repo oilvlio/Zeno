@@ -1,16 +1,17 @@
 import { type FormEvent, useState } from 'react'
 import type { AdminNodeCreateInput, AdminNodeUpdateInput } from '../../api/adminClient'
 import { sortAdminNodes, sortAdminProbeTargets } from '../../lib/adminCollections'
+import { runMaybePromise } from '../../lib/maybePromise'
 import type { AdminNode, AdminNodeInstallCommand, AdminProbeTarget } from '../../types'
 import { ServerFlag } from '../ServerFlag'
 import { AdminDateField, AdminExpandedCheckList, AdminSegmentedField } from './AdminFields'
 import { AdminInstallCommand } from './AdminInstallCommand'
-import { AdminNodeSortModal, applyAdminNodeOrderPatches } from './AdminNodeSortModal'
+import { AdminNodeSortModal } from './AdminNodeSortModal'
 import { AdminDeleteConfirmModal, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions, AdminWorkspaceHeading } from './AdminPrimitives'
 import { billingCycleOptions, billingModeOptions, formatQuotaValue, formatRenewalAmountInput, normalizeBillingCycle, parseMonthlyResetDay, parseQuota, parseRenewalAmount, quotaUnitForBytes, quotaUnitOptions, renewalCurrencyOptions } from './adminOperationalModel'
 import type { AdminNodeWorkspaceProps, MaybePromise } from './adminOperationalTypes'
 
-export function AdminNodeWorkspace({ nodes, targets, onCreate, onUpdate, onDelete, onInstallCommand }: AdminNodeWorkspaceProps) {
+export function AdminNodeWorkspace({ nodes, targets, onCreate, onUpdate, onReorder, onDelete, onInstallCommand }: AdminNodeWorkspaceProps) {
   const [creatingNode, setCreatingNode] = useState(false)
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null)
   const [sortingNodes, setSortingNodes] = useState(false)
@@ -56,7 +57,7 @@ export function AdminNodeWorkspace({ nodes, targets, onCreate, onUpdate, onDelet
           nodes={orderedNodes}
           onClose={() => setSortingNodes(false)}
           onSave={async (nextNodes) => {
-            await applyAdminNodeOrderPatches(nextNodes, onUpdate)
+            await onReorder(nextNodes.map((node) => node.id))
             setSortingNodes(false)
           }}
         />
@@ -133,6 +134,7 @@ function AdminNodeCreateModal({ onCreate, onInstallCommand, onClose }: { onCreat
   }
 
   const createNodeFromForm = (form: HTMLFormElement): Promise<AdminNode | null> => {
+    if (submitting) return Promise.resolve(null)
     const input = nodeInputFromForm(form)
     if (!input) {
       setFormError('请先填写服务器名称。')
@@ -158,8 +160,8 @@ function AdminNodeCreateModal({ onCreate, onInstallCommand, onClose }: { onCreat
   }
 
   return (
-    <AdminModal title="添加服务器" onClose={onClose}>
-      <form className="admin-node-create-form admin-node-edit-form is-sectioned" aria-label="添加服务器" onSubmit={handleSubmit}>
+    <AdminModal title="添加服务器" closeDisabled={submitting} onClose={onClose}>
+      <form className="admin-node-create-form admin-node-edit-form is-sectioned" aria-label="添加服务器" aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
         <AdminFormSection title="服务器名称">
           <div className="admin-form-grid">
             <label>
@@ -226,12 +228,13 @@ function AdminNodeEditModal({ node, targets, onUpdate, onInstallCommand, onClose
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (submitting) return
     const formData = new FormData(event.currentTarget)
     const displayName = String(formData.get('display-name') ?? '').trim()
     const selectedTargets = new Set(selectedTargetIds)
     setSubmitting(true)
     setFormError(null)
-    Promise.resolve(onUpdate(node.id, {
+    runMaybePromise(() => onUpdate(node.id, {
       displayName: displayName || node.displayName,
       homeProbeTargetId: selectedTargets.has(homeTargetId) ? homeTargetId : '',
       expiryDate: String(formData.get('expiry-date') ?? '').trim(),
@@ -250,8 +253,8 @@ function AdminNodeEditModal({ node, targets, onUpdate, onInstallCommand, onClose
   }
 
   return (
-    <AdminModal title="编辑服务器" onClose={onClose}>
-      <form className="admin-node-edit-form is-sectioned" aria-label={`${node.displayName} 节点编辑`} onSubmit={handleSubmit}>
+    <AdminModal title="编辑服务器" closeDisabled={submitting} onClose={onClose}>
+      <form className="admin-node-edit-form is-sectioned" aria-label={`${node.displayName} 节点编辑`} aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
         <AdminFormSection title="服务器名称">
           <div className="admin-form-grid">
             <label className="admin-label-without-caption">

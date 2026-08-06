@@ -325,6 +325,7 @@ describe('AdminDashboard', () => {
 
   it('validates settings URL fields before saving', () => {
     const baseInput = {
+      expectedRevision: 4,
       siteTitle: 'Zeno',
       logoUrl: '/assets/logo/id.png',
       theme: 'system' as const,
@@ -344,6 +345,7 @@ describe('AdminDashboard', () => {
     }
 
     expect(validateAdminSettingsInput(baseInput)).toBeNull()
+    expect(validateAdminSettingsInput({ ...baseInput, expectedRevision: -1 })).toContain('设置版本')
     expect(validateAdminSettingsInput({ ...baseInput, logoUrl: '' })).toBeNull()
     expect(validateAdminSettingsInput({ ...baseInput, logoUrl: 'http://example.com/logo.png' })).toContain('头像 / Logo URL')
     expect(validateAdminSettingsInput({ ...baseInput, desktopBackgroundUrl: 'javascript:alert(1)' })).toContain('电脑端背景图 URL')

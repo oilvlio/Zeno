@@ -46,12 +46,25 @@ describe('adminStateReducer', () => {
     expect(next.targets.every((target) => target.assignments.every((assignment) => assignment.nodeId !== 'example-node-a'))).toBe(true)
   })
 
+  it('applies a committed batch order to every node in one reducer action', () => {
+    const previous = readyState()
+    const next = adminStateReducer(previous, { type: 'nodes.reordered', nodeIds: [backupNode.id, exampleNodeANode.id] })
+    expect(next.kind).toBe('ready')
+    if (next.kind !== 'ready') return
+    expect(next.nodes.map((node) => [node.id, node.displayOrder])).toEqual([
+      [backupNode.id, 10],
+      [exampleNodeANode.id, 20],
+    ])
+    expect(previous.nodes.map((node) => node.id)).toEqual([exampleNodeANode.id, backupNode.id])
+  })
+
   it('keeps non-ready state unchanged when any stale mutation result arrives', () => {
     const loading: AdminLoadState = { kind: 'loading' }
     const staleActions: AdminStateAction[] = [
       { type: 'account.updated', username: 'stale' },
       { type: 'node.created', node: exampleNodeANode },
       { type: 'node.updated', node: exampleNodeANode },
+      { type: 'nodes.reordered', nodeIds: [exampleNodeANode.id] },
       { type: 'node.deleted', nodeId: exampleNodeANode.id },
       { type: 'target.created', target: pingTarget },
       { type: 'target.updated', target: pingTarget },

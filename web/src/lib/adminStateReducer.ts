@@ -11,6 +11,7 @@ export type AdminStateAction =
   | { type: 'account.updated'; username: string }
   | { type: 'node.created'; node: AdminNode }
   | { type: 'node.updated'; node: AdminNode; probeTargetIds?: string[] }
+  | { type: 'nodes.reordered'; nodeIds: string[] }
   | { type: 'node.deleted'; nodeId: string }
   | { type: 'target.created'; target: AdminProbeTarget }
   | { type: 'target.updated'; target: AdminProbeTarget }
@@ -75,6 +76,15 @@ export function adminStateReducer(state: AdminLoadState, action: AdminStateActio
             : enabled ? [...target.assignments, nextAssignment] : target.assignments,
         }
       }),
+    }
+  }
+  if (action.type === 'nodes.reordered') {
+    if (state.kind !== 'ready') return state
+    const nodesByID = new Map(state.nodes.map((node) => [node.id, node]))
+    if (nodesByID.size !== action.nodeIds.length || action.nodeIds.some((nodeId) => !nodesByID.has(nodeId))) return state
+    return {
+      ...state,
+      nodes: action.nodeIds.map((nodeId, index) => ({ ...nodesByID.get(nodeId)!, displayOrder: (index + 1) * 10 })),
     }
   }
   if (action.type === 'node.deleted') {

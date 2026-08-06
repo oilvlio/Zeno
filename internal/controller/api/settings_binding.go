@@ -41,10 +41,20 @@ func assignFloat(field func(*SiteSettings) *float64) func(*SiteSettings, string)
 	}
 }
 
+func assignNonNegativeInt64(field func(*SiteSettings) *int64) func(*SiteSettings, string) {
+	return func(settings *SiteSettings, value string) {
+		parsed, err := strconv.ParseInt(value, 10, 64)
+		if err == nil && parsed >= 0 {
+			*field(settings) = parsed
+		}
+	}
+}
+
 // siteSettingsBindings is the single source of truth for which settings keys
 // are loaded and how each is decoded.
 func siteSettingsBindings() []settingsBinding {
 	return []settingsBinding{
+		{settingKeySettingsRevision, assignNonNegativeInt64(func(s *SiteSettings) *int64 { return &s.Revision })},
 		{settingKeySiteTitle, assignString(func(s *SiteSettings) *string { return &s.SiteTitle })},
 		{settingKeyLogoURL, assignString(func(s *SiteSettings) *string { return &s.LogoURL })},
 		{settingKeyTheme, assignString(func(s *SiteSettings) *string { return &s.Theme })},

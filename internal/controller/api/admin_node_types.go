@@ -93,6 +93,29 @@ type AdminNodeResponse struct {
 	Node AdminNode `json:"node"`
 }
 
+type AdminNodeReorderRequest struct {
+	NodeIDs []string `json:"node_ids"`
+}
+
+func (request *AdminNodeReorderRequest) normalize() error {
+	if len(request.NodeIDs) == 0 {
+		return errInvalidAdminNodeUpdate
+	}
+	seen := make(map[string]struct{}, len(request.NodeIDs))
+	for index, nodeID := range request.NodeIDs {
+		nodeID = strings.TrimSpace(nodeID)
+		if nodeID == "" {
+			return errInvalidAdminNodeUpdate
+		}
+		if _, exists := seen[nodeID]; exists {
+			return errInvalidAdminNodeUpdate
+		}
+		seen[nodeID] = struct{}{}
+		request.NodeIDs[index] = nodeID
+	}
+	return nil
+}
+
 type AdminNodeInstallCommandRequest struct {
 	ControllerURL string `json:"controller_url,omitempty"`
 }

@@ -465,6 +465,70 @@ func (s *sqliteAdminDomain) UpdateAdminNode(ctx context.Context, nodeID string, 
 	return s.adminNodeByID(ctx, nodeID)
 }
 
+func (s *sqliteAdminDomain) ReorderAdminNodes(ctx context.Context, request AdminNodeReorderRequest) error {
+	if err := request.normalize(); err != nil {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { rollbackUnlessCommitted(tx) }()
+	if _, err := tx.ExecContext(ctx, `UPDATE probe_config_meta SET version = version WHERE id = 1`); err != nil {
+		return err
+	}
+	rows, err := tx.QueryContext(ctx, `
+		SELECT n.id
+		FROM nodes n
+		WHERE NOT EXISTS (
+			SELECT 1 FROM admin_deletion_jobs deletion
+			WHERE deletion.entity_kind = 'node'
+			  AND deletion.entity_id = n.id
+			  AND deletion.state IN ('pending', 'running')
+		)
+	`)
+	if err != nil {
+		return err
+	}
+	activeNodeIDs := make(map[string]struct{}, len(request.NodeIDs))
+	for rows.Next() {
+		var nodeID string
+		if err := rows.Scan(&nodeID); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		activeNodeIDs[nodeID] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if len(activeNodeIDs) != len(request.NodeIDs) {
+		return errInvalidAdminNodeUpdate
+	}
+	for _, nodeID := range request.NodeIDs {
+		if _, exists := activeNodeIDs[nodeID]; !exists {
+			return errInvalidAdminNodeUpdate
+		}
+	}
+	now := time.Now().UTC().Unix()
+	for index, nodeID := range request.NodeIDs {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE nodes SET display_order = ?, updated_at = ? WHERE id = ?
+		`, (index+1)*10, now, nodeID); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	tx = nil
+	return nil
+}
+
 func ensureActiveAdminNodeExistsTx(ctx context.Context, tx *sql.Tx, nodeID string) error {
 	return requireAdminResourceTx(ctx, tx, activeAdminNodeExistsSQL, nodeID, errNodeNotFound)
 }

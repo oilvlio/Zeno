@@ -523,6 +523,7 @@ X-Admin-Token: <admin-token>
     "background_overlay": 0,
     "theme_color": "#2563eb",
     "custom_code": "",
+    "revision": 0,
     "updated_at": "2026-07-04T12:00:00Z"
   }
 }
@@ -530,12 +531,13 @@ X-Admin-Token: <admin-token>
 
 ### PATCH /api/admin/v1/settings
 
-部分更新站点配置。所有字段均可省略，提交后 Controller 会 trim 文本并持久化到 SQLite `settings` 表。
+部分更新站点配置。`expected_revision` 必须使用最近一次 GET/PATCH 响应中的 `revision`；其余设置字段均可省略。Controller 会在同一 SQLite 事务内比较并递增单调 revision，再 trim 文本并持久化设置，避免两个后台标签页把较新的设置静默覆盖。
 
 请求：
 
 ```json
 {
+  "expected_revision": 0,
   "site_title": "水饺监控",
   "logo_url": "/assets/logo/custom.png",
   "theme": "dark",
@@ -557,6 +559,7 @@ X-Admin-Token: <admin-token>
 
 约束：
 
+- `expected_revision` 必填且必须是非负整数；与当前 revision 不一致时返回 `409 settings changed`，数据库不会写入任何字段。客户端应重新读取设置、保留本地草稿，并由用户决定是否载入最新版后重试。revision 不使用秒级时间戳，因此同一秒内的连续保存也能可靠区分。
 - `site_title` 不能为空，最长 64 个字符。
 - `theme` 只能是 `system`、`dark` 或 `light`。
 - `agent_controller_url` 可为空；非空时不得包含用户名密码、query 或 fragment。远程地址默认使用 `https://`；真实 loopback host 可使用 `http://`，没有反向代理时也允许 `http://<直接 IP>:<显式端口>`。后台复制命令前会再次确认风险，生成的命令显式传入 `ZENO_ALLOW_INSECURE_HTTP=1`，安装器再把 runtime opt-in 持久化；enrollment/runtime bearer token 仍会明文传输。主机名 HTTP 和没有显式端口的远程 HTTP 会被拒绝。为空时可回退到当前后台地址，但仍执行同一规则。
@@ -631,6 +634,16 @@ X-Admin-Token: <admin-token>
 响应返回新节点 DTO，但不会返回 Agent token 原文或 token hash。新节点默认 `status=no_data`，并为现有探针目标建立默认未启用的服务器关联；管理员选择延迟监控后才会向该节点下发。`renewal_amount` 可为空或为大于 0 的金额；`renewal_currency` 支持 `CNY`、`USD`、`HKD`、`EUR`、`GBP`、`JPY`、`SGD`、`AUD`、`CAD`、`KRW`，默认 `CNY`。`billing_mode` 可选 `both`、`in`、`out`、`max`，默认 `both`；`monthly_reset_day` 范围 1–31，默认 1。`expiry_date` 为空时清空到期日；非空时必须是 `YYYY-MM-DD`。
 
 每次复制安装命令都会生成一个有效期 10 分钟、只能兑换一次的 enrollment token，并立即撤销该节点先前尚未使用的 enrollment；命令不会包含或复用 runtime token。生成命令本身不会中断已在线 Agent：当前 runtime token 继续有效。安装器兑换 enrollment 后会生成随机 runtime token；新 Agent 首次用该 token 成功鉴权时，Controller 才原子切换 runtime token，旧 runtime token 随即失效。后台 UI 提供 Linux / macOS / Windows 三种命令和复制按钮。命令中的 Controller 地址优先使用站点设置里的 `agent_controller_url`；未设置时才使用当前后台请求地址。未显式配置 Agent 版本时，安装脚本解析 Zeno-Agent 最新稳定 release。
+
+### PATCH /api/admin/v1/nodes/reorder
+
+一次提交完整服务器顺序。`node_ids` 必须无重复地覆盖当前全部可见服务器；后端先校验整组 ID，再在单个 SQLite 事务中按 10、20、30… 写入 `display_order`。任一校验或写入失败都会整体回滚，不会留下部分排序；成功返回 `204 No Content`。
+
+```json
+{
+  "node_ids": ["node-c", "node-a", "node-b"]
+}
+```
 
 ### PATCH /api/admin/v1/nodes/{node_id}
 
@@ -773,7 +786,7 @@ Controller 会在 Agent 上报时实际使用这些规则：
 - `/api/agent/v1/state` 会按启用的资源规则评估 `cpu_percent`、内存使用率、磁盘使用率。资源规则的 `duration_sec` 表示统计窗口，默认按 5 分钟平均值超过阈值时把节点公共状态置为 `warning` 并进入 `probe_unhealthy` 通知链路。
 - `/api/agent/v1/probe-results` 只写入探针历史，不再通过延迟或丢包阈值改变节点公共状态。
 - 资源规则命中状态会记录在 Controller 内部的 `alert_rule_states` 表，用来避免某一类健康上报误清另一类仍活跃的异常；`alert_rule_states` 只作为 Controller 内部命中状态存储。
-- 如果规则配置了 `scope_node_ids`，Agent 上报、规则命中和通知发送都会只对这些服务器生效；空数组表示全部服务器。离线规则的 `duration_sec` 同时作为公共在线/离线状态与离线通知的心跳超时时间，默认 30 秒；presence WebSocket 和服务探测结果不覆盖页面在线状态；Controller 启动后先留出一个完整心跳窗口，再每 5 秒补扫一次过期 `last_seen_at`，把漏掉的离线状态落库并进入同一条 `node_offline` 通知链路。
+- 如果规则配置了 `scope_node_ids`，Agent 上报、规则命中和通知发送都会只对这些服务器生效；空数组表示全部服务器。离线规则的 `duration_sec` 同时作为公共在线/离线状态与离线通知的心跳超时时间，默认 60 秒；presence WebSocket 和服务探测结果不覆盖页面在线状态；Controller 启动后先留出一个完整心跳窗口，再每 5 秒补扫一次过期 `last_seen_at`，把漏掉的离线状态落库并进入同一条 `node_offline` 通知链路。
 - 通知发送同时要求：状态转换存在、对应通知类型启用、至少一条映射到该事件类型且对该服务器生效的规则启用、且存在启用并配置好的通知渠道。
 
 ```json
@@ -802,9 +815,9 @@ Controller 会在 Agent 上报时实际使用这些规则：
       "category": "liveness",
       "metric": "heartbeat_age_sec",
       "comparator": ">=",
-      "threshold": 30,
+      "threshold": 60,
       "threshold_unit": "s",
-      "duration_sec": 30,
+      "duration_sec": 60,
       "enabled": true,
       "notification_event_type": "node_offline",
       "notification_label": "离线",

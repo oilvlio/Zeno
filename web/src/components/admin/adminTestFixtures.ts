@@ -152,5 +152,6 @@ export const settings: AdminSettings = {
   backgroundOverlay: 0.08,
   themeColor: '#6366f1',
   customCode: '<style>.home-top-card { border-color: #2563eb; }</style><script>window.ZenoCustomLoaded = true;</script>',
+  revision: 4,
   updatedAt: '2026-07-04T12:00:00Z',
 }

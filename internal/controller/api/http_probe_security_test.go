@@ -143,3 +143,17 @@ func TestRunHTTPProbeRejectsUserinfoBeforeDial(t *testing.T) {
 		t.Fatalf("userinfo endpoint received %d requests", hits.Load())
 	}
 }
+
+func TestRunHTTPProbePreservesFailureStatusCode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "missing", http.StatusNotFound)
+	}))
+	defer server.Close()
+	samples, err := RunHTTPProbe(context.Background(), ProbeTarget{ID: "status", Type: "http_get", Address: server.URL, Count: 1, TimeoutMS: 1000})
+	if err != nil {
+		t.Fatalf("run HTTP probe: %v", err)
+	}
+	if len(samples) != 1 || samples[0].Success || samples[0].Error != "http_status_404" {
+		t.Fatalf("HTTP failure samples = %+v, want http_status_404", samples)
+	}
+}

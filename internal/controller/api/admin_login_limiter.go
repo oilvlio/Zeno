@@ -61,6 +61,13 @@ func (reservation adminLoginReservation) release(success bool) {
 	reservation.limiter.recordSuccess(reservation.key)
 }
 
+func (reservation adminLoginReservation) cancel() {
+	if reservation.limiter == nil || reservation.key == "" {
+		return
+	}
+	reservation.limiter.cancel(reservation.key)
+}
+
 func (limiter *adminLoginLimiter) pruneLocked(now time.Time) {
 	oldestKey := ""
 	oldestSeen := now
@@ -99,4 +106,22 @@ func (limiter *adminLoginLimiter) recordSuccess(key string) {
 	limiter.mu.Lock()
 	defer limiter.mu.Unlock()
 	delete(limiter.attempts, key)
+}
+
+func (limiter *adminLoginLimiter) cancel(key string) {
+	limiter.mu.Lock()
+	defer limiter.mu.Unlock()
+	attempt, ok := limiter.attempts[key]
+	if !ok {
+		return
+	}
+	if attempt.Count <= 1 {
+		delete(limiter.attempts, key)
+		return
+	}
+	attempt.Count--
+	if attempt.Count < adminLoginMaxFailures {
+		attempt.LockedUntil = time.Time{}
+	}
+	limiter.attempts[key] = attempt
 }

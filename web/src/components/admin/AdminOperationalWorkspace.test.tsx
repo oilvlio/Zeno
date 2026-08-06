@@ -12,6 +12,7 @@ const commonProps = {
   alertRules: [],
   onNodeCreate: async () => undefined,
   onNodeUpdate: () => {},
+  onNodeReorder: () => {},
   onNodeDelete: () => {},
   onInstallCommand: async () => ({ nodeId: 'node-1', command: 'install', commands: { linux: 'install' } }),
   onProbeTargetCreate: () => {},

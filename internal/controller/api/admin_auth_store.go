@@ -44,7 +44,10 @@ func (s *sqliteAdminAuth) AdminLogin(ctx context.Context, username, password, fa
 	if err != nil {
 		return AdminSession{}, err
 	}
-	passwordOK := s.adminPasswordMatches(ctx, password, fallbackHash)
+	passwordOK, err := s.adminPasswordMatches(ctx, password, fallbackHash)
+	if err != nil {
+		return AdminSession{}, err
+	}
 	if strings.TrimSpace(username) != account.Username || !passwordOK {
 		return AdminSession{}, errInvalidAdminLogin
 	}
@@ -190,11 +193,14 @@ func (s *sqliteAdminAuth) UpdateAdminAccount(ctx context.Context, username, curr
 	if newPassword != "" && (len([]rune(newPassword)) < 8 || len([]rune(newPassword)) > 128) {
 		return AdminSession{}, errInvalidAdminPasswordUpdate
 	}
-	if !s.adminPasswordMatches(ctx, currentPassword, fallbackHash) {
+	passwordOK, err := s.adminPasswordMatches(ctx, currentPassword, fallbackHash)
+	if err != nil {
+		return AdminSession{}, err
+	}
+	if !passwordOK {
 		return AdminSession{}, errInvalidAdminPasswordUpdate
 	}
 	passwordHash := ""
-	var err error
 	if newPassword != "" {
 		passwordHash, err = hashAdminPassword(newPassword)
 		if err != nil {
@@ -243,24 +249,24 @@ func (s *sqliteAdminAuth) UpdateAdminAccount(ctx context.Context, username, curr
 	return AdminSession{Username: username, Token: token}, nil
 }
 
-func (s *sqliteAdminAuth) adminPasswordMatches(ctx context.Context, password, fallbackHash string) bool {
+func (s *sqliteAdminAuth) adminPasswordMatches(ctx context.Context, password, fallbackHash string) (bool, error) {
 	var storedHash string
 	err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, settingKeyAdminPasswordHash).Scan(&storedHash)
 	if err != nil && err != sql.ErrNoRows {
-		return false
+		return false, err
 	}
 	if err == sql.ErrNoRows {
 		storedHash = ""
 	}
 	if !adminPasswordMatches(storedHash, fallbackHash, password) {
-		return false
+		return false, nil
 	}
 	if storedHash == "" || strings.HasPrefix(storedHash, "argon2id:") {
-		return true
+		return true, nil
 	}
 	upgradedHash, err := hashAdminPassword(password)
 	if err != nil {
-		return false
+		return false, err
 	}
 	result, err := s.db.ExecContext(ctx, `
 		UPDATE settings
@@ -268,10 +274,13 @@ func (s *sqliteAdminAuth) adminPasswordMatches(ctx context.Context, password, fa
 		WHERE key = ? AND value = ?
 	`, upgradedHash, time.Now().UTC().Unix(), settingKeyAdminPasswordHash, storedHash)
 	if err != nil {
-		return false
+		return false, err
 	}
 	updated, err := result.RowsAffected()
-	return err == nil && updated == 1
+	if err != nil {
+		return false, err
+	}
+	return updated == 1, nil
 }
 
 func (s *sqliteAdminAuth) createAdminSession(ctx context.Context, token string) error {
@@ -284,20 +293,23 @@ func (s *sqliteAdminAuth) createAdminSession(ctx context.Context, token string) 
 		return err
 	}
 	defer func() { rollbackUnlessCommitted(tx) }()
+	currentTokenHash := HashAdminToken(token)
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO admin_sessions (token_hash, created_at, last_seen_at)
 		VALUES (?, ?, ?)
-	`, HashAdminToken(token), now, now); err != nil {
+	`, currentTokenHash, now, now); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `
 		DELETE FROM admin_sessions
-		WHERE token_hash NOT IN (
+		WHERE token_hash <> ?
+		  AND token_hash NOT IN (
 			SELECT token_hash FROM admin_sessions
+			WHERE token_hash <> ?
 			ORDER BY last_seen_at DESC, created_at DESC, token_hash DESC
 			LIMIT ?
 		)
-	`, adminSessionMaxActive); err != nil {
+	`, currentTokenHash, currentTokenHash, adminSessionMaxActive-1); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {

@@ -27,6 +27,7 @@ export function normalizeAdminAlertRules(input: ApiAdminAlertRulesResponse): Adm
 
 export function serializeAdminSettingsUpdate(input: AdminSettingsUpdateInput) {
   return {
+    expected_revision: input.expectedRevision,
     ...(input.siteTitle !== undefined ? { site_title: input.siteTitle } : {}),
     ...(input.logoUrl !== undefined ? { logo_url: input.logoUrl } : {}),
     ...(input.theme !== undefined ? { theme: input.theme } : {}),

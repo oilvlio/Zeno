@@ -9,6 +9,7 @@ import { defaultSettings } from '../../lib/appearance'
 import { SlidingSelector } from '../SlidingSelector'
 import type { AdminNode, AdminNodeInstallCommand, AdminSettings, AdminTheme } from '../../types'
 import type { AdminAuthState, AdminLoadState } from '../../lib/adminModel'
+import type { MaybePromise } from '../../lib/maybePromise'
 import { useAdminController } from '../../hooks/useAdminController'
 import '../../styles/admin.css'
 
@@ -21,8 +22,6 @@ const adminSections: ReadonlyArray<{ id: AdminSection; label: string }> = [
   { id: 'account', label: '账户' },
   { id: 'settings', label: '设置' },
 ]
-type MaybePromise<T = void> = T | Promise<T>
-
 export interface AdminDashboardProps {
   onHome: () => void
   settings?: AdminSettings
@@ -37,6 +36,7 @@ export interface AdminDashboardProps {
   onAdminAccountUpdate?: (username: string, currentPassword: string, newPassword: string) => Promise<void>
   onAdminNodeCreate?: (input: AdminNodeCreateInput) => Promise<AdminNode | void>
   onAdminNodeUpdate?: (nodeId: string, input: AdminNodeUpdateInput) => MaybePromise
+  onAdminNodeReorder?: (nodeIds: string[]) => MaybePromise
   onAdminNodeDelete?: (nodeId: string) => MaybePromise
   onAdminInstallCommand?: (nodeId: string) => Promise<AdminNodeInstallCommand>
   onAdminProbeTargetCreate?: (input: AdminProbeTargetInput) => MaybePromise
@@ -47,7 +47,7 @@ export interface AdminDashboardProps {
   onAdminNotificationChannelDelete?: (channelId: string) => MaybePromise
   onAdminNotificationChannelTest?: (channelId: string) => void
   onAdminAlertRuleUpdate?: (ruleId: string, input: AdminAlertRuleUpdateInput) => MaybePromise
-  onAdminSettingsUpdate?: (input: AdminSettingsUpdateInput) => MaybePromise
+  onAdminSettingsUpdate?: (input: AdminSettingsUpdateInput) => MaybePromise<AdminSettings | void>
   onThemeChange?: (theme: AdminTheme) => void
   onBackgroundToggle?: () => void
   backgroundEnabled?: boolean
@@ -98,6 +98,7 @@ export function AdminDashboardContainer({
       onAdminAccountUpdate={controller.updateAdminAccountDetails}
       onAdminNodeCreate={controller.createAdminNodeDetails}
       onAdminNodeUpdate={controller.updateAdminNodeDetails}
+      onAdminNodeReorder={controller.reorderAdminNodeDetails}
       onAdminNodeDelete={controller.deleteAdminNodeDetails}
       onAdminInstallCommand={controller.requestAdminInstallCommand}
       onAdminProbeTargetCreate={controller.createAdminProbeTargetDetails}
@@ -130,6 +131,7 @@ export function AdminDashboard({
   onAdminAccountUpdate = () => Promise.reject(new Error('account update unavailable')),
   onAdminNodeCreate = () => Promise.resolve(),
   onAdminNodeUpdate = () => {},
+  onAdminNodeReorder = () => {},
   onAdminNodeDelete = () => {},
   onAdminInstallCommand = () => Promise.reject(new Error('install command unavailable')),
   onAdminProbeTargetCreate = () => {},
@@ -152,6 +154,7 @@ export function AdminDashboard({
   const isAuthenticated = adminSessionReady && hasAdminToken
   const handleTokenSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (authState.kind === 'loading') return
     const form = event.currentTarget
     const formData = new FormData(form)
     const username = String(formData.get('admin-username') ?? '').trim()
@@ -198,6 +201,7 @@ export function AdminDashboard({
                     alertRules={adminState.alertRules}
                     onNodeCreate={onAdminNodeCreate}
                     onNodeUpdate={onAdminNodeUpdate}
+                    onNodeReorder={onAdminNodeReorder}
                     onNodeDelete={onAdminNodeDelete}
                     onInstallCommand={onAdminInstallCommand}
                     onProbeTargetCreate={onAdminProbeTargetCreate}
@@ -224,7 +228,7 @@ export function AdminDashboard({
         ) : dashboardHeader}
 
         {adminSessionReady && !hasAdminToken && (
-          <form className="admin-login-card" aria-label="admin login form" onSubmit={handleTokenSubmit}>
+          <form className="admin-login-card" aria-label="admin login form" aria-busy={authState.kind === 'loading'} inert={authState.kind === 'loading' ? true : undefined} onSubmit={handleTokenSubmit}>
               <div className="admin-login-title">
                 <strong>后台登录</strong>
               </div>

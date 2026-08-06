@@ -142,6 +142,7 @@ describe('fetchSettings', () => {
         background_overlay: 0.08,
         theme_color: '#6366f1',
         custom_code: '<style>.home-top-card { border-color: #2563eb; }</style><script>window.ZenoCustomLoaded = true;</script>',
+        revision: 4,
         updated_at: '2026-07-04T12:00:00Z',
       },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
@@ -149,6 +150,7 @@ describe('fetchSettings', () => {
 
     await fetchAdminSettings('admin-pass')
     const settings = await updateAdminSettings('admin-pass', {
+      expectedRevision: 4,
       siteTitle: '水饺监控',
       logoUrl: '/assets/logo/custom.png',
       theme: 'dark',
@@ -196,6 +198,7 @@ describe('fetchSettings', () => {
         'X-Admin-Token': 'admin-pass',
       },
       body: JSON.stringify({
+        expected_revision: 4,
         site_title: '水饺监控',
         logo_url: '/assets/logo/custom.png',
         theme: 'dark',
@@ -214,5 +217,26 @@ describe('fetchSettings', () => {
         custom_code: '<style>.home-top-card { border-color: #2563eb; }</style><script>window.ZenoCustomLoaded = true;</script>',
       }),
     })
+    expect(settings.revision).toBe(4)
+  })
+
+  it('returns the latest settings with a typed conflict error', async () => {
+    const latest = {
+      site_title: 'newer title', logo_url: '', theme: 'system', background_url: '',
+      revision: 8,
+    }
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => (
+      init?.method === 'PATCH'
+        ? new Response(JSON.stringify({ error: 'settings changed' }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+        : new Response(JSON.stringify({ settings: latest }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    ))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const promise = updateAdminSettings('admin-pass', { expectedRevision: 7, siteTitle: 'stale title' })
+    await expect(promise).rejects.toMatchObject({
+      name: 'AdminSettingsConflictError',
+      latestSettings: { siteTitle: 'newer title', revision: 8 },
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

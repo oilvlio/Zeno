@@ -74,7 +74,7 @@ UI 规则：保持已确认主页卡片、详情页密度和 Admin 分区结构�
 
 ## 在线状态计算
 
-Controller 根据 `last_seen_at`、离线通知规则的 `duration_sec` 和资源规则命中状态计算。离线通知默认 30 秒，公共页面和通知补扫使用同一个超时时间：
+Controller 根据 `last_seen_at`、离线通知规则的 `duration_sec` 和资源规则命中状态计算。离线通知默认 60 秒，公共页面和通知补扫使用同一个超时时间：
 
 ```text
 online: last_seen_at 未超过离线通知 duration，且无未恢复的 resource warning

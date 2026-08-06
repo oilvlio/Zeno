@@ -20,6 +20,7 @@ export interface AdminSettings {
   backgroundOverlay: number
   themeColor: string
   customCode: string
+  revision: number
   updatedAt?: string
 }
 

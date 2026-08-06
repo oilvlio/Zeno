@@ -207,7 +207,7 @@ func RunHTTPProbe(ctx context.Context, target ProbeTarget) ([]probe.Sample, erro
 		_, _ = io.Copy(io.Discard, response.Body)
 		_ = response.Body.Close()
 		if response.StatusCode < 200 || response.StatusCode >= 400 {
-			samples = append(samples, failedMeasuredLocalProbeSample(seq, elapsedMS, "http_status"))
+			samples = append(samples, failedMeasuredLocalProbeSample(seq, elapsedMS, fmt.Sprintf("http_status_%d", response.StatusCode)))
 			continue
 		}
 		samples = append(samples, measuredLocalProbeSample(seq, elapsedMS, timeout))

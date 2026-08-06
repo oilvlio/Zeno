@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react'
 import type { AdminProbeTargetInput, AdminProbeTargetUpdateInput } from '../../api/adminClient'
 import { sortAdminProbeTargets } from '../../lib/adminCollections'
+import { runMaybePromise } from '../../lib/maybePromise'
 import type { AdminNode, AdminProbeTarget, ProbeType } from '../../types'
 import { AdminExpandedCheckList, AdminSegmentedField } from './AdminFields'
 import { AdminDeleteConfirmModal, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions, AdminWorkspaceHeading } from './AdminPrimitives'
@@ -93,6 +94,7 @@ function AdminTargetCreateModal({ nodes, onCreate, onClose }: { nodes: AdminNode
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (submitting) return
     const formData = new FormData(event.currentTarget)
     const name = String(formData.get('new-target-name') ?? '').trim()
     const type = normalizeTargetFormType(String(formData.get('new-target-type') ?? 'tcping'))
@@ -101,7 +103,7 @@ function AdminTargetCreateModal({ nodes, onCreate, onClose }: { nodes: AdminNode
     if (name === '' || address === '' || (type === 'tcping' && port === null)) return
     setSubmitting(true)
     setFormError(null)
-    Promise.resolve(onCreate({
+    runMaybePromise(() => onCreate({
       name,
       type,
       address,
@@ -117,8 +119,8 @@ function AdminTargetCreateModal({ nodes, onCreate, onClose }: { nodes: AdminNode
   }
 
   return (
-    <AdminModal title="添加延迟监控目标" onClose={onClose}>
-      <form className="admin-target-create-form admin-node-edit-form is-sectioned" aria-label="添加探针目标" onSubmit={handleSubmit}>
+    <AdminModal title="添加延迟监控目标" closeDisabled={submitting} onClose={onClose}>
+      <form className="admin-target-create-form admin-node-edit-form is-sectioned" aria-label="添加探针目标" aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
         <AdminFormSection title="目标信息">
           <div className="admin-form-grid">
             <label>
@@ -184,13 +186,14 @@ function AdminTargetEditModal({ target, nodes, onUpdate, onClose }: { target: Ad
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (submitting) return
     const formData = new FormData(event.currentTarget)
     const type = normalizeTargetFormType(String(formData.get('target-type') ?? targetType))
     const port = type === 'tcping' ? parsePositiveInt(String(formData.get('target-port') ?? '')) : null
     if (type === 'tcping' && port === null) return
     setSubmitting(true)
     setFormError(null)
-    Promise.resolve(onUpdate(target.id, {
+    runMaybePromise(() => onUpdate(target.id, {
       name: String(formData.get('target-name') ?? ''),
       type,
       address: String(formData.get('target-address') ?? ''),
@@ -211,8 +214,8 @@ function AdminTargetEditModal({ target, nodes, onUpdate, onClose }: { target: Ad
   }
 
   return (
-    <AdminModal title="编辑延迟监控" onClose={onClose}>
-      <form className="admin-target-edit-form admin-node-edit-form is-sectioned" aria-label={`${target.name} 探针目标编辑`} onSubmit={handleSubmit}>
+    <AdminModal title="编辑延迟监控" closeDisabled={submitting} onClose={onClose}>
+      <form className="admin-target-edit-form admin-node-edit-form is-sectioned" aria-label={`${target.name} 探针目标编辑`} aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
         <AdminFormSection title="目标信息">
           <div className="admin-form-grid">
             <label>

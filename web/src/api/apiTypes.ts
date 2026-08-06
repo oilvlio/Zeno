@@ -18,6 +18,7 @@ export interface ApiSettings {
   background_overlay?: number
   theme_color?: string
   custom_code?: string
+  revision?: number
   updated_at?: string
 }
 
@@ -390,6 +391,7 @@ export interface AdminAlertRulesData {
 }
 
 export interface AdminSettingsUpdateInput {
+  expectedRevision: number
   siteTitle?: string
   logoUrl?: string
   theme?: AdminTheme

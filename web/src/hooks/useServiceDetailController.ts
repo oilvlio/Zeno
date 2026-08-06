@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { fetchServiceLatency, subscribeServiceLatency, type ServiceLatencyData } from '../api/publicClient'
 import { captureAdminTokenIdentity, type AdminTokenIdentity } from '../lib/adminToken'
 import { DetailMemoryCache, loadCachedDetailData, rememberDetailData, serviceLatencyCachePrefix } from '../lib/detailCache'
+import { detailHttpFallbackDelayMs } from '../lib/detailTiming'
 import { coerceHistoryRange, isHTTPUnauthorizedError, rangeRequiresAdmin } from '../lib/historyRange'
 import { startResilientLiveData } from '../lib/resilientLive'
 
@@ -10,8 +11,6 @@ export type ServiceLatencyLoadState =
   | { kind: 'loading' }
   | { kind: 'ready'; data: ServiceLatencyData }
   | { kind: 'error'; message: string }
-
-const detailHttpFallbackDelayMs = 1800
 
 function validateServiceLatencyData(value: unknown): ServiceLatencyData | null {
   const data = value as Partial<ServiceLatencyData> | null

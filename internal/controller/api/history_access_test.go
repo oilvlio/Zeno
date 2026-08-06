@@ -45,6 +45,26 @@ func TestExtendedHistoryRequiresAdminToken(t *testing.T) {
 	}
 }
 
+func TestExtendedHistoryRejectsExistingSessionWhenAdminIsDisabled(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+	const oldSession = "old-admin-session"
+	if err := store.createAdminSession(context.Background(), oldSession); err != nil {
+		t.Fatalf("create old admin session: %v", err)
+	}
+	handler := NewHandler(HandlerOptions{Store: store})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/public/v1/nodes/example-node-a/latency?range=7d", nil)
+	request.Header.Set("X-Admin-Token", oldSession)
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("disabled admin extended history status = %d, want 404; body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestTieredHistoryKeepsExactlyThirtyDayWindow(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {

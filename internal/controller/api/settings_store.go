@@ -3,12 +3,15 @@ package api
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
+	settingKeySettingsRevision     = "settings_revision"
 	settingKeySiteTitle            = "site_title"
 	settingKeyLogoURL              = "logo_url"
 	settingKeyTheme                = "theme"
@@ -27,6 +30,8 @@ const (
 	settingKeyCustomCode           = "custom_code"
 )
 
+var errAdminSettingsConflict = errors.New("admin settings conflict")
+
 type sqliteSettings struct {
 	db *sql.DB
 }
@@ -43,13 +48,33 @@ func (s *sqliteSettings) UpdateAdminSettings(ctx context.Context, update AdminSe
 	if err := update.normalize(); err != nil {
 		return SiteSettings{}, err
 	}
+	values := adminSettingsUpdateValues(update)
+	if len(values) == 0 {
+		return s.siteSettings(ctx)
+	}
 	now := time.Now().UTC().Unix()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return SiteSettings{}, err
 	}
 	defer func() { rollbackUnlessCommitted(tx) }()
-	values := adminSettingsUpdateValues(update)
+	// The first write acquires SQLite's write reservation before the revision is
+	// read. Concurrent settings writers therefore serialize before comparing
+	// their expected revision instead of both validating the same snapshot.
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO settings (key, value, updated_at)
+		VALUES (?, '0', ?)
+		ON CONFLICT(key) DO NOTHING
+	`, settingKeySettingsRevision, now); err != nil {
+		return SiteSettings{}, err
+	}
+	currentRevision, err := settingsRevisionTx(ctx, tx)
+	if err != nil {
+		return SiteSettings{}, err
+	}
+	if update.ExpectedRevision != nil && currentRevision != *update.ExpectedRevision {
+		return SiteSettings{}, errAdminSettingsConflict
+	}
 	for key, value := range values {
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO settings (key, value, updated_at)
@@ -59,6 +84,14 @@ func (s *sqliteSettings) UpdateAdminSettings(ctx context.Context, update AdminSe
 			return SiteSettings{}, err
 		}
 	}
+	if currentRevision == int64(^uint64(0)>>1) {
+		return SiteSettings{}, fmt.Errorf("settings revision exhausted")
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE settings SET value = ?, updated_at = ? WHERE key = ?
+	`, strconv.FormatInt(currentRevision+1, 10), now, settingKeySettingsRevision); err != nil {
+		return SiteSettings{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return SiteSettings{}, err
 	}
@@ -66,6 +99,18 @@ func (s *sqliteSettings) UpdateAdminSettings(ctx context.Context, update AdminSe
 	// Re-read after commit so the response includes concurrent disjoint updates
 	// rather than the stale pre-PATCH snapshot.
 	return s.siteSettings(ctx)
+}
+
+func settingsRevisionTx(ctx context.Context, tx *sql.Tx) (int64, error) {
+	var stored string
+	if err := tx.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, settingKeySettingsRevision).Scan(&stored); err != nil {
+		return 0, err
+	}
+	revision, err := strconv.ParseInt(strings.TrimSpace(stored), 10, 64)
+	if err != nil || revision < 0 {
+		return 0, fmt.Errorf("invalid settings revision %q", stored)
+	}
+	return revision, nil
 }
 
 func (s *sqliteSettings) siteSettings(ctx context.Context) (SiteSettings, error) {

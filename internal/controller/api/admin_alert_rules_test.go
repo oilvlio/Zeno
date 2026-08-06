@@ -125,8 +125,8 @@ func TestDefaultAlertRuleDurationMigration(t *testing.T) {
 	}
 	defer store.Close()
 	ctx := context.Background()
-	if _, err := store.db.ExecContext(ctx, `DELETE FROM settings WHERE key = 'alert_default_durations_v2_migrated'`); err != nil {
-		t.Fatalf("clear duration migration marker: %v", err)
+	if _, err := store.db.ExecContext(ctx, `DELETE FROM settings WHERE key IN ('alert_default_durations_v2_migrated', 'node_offline_default_60s_migrated')`); err != nil {
+		t.Fatalf("clear duration migration markers: %v", err)
 	}
 	if _, err := store.db.ExecContext(ctx, `DELETE FROM settings WHERE key = 'resource_alert_duration_5m_migrated'`); err != nil {
 		t.Fatalf("clear resource duration migration marker: %v", err)
@@ -148,7 +148,7 @@ func TestDefaultAlertRuleDurationMigration(t *testing.T) {
 	if err := store.ensureDefaultAlertRules(ctx); err != nil {
 		t.Fatalf("ensure default alert rules: %v", err)
 	}
-	wantDurations := map[string]int{"cpu_high": 300, "memory_high": 300, "disk_high": 300, "node_offline": 30}
+	wantDurations := map[string]int{"cpu_high": 300, "memory_high": 300, "disk_high": 300, "node_offline": 60}
 	for ruleID := range oldDurations {
 		var duration int
 		if err := store.db.QueryRowContext(ctx, `SELECT duration_sec FROM alert_rules WHERE id = ?`, ruleID).Scan(&duration); err != nil {
@@ -162,8 +162,55 @@ func TestDefaultAlertRuleDurationMigration(t *testing.T) {
 	if err := store.db.QueryRowContext(ctx, `SELECT threshold FROM alert_rules WHERE id = 'node_offline'`).Scan(&offlineThreshold); err != nil {
 		t.Fatalf("read offline threshold: %v", err)
 	}
-	if offlineThreshold != 30 {
-		t.Fatalf("node_offline threshold = %v, want migrated default 30", offlineThreshold)
+	if offlineThreshold != 60 {
+		t.Fatalf("node_offline threshold = %v, want migrated default 60", offlineThreshold)
+	}
+}
+
+func TestNodeOfflineDefaultMigrationUpgradesOnlyUntouchedThirtySecondRule(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	if _, err := store.db.ExecContext(ctx, `
+		DELETE FROM settings WHERE key = 'node_offline_default_60s_migrated';
+		UPDATE alert_rules
+		SET threshold = 30,
+		    duration_sec = 30,
+		    created_at = (SELECT updated_at - 100 FROM settings WHERE key = 'alert_default_durations_v2_migrated'),
+		    updated_at = (SELECT updated_at FROM settings WHERE key = 'alert_default_durations_v2_migrated')
+		WHERE id = 'node_offline';
+	`); err != nil {
+		t.Fatalf("seed released 30s default: %v", err)
+	}
+	if err := store.ensureDefaultAlertRules(ctx); err != nil {
+		t.Fatalf("migrate released 30s default: %v", err)
+	}
+	var threshold float64
+	var duration int
+	if err := store.db.QueryRowContext(ctx, `SELECT threshold, duration_sec FROM alert_rules WHERE id = 'node_offline'`).Scan(&threshold, &duration); err != nil {
+		t.Fatalf("read migrated offline rule: %v", err)
+	}
+	if threshold != 60 || duration != 60 {
+		t.Fatalf("migrated offline rule = %v/%d, want 60/60", threshold, duration)
+	}
+
+	if _, err := store.db.ExecContext(ctx, `
+		DELETE FROM settings WHERE key = 'node_offline_default_60s_migrated';
+		UPDATE alert_rules SET threshold = 30, duration_sec = 30, updated_at = created_at + 1 WHERE id = 'node_offline';
+	`); err != nil {
+		t.Fatalf("seed user-edited 30s rule: %v", err)
+	}
+	if err := store.ensureDefaultAlertRules(ctx); err != nil {
+		t.Fatalf("rerun migration for user-edited rule: %v", err)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT threshold, duration_sec FROM alert_rules WHERE id = 'node_offline'`).Scan(&threshold, &duration); err != nil {
+		t.Fatalf("read preserved offline rule: %v", err)
+	}
+	if threshold != 30 || duration != 30 {
+		t.Fatalf("user-edited offline rule = %v/%d, want preserved 30/30", threshold, duration)
 	}
 }
 

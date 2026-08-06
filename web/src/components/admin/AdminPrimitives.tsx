@@ -1,7 +1,6 @@
-import { type FormEvent, type ReactNode, useId, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-
-type MaybePromise<T = void> = T | Promise<T>
+import { runMaybePromise, type MaybePromise } from '../../lib/maybePromise'
 
 function AdminModalLayer({ children }: { children: ReactNode }) {
   if (typeof document === 'undefined') return <>{children}</>
@@ -9,13 +8,68 @@ function AdminModalLayer({ children }: { children: ReactNode }) {
 }
 
 export function AdminModal({ title, onClose, children, className, descriptionId, closeDisabled = false }: { title: string; onClose: () => void; children: ReactNode; className?: string; descriptionId?: string; closeDisabled?: boolean }) {
+  const modalRef = useRef<HTMLElement | null>(null)
+  const titleId = useId()
+  useEffect(() => {
+    const modal = modalRef.current
+    if (!modal || typeof document === 'undefined') return undefined
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const initialTarget = modal.querySelector<HTMLElement>([
+      '[autofocus]',
+      '.admin-modal-body input:not([disabled])',
+      '.admin-modal-body textarea:not([disabled])',
+      '.admin-modal-body select:not([disabled])',
+      '.admin-modal-body button:not([disabled])',
+      'button:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(','))
+    ;(initialTarget ?? modal).focus()
+    return () => {
+      if (previouslyFocused?.isConnected) previouslyFocused.focus()
+    }
+  }, [])
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape') {
+      if (closeDisabled) return
+      event.preventDefault()
+      event.stopPropagation()
+      onClose()
+      return
+    }
+    if (event.key !== 'Tab') return
+    const modal = modalRef.current
+    if (!modal) return
+    const focusable = Array.from(modal.querySelectorAll<HTMLElement>([
+      'a[href]',
+      'button:not([disabled])',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(','))).filter((element) => element.getAttribute('aria-hidden') !== 'true')
+    if (focusable.length === 0) {
+      event.preventDefault()
+      modal.focus()
+      return
+    }
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement
+    if (event.shiftKey && (active === first || !modal.contains(active))) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && (active === last || !modal.contains(active))) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
   return (
     <AdminModalLayer>
       <div className="admin-modal-backdrop" role="presentation">
-        <section className={`admin-modal${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true" aria-label={title} aria-describedby={descriptionId}>
+        <section ref={modalRef} className={`admin-modal${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} tabIndex={-1} onKeyDown={handleKeyDown}>
           <header className="admin-modal-header">
             <div>
-              <h3>{title}</h3>
+              <h3 id={titleId}>{title}</h3>
             </div>
             <button className="admin-modal-close" type="button" onClick={onClose} aria-label="关闭弹窗" disabled={closeDisabled}>×</button>
           </header>
@@ -46,7 +100,7 @@ export function AdminDeleteConfirmModal({ title, subjectName, confirmLabel, onCo
     if (submitting) return
     setSubmitting(true)
     setFormError(null)
-    Promise.resolve(onConfirm())
+    runMaybePromise(onConfirm)
       .then(onClose)
       .catch((error: unknown) => setFormError(error instanceof Error ? error.message : '删除失败'))
       .finally(() => setSubmitting(false))
@@ -54,7 +108,7 @@ export function AdminDeleteConfirmModal({ title, subjectName, confirmLabel, onCo
 
   return (
     <AdminModal title={title} className="admin-delete-modal" descriptionId={descriptionId} closeDisabled={submitting} onClose={() => { if (!submitting) onClose() }}>
-      <form className="admin-delete-confirm" aria-busy={submitting} onSubmit={handleSubmit}>
+      <form className="admin-delete-confirm" aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
         <div id={descriptionId} className="admin-delete-confirm__content">
           <p className="admin-delete-confirm__lead">确认删除「<strong>{subjectName}</strong>」？</p>
           <p className="admin-delete-confirm__hint">删除后无法恢复。</p>

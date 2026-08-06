@@ -49,10 +49,12 @@ type SiteSettings struct {
 	BackgroundOverlay    float64 `json:"background_overlay"`
 	ThemeColor           string  `json:"theme_color"`
 	CustomCode           string  `json:"custom_code"`
+	Revision             int64   `json:"revision"`
 	UpdatedAt            string  `json:"updated_at,omitempty"`
 }
 
 type AdminSettingsUpdateRequest struct {
+	ExpectedRevision     *int64   `json:"expected_revision,omitempty"`
 	SiteTitle            *string  `json:"site_title,omitempty"`
 	LogoURL              *string  `json:"logo_url,omitempty"`
 	Theme                *string  `json:"theme,omitempty"`
@@ -101,6 +103,9 @@ func defaultSiteSettings() SiteSettings {
 }
 
 func (request *AdminSettingsUpdateRequest) normalize() error {
+	if request.ExpectedRevision != nil && *request.ExpectedRevision < 0 {
+		return errInvalidAdminSettingsUpdate
+	}
 	normalizer := newPatchNormalizer(errInvalidAdminSettingsUpdate)
 	normalizer.text(&request.SiteTitle, trimRequiredMaxRunes(64))
 	normalizer.text(&request.LogoURL, trimOptionalValid(validSettingsAssetURL))

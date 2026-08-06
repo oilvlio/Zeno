@@ -38,6 +38,7 @@ func TestWriteAdminErrorStatusMapping(t *testing.T) {
 		{errInvalidAdminNotificationTypeWrite, http.StatusBadRequest, "bad request"},
 		{errInvalidAdminAlertRuleUpdate, http.StatusBadRequest, "bad request"},
 		{errInvalidAdminPasswordUpdate, http.StatusBadRequest, "bad request"},
+		{errAdminSettingsConflict, http.StatusConflict, "settings changed"},
 		{errNotificationCredentialKeyRequired, http.StatusConflict, "notification key unavailable"},
 		{errNotificationDeliveryNotFailed, http.StatusConflict, "notification delivery is not failed"},
 		{errNodeAlreadyExists, http.StatusConflict, "already exists"},

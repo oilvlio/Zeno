@@ -731,17 +731,17 @@
   --control-bg: transparent;
 }
 .admin-select-popover,
+.admin-install-platforms,
+.admin-date-popover {
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: var(--radius-card);
+  color: var(--foreground);
+}
+.admin-select-popover,
 .admin-install-platforms {
   display: grid;
   gap: 4px;
   padding: 6px;
-  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
-  border-radius: var(--radius-card);
-  background: var(--zeno-overlay-surface);
-  color: var(--foreground);
-  box-shadow: var(--zeno-overlay-shadow);
-  -webkit-backdrop-filter: var(--zeno-overlay-filter);
-  backdrop-filter: var(--zeno-overlay-filter);
 }
 .admin-select-popover {
   z-index: 92;
@@ -770,13 +770,6 @@
   z-index: 90;
   width: min(312px, calc(100vw - 40px));
   padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
-  border-radius: var(--radius-card);
-  background: var(--zeno-overlay-surface);
-  color: var(--foreground);
-  box-shadow: var(--zeno-overlay-shadow);
-  -webkit-backdrop-filter: var(--zeno-overlay-filter);
-  backdrop-filter: var(--zeno-overlay-filter);
 }
 .admin-date-calendar-header,
 .admin-date-actions {
@@ -840,21 +833,7 @@
 }
 .admin-date-year-panel { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .admin-date-month-panel { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.admin-date-option-panel button {
-  min-width: 0;
-  height: 30px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-field);
-  background: transparent;
-  color: var(--foreground);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
-}
-.admin-date-option-panel button:hover { border-color: color-mix(in srgb, var(--blue) 30%, var(--border)); background: color-mix(in srgb, var(--blue) 7%, transparent); color: var(--blue); }
-.admin-date-option-panel button.is-selected { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); box-shadow: none; }
+.admin-date-option-panel button,
 .admin-date-calendar-header > button,
 .admin-date-actions button,
 .admin-date-grid button {
@@ -868,6 +847,12 @@
   font-weight: 500;
   cursor: pointer;
 }
+.admin-date-option-panel button {
+  min-width: 0;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+.admin-date-option-panel button:hover { border-color: color-mix(in srgb, var(--blue) 30%, var(--border)); background: color-mix(in srgb, var(--blue) 7%, transparent); color: var(--blue); }
+.admin-date-option-panel button.is-selected { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); box-shadow: none; }
 .admin-date-calendar-header > button { width: 30px; flex: none; border-radius: var(--radius-pill); color: var(--blue); background: transparent; }
 .admin-date-weekdays,
 .admin-date-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
@@ -1371,7 +1356,11 @@
   gap: 0;
   margin: 0;
   padding: 0;
-  overflow: hidden;
+  max-height: min(55dvh, 560px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   border: 1px solid var(--divider);
   border-radius: var(--radius-card);
   background: transparent;

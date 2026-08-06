@@ -8,6 +8,7 @@ export function isAdminUnauthorizedError(error: unknown): boolean {
 
 
 export function validateAdminSettingsInput(input: AdminSettingsUpdateInput): string | null {
+  if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0) return '设置版本无效，请载入最新设置。'
   if (!validSettingsImageURL(input.logoUrl ?? '')) return '头像 / Logo URL 只能是 https:// 链接或 /assets/... 站内路径。'
   if (!validSettingsImageURL(input.desktopBackgroundUrl ?? input.backgroundUrl ?? '')) return '电脑端背景图 URL 只能是 https:// 链接或 /assets/... 站内路径。'
   if (!validSettingsImageURL(input.mobileBackgroundUrl ?? '')) return '手机端背景图 URL 只能是 https:// 链接或 /assets/... 站内路径。'

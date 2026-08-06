@@ -44,6 +44,10 @@ type adminAuthStore interface {
 	AdminAccountConfigured(ctx context.Context) (bool, error)
 }
 
+type adminNodeOrderStore interface {
+	ReorderAdminNodes(ctx context.Context, request AdminNodeReorderRequest) error
+}
+
 const (
 	adminSessionCookieName = "__Host-zeno_admin_session"
 	adminCSRFHeaderName    = "X-Zeno-CSRF"
@@ -138,19 +142,34 @@ func (h *handler) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		accountReservation, reserved = h.loginLimiter.reserve(accountKey)
 		if !reserved {
+			// The account key may already be locked while the per-IP reservation
+			// above succeeded. This request never reaches password verification, so
+			// do not consume an unrelated IP failure slot.
+			ipReservation.cancel()
 			writeError(w, http.StatusTooManyRequests, "too many attempts")
 			return
 		}
 	}
 	loginSucceeded := false
+	loginAttemptCounted := true
 	defer func() {
-		accountReservation.release(loginSucceeded)
-		ipReservation.release(loginSucceeded)
+		if loginAttemptCounted {
+			accountReservation.release(loginSucceeded)
+			ipReservation.release(loginSucceeded)
+			return
+		}
+		accountReservation.cancel()
+		ipReservation.cancel()
 	}()
 	if authStore, ok := h.store.(adminAuthStore); ok {
 		session, err := authStore.AdminLogin(r.Context(), request.Username, request.Password, h.adminPasswordHash)
 		if err != nil {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
+			if errors.Is(err, errInvalidAdminLogin) {
+				writeError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			loginAttemptCounted = false
+			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		loginSucceeded = true
@@ -247,6 +266,9 @@ func readAdminSettings(ctx context.Context, store adminStore) (AdminSettingsResp
 }
 
 func updateAdminSettings(ctx context.Context, store adminStore, update AdminSettingsUpdateRequest) (AdminSettingsResponse, error) {
+	if update.ExpectedRevision == nil {
+		return AdminSettingsResponse{}, errInvalidAdminSettingsUpdate
+	}
 	settings, err := store.UpdateAdminSettings(ctx, update)
 	return AdminSettingsResponse{Settings: settings}, err
 }
@@ -459,6 +481,31 @@ func (h *handler) handleAdminNodeResource(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, AdminNodeResponse{Node: node})
 }
 
+func (h *handler) handleAdminNodeReorder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if _, ok := h.authorizeAdminRequest(w, r); !ok {
+		return
+	}
+	store, ok := h.store.(adminNodeOrderStore)
+	if !ok {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	var request AdminNodeReorderRequest
+	if !decodeJSONBody(w, r, &request, adminJSONBodyLimit, true) {
+		return
+	}
+	if err := store.ReorderAdminNodes(r.Context(), request); err != nil {
+		writeAdminError(w, err)
+		return
+	}
+	h.publishSummaryNowFresh(r.Context())
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *handler) handleAdminNodeInstallCommand(w http.ResponseWriter, r *http.Request, nodeID string) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -583,6 +630,10 @@ func (h *handler) authorizeAdminRequest(w http.ResponseWriter, r *http.Request) 
 // history endpoints while allowing the public dashboard to pass its existing
 // opaque admin session in X-Admin-Token.
 func (h *handler) authorizeExtendedHistoryRequest(w http.ResponseWriter, r *http.Request) bool {
+	if h.adminPasswordHash == "" {
+		writeError(w, http.StatusNotFound, "not found")
+		return false
+	}
 	provided, cookieAuth := adminRequestToken(r)
 	if cookieAuth && !h.requestUsesHTTPS(r) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
@@ -688,6 +739,7 @@ var adminErrorResponses = []struct {
 		errInvalidAdminNotificationTypeWrite, errInvalidAdminAlertRuleUpdate,
 		errInvalidAdminPasswordUpdate,
 	}},
+	{http.StatusConflict, "settings changed", []error{errAdminSettingsConflict}},
 	{http.StatusConflict, "notification key unavailable", []error{errNotificationCredentialKeyRequired}},
 	{http.StatusConflict, "notification delivery is not failed", []error{errNotificationDeliveryNotFailed}},
 	{http.StatusConflict, "already exists", []error{

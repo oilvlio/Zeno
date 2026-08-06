@@ -21,6 +21,13 @@ export async function fetchAdminSettings(adminToken: string, signal?: AbortSigna
   return normalizeSettings(data.settings)
 }
 
+export class AdminSettingsConflictError extends Error {
+  constructor(readonly latestSettings: AdminSettings) {
+    super('服务端设置已更新，请载入最新设置。')
+    this.name = 'AdminSettingsConflictError'
+  }
+}
+
 export async function updateAdminSettings(adminToken: string, input: AdminSettingsUpdateInput, signal?: AbortSignal): Promise<AdminSettings> {
   const response = await fetch('/api/admin/v1/settings', {
     method: 'PATCH',
@@ -28,6 +35,9 @@ export async function updateAdminSettings(adminToken: string, input: AdminSettin
     headers: adminHeaders(adminToken, { Accept: 'application/json', 'Content-Type': 'application/json' }),
     body: JSON.stringify(serializeAdminSettingsUpdate(input)),
   })
+  if (response.status === 409) {
+    throw new AdminSettingsConflictError(await fetchAdminSettings(adminToken, signal))
+  }
   if (!response.ok) {
     throw new Error(`admin settings update failed: ${response.status}`)
   }
@@ -44,6 +54,18 @@ export async function fetchAdminNodes(adminToken: string, signal?: AbortSignal):
     throw new Error(`admin nodes request failed: ${response.status}`)
   }
   return normalizeAdminNodes(await response.json() as ApiAdminNodesResponse)
+}
+
+export async function reorderAdminNodes(adminToken: string, nodeIds: string[], signal?: AbortSignal): Promise<void> {
+  const response = await fetch('/api/admin/v1/nodes/reorder', {
+    method: 'PATCH',
+    signal,
+    headers: adminHeaders(adminToken, { Accept: 'application/json', 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ node_ids: nodeIds }),
+  })
+  if (!response.ok) {
+    throw new Error(`admin node reorder failed: ${response.status}`)
+  }
 }
 
 export async function fetchAdminProbeTargets(adminToken: string, signal?: AbortSignal): Promise<AdminProbeTargetsData> {

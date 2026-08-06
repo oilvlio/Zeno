@@ -22,6 +22,7 @@ export function normalizeSettings(input: ApiSettings): AdminSettings {
     backgroundOverlay: input.background_overlay ?? 0,
     themeColor: input.theme_color ?? '#2563eb',
     customCode: input.custom_code ?? '',
+    revision: Number.isSafeInteger(input.revision) && (input.revision ?? -1) >= 0 ? input.revision! : 0,
     updatedAt: input.updated_at,
   }
 }

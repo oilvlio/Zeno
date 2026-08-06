@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { fetchNodeLatency, fetchNodeState, peekPrefetchedNodeLatency, subscribeNodeLatency, subscribeNodeState, type NodeLatencyData, type NodeStateData, type SummaryData } from '../api/publicClient'
 import { captureAdminTokenIdentity, type AdminTokenIdentity } from '../lib/adminToken'
 import { DetailMemoryCache, loadCachedDetailData, nodeLatencyCachePrefix, nodeStateCachePrefix, rememberDetailData } from '../lib/detailCache'
+import { detailHttpFallbackDelayMs } from '../lib/detailTiming'
 import { coerceHistoryRange, isHTTPUnauthorizedError, rangeRequiresAdmin } from '../lib/historyRange'
 import { startResilientLiveData } from '../lib/resilientLive'
 import type { StatePoint } from '../types'
@@ -18,7 +19,6 @@ export type StateHistoryLoadState =
   | { kind: 'ready'; data: NodeStateData }
   | { kind: 'error'; message: string }
 
-const detailHttpFallbackDelayMs = 1800
 const detailSnapshotKeyLimit = 12
 
 export function shouldApplyNodeLatencySnapshot(seen: Map<string, string>, cacheKey: string, snapshotKey?: string): boolean {

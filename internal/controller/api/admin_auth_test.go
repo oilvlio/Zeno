@@ -262,3 +262,58 @@ func TestAdminSessionExpiresAfterOneDay(t *testing.T) {
 		t.Fatalf("expired one-day session status = %d, want 401; body=%s", expiredRecorder.Code, expiredRecorder.Body.String())
 	}
 }
+
+func TestAdminSessionPruningAlwaysProtectsNewSession(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	future := time.Now().UTC().Add(time.Hour).Unix()
+	for index := 0; index < adminSessionMaxActive; index++ {
+		if _, err := store.db.ExecContext(ctx, `
+			INSERT INTO admin_sessions (token_hash, created_at, last_seen_at) VALUES (?, ?, ?)
+		`, HashAdminToken("existing-session-"+formatInt64(int64(index))), future, future); err != nil {
+			t.Fatalf("seed existing session %d: %v", index, err)
+		}
+	}
+	const currentToken = "current-session"
+	if err := store.createAdminSession(ctx, currentToken); err != nil {
+		t.Fatalf("create current session: %v", err)
+	}
+	var count int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM admin_sessions`).Scan(&count); err != nil {
+		t.Fatalf("count active sessions: %v", err)
+	}
+	if count != adminSessionMaxActive {
+		t.Fatalf("active session count = %d, want %d", count, adminSessionMaxActive)
+	}
+	var currentCount int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM admin_sessions WHERE token_hash = ?`, HashAdminToken(currentToken)).Scan(&currentCount); err != nil {
+		t.Fatalf("find current session: %v", err)
+	}
+	if currentCount != 1 {
+		t.Fatalf("current session count = %d, want protected session to survive pruning", currentCount)
+	}
+}
+
+func TestAdminLoginStorageFailuresReturnServerErrorWithoutLockout(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
+	if err := store.Close(); err != nil {
+		t.Fatalf("close sqlite store: %v", err)
+	}
+	for attempt := 1; attempt <= adminLoginMaxFailures+1; attempt++ {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/login", strings.NewReader(`{"username":"admin","password":"admin-pass"}`))
+		request.Header.Set("Content-Type", "application/json")
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusInternalServerError {
+			t.Fatalf("attempt %d status = %d, want 500 without lockout; body=%s", attempt, recorder.Code, recorder.Body.String())
+		}
+	}
+}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchSummary, subscribeSummary, type SummaryData } from '../api/publicClient'
+import { detailHttpFallbackDelayMs } from '../lib/detailTiming'
 import { flushScheduledSummaryWrite, loadStoredSummary, scheduleRememberSummary } from '../lib/summaryCache'
 import { startResilientLiveData } from '../lib/resilientLive'
 import type { HomeCardNode } from '../types'
@@ -15,7 +16,6 @@ export type HomeRealtimeSnapshot = {
   downSpeed: number
 }
 
-const detailHttpFallbackDelayMs = 1800
 const homeRealtimeSnapshotIntervalMs = 2000
 const homeRealtimeSnapshotFrameToleranceMs = 150
 const homeRealtimeStartupSyncMs = 1000

@@ -80,6 +80,7 @@ func TestAdminSettingsUpdateBindingsCoverEveryRequestField(t *testing.T) {
 	aliasHandled := map[string]struct{}{
 		"BackgroundURL":        {},
 		"DesktopBackgroundURL": {},
+		"ExpectedRevision":     {},
 	}
 
 	bound := map[string]struct{}{}

@@ -98,6 +98,33 @@ func TestAdminLoginIPRateLimitCannotBeBypassedWithDifferentUsernames(t *testing.
 	}
 }
 
+func TestAdminLoginLockedAccountDoesNotConsumeIPFailureSlot(t *testing.T) {
+	httpHandler := NewHandler(HandlerOptions{AdminPasswordHash: testAdminPasswordHash("admin-pass")})
+	handler := httpHandler.(*handler)
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/login", strings.NewReader(`{"username":"admin","password":"admin-pass"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.RemoteAddr = "198.51.100.9:12345"
+	accountKey := handler.adminLoginRateLimitKey(request, "admin")
+	for attempt := 0; attempt < adminLoginMaxFailures; attempt++ {
+		if _, ok := handler.loginLimiter.reserve(accountKey); !ok {
+			t.Fatalf("account attempt %d rejected before lock threshold", attempt+1)
+		}
+	}
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("locked account status = %d, want 429; body=%s", recorder.Code, recorder.Body.String())
+	}
+	ipKey := handler.adminLoginIPRateLimitKey(request)
+	handler.loginLimiter.mu.Lock()
+	_, retained := handler.loginLimiter.attempts[ipKey]
+	handler.loginLimiter.mu.Unlock()
+	if retained {
+		t.Fatal("account-level rejection retained a per-IP failure reservation")
+	}
+}
+
 func TestAdminPasswordHashRejectsOversizedArgonParameters(t *testing.T) {
 	oversized := "argon2id:v=19:m=1048576:t=3:p=2:emVuby1kdW1teS1zYWx0:MfaHhKQHaOt+QsALfIOerW4EtUmf5zKMiHhxvflHstY"
 	if adminPasswordMatches(oversized, "", "wrong-pass") {

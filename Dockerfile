@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
-# Base image policy: track explicit upstream patch/minor tags (not latest) so
-# routine rebuilds pick up maintained Debian package fixes without hiding major
-# upgrades. The GitHub Docker workflow emits provenance and SBOM attestations for
-# every published image.
+# Builder versions match the CI toolchains exactly, so the shipped binary and
+# assets are produced by the runtimes that passed the full test suite. Digest
+# pins keep rebuild inputs immutable; version upgrades update CI and these two
+# stages together. Published images include provenance and SBOM attestations.
 
-FROM --platform=$BUILDPLATFORM node:26.5.1-bookworm-slim@sha256:9e6f9357d371591e32ab6f2d8a26d63bdd0d17c29eee3f4f3e7e454d9634bf73 AS web-builder
+FROM --platform=$BUILDPLATFORM node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203 AS web-builder
 WORKDIR /src/web
 COPY web/package*.json ./
 RUN npm ci
@@ -13,7 +13,7 @@ ARG VERSION=dev
 ENV VITE_BUILD_ID=${VERSION}
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1.26.5-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651 AS go-builder
+FROM --platform=$BUILDPLATFORM golang:1.25.12-bookworm@sha256:908f8ff2ec296df2f349563072c7925775cd28b50361a52ed834a8a37399b9bf AS go-builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

@@ -182,6 +182,7 @@ func NewHandler(options ...HandlerOptions) http.Handler {
 	mux.HandleFunc("/api/admin/v1/probe-targets", h.handleAdminProbeTargets)
 	mux.HandleFunc("/api/admin/v1/probe-targets/", h.handleAdminProbeTargetResource)
 	mux.HandleFunc("/api/admin/v1/nodes", h.handleAdminNodes)
+	mux.HandleFunc("/api/admin/v1/nodes/reorder", h.handleAdminNodeReorder)
 	mux.HandleFunc("/api/admin/v1/nodes/", h.handleAdminNodeResource)
 	mux.HandleFunc("/api/agent/v1/enroll", h.handleAgentEnrollment)
 	mux.HandleFunc("/api/agent/v1/probe-targets", h.handleAgentProbeTargets)

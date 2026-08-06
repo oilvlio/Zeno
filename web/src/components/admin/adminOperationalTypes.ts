@@ -8,8 +8,9 @@ import type {
   AdminProbeTargetUpdateInput,
 } from '../../api/adminClient'
 import type { AdminAlertRule, AdminNode, AdminNodeInstallCommand, AdminNotificationChannel, AdminProbeTarget } from '../../types'
+import type { MaybePromise } from '../../lib/maybePromise'
 
-export type MaybePromise<T = void> = T | Promise<T>
+export type { MaybePromise } from '../../lib/maybePromise'
 export type AdminOperationalSection = 'nodes' | 'targets' | 'notifications'
 
 export interface AdminNodeWorkspaceProps {
@@ -17,6 +18,7 @@ export interface AdminNodeWorkspaceProps {
   targets: AdminProbeTarget[]
   onCreate: (input: AdminNodeCreateInput) => Promise<AdminNode | void>
   onUpdate: (nodeId: string, input: AdminNodeUpdateInput) => MaybePromise
+  onReorder: (nodeIds: string[]) => MaybePromise
   onDelete: (nodeId: string) => MaybePromise
   onInstallCommand: (nodeId: string) => Promise<AdminNodeInstallCommand>
 }
@@ -48,6 +50,7 @@ export interface AdminOperationalWorkspaceProps {
   alertRules: AdminAlertRule[]
   onNodeCreate: AdminNodeWorkspaceProps['onCreate']
   onNodeUpdate: AdminNodeWorkspaceProps['onUpdate']
+  onNodeReorder: AdminNodeWorkspaceProps['onReorder']
   onNodeDelete: AdminNodeWorkspaceProps['onDelete']
   onInstallCommand: AdminNodeWorkspaceProps['onInstallCommand']
   onProbeTargetCreate: AdminTargetWorkspaceProps['onCreate']

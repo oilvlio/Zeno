@@ -113,6 +113,9 @@ func (s *sqliteAdminAlertRules) ensureDefaultAlertRules(ctx context.Context) err
 	if err := s.migrateDefaultAlertRuleDurations(ctx); err != nil {
 		return err
 	}
+	if err := s.migrateNodeOfflineDefaultToOneMinute(ctx); err != nil {
+		return err
+	}
 	if err := s.migrateResourceAlertRuleDurationToFiveMinutes(ctx); err != nil {
 		return err
 	}
@@ -166,6 +169,55 @@ func (s *sqliteAdminAlertRules) migrateDefaultAlertRuleDurations(ctx context.Con
 		`, migrationKey, now); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *sqliteAdminAlertRules) migrateNodeOfflineDefaultToOneMinute(ctx context.Context) error {
+	const migrationKey = "node_offline_default_60s_migrated"
+	now := time.Now().UTC().Unix()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { rollbackUnlessCommitted(tx) }()
+	var marker string
+	if err := tx.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, migrationKey).Scan(&marker); err != nil {
+		if err != sql.ErrNoRows {
+			return err
+		}
+	} else {
+		return nil
+	}
+	// Only the two released forms of the untouched 30s default are eligible:
+	// a row that was created as 30/30, or a legacy 180/180 row changed by the
+	// v2 migration. A later user edit has a different updated_at and is kept.
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE alert_rules
+		SET threshold = 60, duration_sec = 60, updated_at = ?
+		WHERE id = 'node_offline'
+		  AND threshold = 30
+		  AND duration_sec = 30
+		  AND (
+		    updated_at = created_at
+		    OR updated_at = (
+		      SELECT updated_at FROM settings
+		      WHERE key = 'alert_default_durations_v2_migrated'
+		    )
+		  )
+	`, now); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO settings (key, value, updated_at)
+		VALUES (?, '1', ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+	`, migrationKey, now); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	tx = nil
 	return nil
 }
 

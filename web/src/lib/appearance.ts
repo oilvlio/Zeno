@@ -24,6 +24,7 @@ export const defaultSettings: AdminSettings = {
   mobileBackgroundUrl: '',
   ...defaultAppearancePreset,
   customCode: '',
+  revision: 0,
 }
 
 export const appearancePresets: Record<AppearancePreset, AppearanceValues> = {

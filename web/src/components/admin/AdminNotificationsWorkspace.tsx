@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react'
 import type { AdminAlertRuleUpdateInput, AdminNotificationChannelCreateInput, AdminNotificationChannelUpdateInput } from '../../api/adminClient'
+import { runMaybePromise } from '../../lib/maybePromise'
 import type { AdminAlertRule, AdminNode, AdminNotificationChannel } from '../../types'
 import { AdminSegmentedField } from './AdminFields'
 import { AdminCredentialField, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions, AdminWorkspaceHeading } from './AdminPrimitives'
@@ -78,16 +79,17 @@ function AdminAlertRuleAddModal({ rules, nodes, onAdd, onClose }: { rules: Admin
   const [submittingRuleId, setSubmittingRuleId] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const addRule = (ruleId: string) => {
+    if (submittingRuleId !== null) return
     setSubmittingRuleId(ruleId)
     setFormError(null)
-    Promise.resolve(onAdd(ruleId, { enabled: true }))
+    runMaybePromise(() => onAdd(ruleId, { enabled: true }))
       .then(() => onClose())
       .catch((error: unknown) => setFormError(error instanceof Error ? error.message : '添加失败'))
       .finally(() => setSubmittingRuleId(null))
   }
   return (
-    <AdminModal title="添加通知类型" onClose={onClose}>
-      <div className="admin-alert-rule-add-form admin-node-edit-form is-sectioned" aria-label="添加通知类型">
+    <AdminModal title="添加通知类型" closeDisabled={submittingRuleId !== null} onClose={onClose}>
+      <div className="admin-alert-rule-add-form admin-node-edit-form is-sectioned" aria-label="添加通知类型" aria-busy={submittingRuleId !== null} inert={submittingRuleId !== null ? true : undefined}>
         <AdminFormSection title="通知类型">
           <div className="admin-rule-picker" role="list" aria-label="可添加通知类型">
             {rules.length === 0 && <div className="admin-state-card">所有通知类型都已添加。</div>}
@@ -117,6 +119,7 @@ function AdminAlertRuleEditModal({ rule, nodes, onUpdate, onClose }: { rule: Adm
   const supportsDuration = !isRenewalRule
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (submitting) return
     const formData = new FormData(event.currentTarget)
     const scopeNodeIds = nodes.filter((node) => formData.get(`rule-scope-${node.id}`) === 'on').map((node) => node.id)
     const renewalThreshold = isRenewalRule ? parseRenewalThreshold(String(formData.get('rule-renewal-days') ?? '')) : null
@@ -124,7 +127,7 @@ function AdminAlertRuleEditModal({ rule, nodes, onUpdate, onClose }: { rule: Adm
     const durationSec = supportsDuration ? parseNonNegativeInt(String(formData.get('rule-duration-sec') ?? '')) : null
     setSubmitting(true)
     setFormError(null)
-    Promise.resolve(onUpdate(rule.id, {
+    runMaybePromise(() => onUpdate(rule.id, {
       enabled: formData.get('rule-enabled') === 'on',
       ...(isRenewalRule && renewalThreshold !== null ? { threshold: renewalThreshold } : {}),
       ...(isResourceRule && resourceThreshold !== null ? { threshold: resourceThreshold } : {}),
@@ -137,8 +140,8 @@ function AdminAlertRuleEditModal({ rule, nodes, onUpdate, onClose }: { rule: Adm
   }
 
   return (
-    <AdminModal title={`编辑通知类型 · ${rule.name}`} onClose={onClose}>
-      <form className="admin-alert-rule-edit-form admin-node-edit-form is-sectioned" aria-label={`${rule.name} 通知类型编辑`} onSubmit={handleSubmit}>
+    <AdminModal title={`编辑通知类型 · ${rule.name}`} closeDisabled={submitting} onClose={onClose}>
+      <form className="admin-alert-rule-edit-form admin-node-edit-form is-sectioned" aria-label={`${rule.name} 通知类型编辑`} aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
         <AdminFormSection title="通知设置">
           <div className="admin-form-grid admin-alert-rule-settings-grid">
             {isRenewalRule && (
@@ -268,6 +271,7 @@ function AdminNotificationChannelEditModal({ channel, onUpdate, onTest, onClose 
   const [formError, setFormError] = useState<string | null>(null)
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (submitting) return
     const formData = new FormData(event.currentTarget)
     const name = String(formData.get('channel-name') ?? '').trim()
     const destination = String(formData.get('channel-destination') ?? '').trim()
@@ -275,7 +279,7 @@ function AdminNotificationChannelEditModal({ channel, onUpdate, onTest, onClose 
     if (name === '') return
     setSubmitting(true)
     setFormError(null)
-    Promise.resolve(onUpdate(channel.id, {
+    runMaybePromise(() => onUpdate(channel.id, {
       name,
       ...(destination !== '' ? { destination } : {}),
       ...(credential !== '' ? { credential } : {}),
@@ -287,8 +291,8 @@ function AdminNotificationChannelEditModal({ channel, onUpdate, onTest, onClose 
   }
 
   return (
-    <AdminModal title="编辑通知渠道" className="admin-notification-channel-modal" onClose={onClose}>
-      <form className="admin-notification-edit-form admin-node-edit-form is-sectioned" aria-label="编辑通知渠道" onSubmit={handleSubmit}>
+    <AdminModal title="编辑通知渠道" className="admin-notification-channel-modal" closeDisabled={submitting} onClose={onClose}>
+      <form className="admin-notification-edit-form admin-node-edit-form is-sectioned" aria-label="编辑通知渠道" aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
         <AdminFormSection title="渠道配置">
           <div className="admin-form-grid admin-channel-form-grid">
             <label>
@@ -323,6 +327,7 @@ function AdminNotificationChannelCreateModal({ onCreate, onClose }: { onCreate: 
   const [formError, setFormError] = useState<string | null>(null)
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (submitting) return
     const formData = new FormData(event.currentTarget)
     const name = String(formData.get('new-channel-name') ?? '').trim()
     const destination = String(formData.get('new-channel-destination') ?? '').trim()
@@ -330,7 +335,7 @@ function AdminNotificationChannelCreateModal({ onCreate, onClose }: { onCreate: 
     if (name === '' || destination === '' || credential === '') return
     setSubmitting(true)
     setFormError(null)
-    Promise.resolve(onCreate({
+    runMaybePromise(() => onCreate({
       name,
       destination,
       credential,
@@ -342,8 +347,8 @@ function AdminNotificationChannelCreateModal({ onCreate, onClose }: { onCreate: 
   }
 
   return (
-    <AdminModal title="添加通知渠道" className="admin-notification-channel-modal" onClose={onClose}>
-      <form className="admin-notification-create-form admin-node-edit-form is-sectioned" aria-label="添加通知渠道" onSubmit={handleSubmit}>
+    <AdminModal title="添加通知渠道" className="admin-notification-channel-modal" closeDisabled={submitting} onClose={onClose}>
+      <form className="admin-notification-create-form admin-node-edit-form is-sectioned" aria-label="添加通知渠道" aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
         <AdminFormSection title="渠道配置">
           <div className="admin-form-grid admin-channel-form-grid">
             <label>

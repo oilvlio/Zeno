@@ -22,6 +22,7 @@ export function AdminOperationalWorkspace({
   alertRules,
   onNodeCreate,
   onNodeUpdate,
+  onNodeReorder,
   onNodeDelete,
   onInstallCommand,
   onProbeTargetCreate,
@@ -36,7 +37,7 @@ export function AdminOperationalWorkspace({
 }: AdminOperationalWorkspaceRouterProps) {
   if (activeSection === 'nodes') {
     const NodeWorkspace = sectionComponents?.nodes ?? AdminNodeWorkspace
-    return <NodeWorkspace nodes={nodes} targets={targets} onCreate={onNodeCreate} onUpdate={onNodeUpdate} onDelete={onNodeDelete} onInstallCommand={onInstallCommand} />
+    return <NodeWorkspace nodes={nodes} targets={targets} onCreate={onNodeCreate} onUpdate={onNodeUpdate} onReorder={onNodeReorder} onDelete={onNodeDelete} onInstallCommand={onInstallCommand} />
   }
   if (activeSection === 'targets') {
     const TargetWorkspace = sectionComponents?.targets ?? AdminTargetWorkspace

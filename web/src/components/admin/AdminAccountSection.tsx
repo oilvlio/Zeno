@@ -18,6 +18,7 @@ export default function AdminAccountSection({ account, onUpdate, onLogout }: Adm
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (submitting) return
     const formData = new FormData(event.currentTarget)
     const username = String(formData.get('account-username') ?? '').trim()
     const currentPassword = String(formData.get('current-password') ?? '').trim()
@@ -50,7 +51,7 @@ export default function AdminAccountSection({ account, onUpdate, onLogout }: Adm
   return (
     <section className="admin-account-section admin-workspace-panel" aria-label="账户设置">
       <AdminWorkspaceHeading title="登录信息" />
-      <form className="admin-account-form admin-node-edit-form is-sectioned admin-workspace-form" aria-label="修改账号和密码" onSubmit={handleSubmit}>
+      <form className="admin-account-form admin-node-edit-form is-sectioned admin-workspace-form" aria-label="修改账号和密码" aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
         <section className="admin-workspace-card" aria-label="登录信息">
           <div className="admin-form-grid">
             <label>

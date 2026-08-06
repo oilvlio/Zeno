@@ -1,7 +1,7 @@
 export const liveRefreshIntervalMs = 15_000
 export const liveRefreshTimeoutMs = 10_000
 
-type MaybePromise<T = void> = T | Promise<T>
+import type { MaybePromise } from './maybePromise'
 
 export interface LiveRefreshOptions {
   intervalMs?: number

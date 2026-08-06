@@ -138,7 +138,7 @@ func TestAdminAPIDedupMatchesPreRefactorHandlers(t *testing.T) {
 	oversizedSettings := `{"site_title":"` + strings.Repeat("x", int(adminJSONBodyLimit)) + `"}`
 	tests := []adminAPIDedupCase{
 		{name: "settings GET success", endpoint: adminAPIDedupSettings, method: http.MethodGet, path: "/api/admin/v1/settings", token: "admin-pass"},
-		{name: "settings PATCH success", endpoint: adminAPIDedupSettings, method: http.MethodPatch, path: "/api/admin/v1/settings", body: `{"site_title":"Updated"}`, token: "admin-pass"},
+		{name: "settings PATCH success", endpoint: adminAPIDedupSettings, method: http.MethodPatch, path: "/api/admin/v1/settings", body: `{"expected_revision":0,"site_title":"Updated"}`, token: "admin-pass"},
 		{name: "settings wrong method after authorization", endpoint: adminAPIDedupSettings, method: http.MethodPost, path: "/api/admin/v1/settings", token: "admin-pass"},
 		{name: "settings wrong method without authorization", endpoint: adminAPIDedupSettings, method: http.MethodPost, path: "/api/admin/v1/settings"},
 		{name: "settings unauthorized", endpoint: adminAPIDedupSettings, method: http.MethodGet, path: "/api/admin/v1/settings"},
@@ -146,8 +146,8 @@ func TestAdminAPIDedupMatchesPreRefactorHandlers(t *testing.T) {
 		{name: "settings invalid JSON", endpoint: adminAPIDedupSettings, method: http.MethodPatch, path: "/api/admin/v1/settings", body: `{"site_title":`, token: "admin-pass"},
 		{name: "settings unknown JSON field", endpoint: adminAPIDedupSettings, method: http.MethodPatch, path: "/api/admin/v1/settings", body: `{"unknown":true}`, token: "admin-pass"},
 		{name: "settings oversized JSON body", endpoint: adminAPIDedupSettings, method: http.MethodPatch, path: "/api/admin/v1/settings", body: oversizedSettings, token: "admin-pass"},
-		{name: "settings business error", endpoint: adminAPIDedupSettings, method: http.MethodPatch, path: "/api/admin/v1/settings", body: `{"site_title":"Updated"}`, token: "admin-pass", configure: func(store *adminAPIDedupStore) { store.updateSettingsErr = errInvalidAdminSettingsUpdate }},
-		{name: "settings internal update error", endpoint: adminAPIDedupSettings, method: http.MethodPatch, path: "/api/admin/v1/settings", body: `{"site_title":"Updated"}`, token: "admin-pass", configure: func(store *adminAPIDedupStore) { store.updateSettingsErr = internalErr }},
+		{name: "settings business error", endpoint: adminAPIDedupSettings, method: http.MethodPatch, path: "/api/admin/v1/settings", body: `{"expected_revision":0,"site_title":"Updated"}`, token: "admin-pass", configure: func(store *adminAPIDedupStore) { store.updateSettingsErr = errInvalidAdminSettingsUpdate }},
+		{name: "settings internal update error", endpoint: adminAPIDedupSettings, method: http.MethodPatch, path: "/api/admin/v1/settings", body: `{"expected_revision":0,"site_title":"Updated"}`, token: "admin-pass", configure: func(store *adminAPIDedupStore) { store.updateSettingsErr = internalErr }},
 		{name: "settings internal GET error", endpoint: adminAPIDedupSettings, method: http.MethodGet, path: "/api/admin/v1/settings", token: "admin-pass", configure: func(store *adminAPIDedupStore) { store.settingsErr = internalErr }},
 
 		{name: "channels GET success", endpoint: adminAPIDedupChannels, method: http.MethodGet, path: "/api/admin/v1/notification-channels", token: "admin-pass"},

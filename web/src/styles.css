@@ -181,14 +181,12 @@ svg { display: block; }
   padding: 6px;
   border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
   border-radius: var(--radius-card);
-  background: var(--zeno-overlay-surface);
   color: var(--foreground);
-  box-shadow: var(--zeno-overlay-shadow);
-  -webkit-backdrop-filter: var(--zeno-overlay-filter);
-  backdrop-filter: var(--zeno-overlay-filter);
 }
+.theme-menu-popover,
 .admin-select-popover,
-.admin-install-platforms {
+.admin-install-platforms,
+.admin-date-popover {
   background: var(--zeno-overlay-surface);
   box-shadow: var(--zeno-overlay-shadow);
   -webkit-backdrop-filter: var(--zeno-overlay-filter);
