@@ -137,6 +137,7 @@ export function serializeAdminAlertRuleUpdate(input: AdminAlertRuleUpdateInput) 
   return {
     ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
     ...(input.threshold !== undefined ? { threshold: input.threshold } : {}),
+    ...(input.renewalDays !== undefined ? { renewal_days: input.renewalDays } : {}),
     ...(input.durationSec !== undefined ? { duration_sec: input.durationSec } : {}),
     ...(input.scopeNodeIds !== undefined ? { scope_node_ids: input.scopeNodeIds } : {}),
   }
@@ -236,6 +237,7 @@ export function normalizeAdminAlertRule(rule: ApiAdminAlertRule): AdminAlertRule
     metric: rule.metric,
     comparator: rule.comparator,
     threshold: rule.threshold,
+    renewalDays: rule.renewal_days ?? [],
     thresholdUnit: rule.threshold_unit,
     durationSec: rule.duration_sec,
     enabled: rule.enabled,

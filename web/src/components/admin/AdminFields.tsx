@@ -1,5 +1,6 @@
 import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { OverlaySurface } from '../OverlaySurface'
 
 type RectLike = Pick<DOMRect, 'top' | 'right' | 'bottom' | 'left' | 'width' | 'height'>
 type ViewportSize = { width: number; height: number }
@@ -151,7 +152,7 @@ export function AdminDateField({ name, label, defaultValue = '', defaultPermanen
   }, [disabled])
 
   const calendar = open && !disabled ? (
-    <div ref={popoverRef} className="admin-date-popover" role="dialog" aria-label={`${label}日历`} style={popoverStyle}>
+    <OverlaySurface ref={popoverRef} className="admin-date-popover" role="dialog" aria-label={`${label}日历`} style={popoverStyle}>
       <div className="admin-date-calendar-header">
         <button type="button" aria-label="上个月" onClick={() => shiftMonth(-1)}>‹</button>
         <div className="admin-date-current" aria-label="选择年月">
@@ -199,7 +200,7 @@ export function AdminDateField({ name, label, defaultValue = '', defaultPermanen
           </div>
         </>
       )}
-    </div>
+    </OverlaySurface>
   ) : null
 
   return (
@@ -261,13 +262,13 @@ export function AdminSegmentedField({ name, label, options, value, defaultValue,
 
   const classes = ['admin-form-control', 'admin-segmented-field admin-select-menu-field', className, disabled ? 'is-disabled' : ''].filter(Boolean).join(' ')
   const popover = open && !disabled ? (
-    <div ref={popoverRef} className="admin-select-popover" role="listbox" aria-label={`${label}选项`} style={popoverStyle}>
+    <OverlaySurface ref={popoverRef} className="admin-select-popover" role="listbox" aria-label={`${label}选项`} style={popoverStyle}>
       {options.map((option) => (
         <button key={option.value} type="button" role="option" aria-selected={selectedValue === option.value} data-active={selectedValue === option.value} onClick={() => setSelectedValue(option.value)}>
           <span>{option.label}</span>
         </button>
       ))}
-    </div>
+    </OverlaySurface>
   ) : null
   return (
     <div className={classes}>
@@ -291,10 +292,11 @@ interface AdminExpandedCheckListProps {
   title?: string
   panelLabel?: string
   emptyText?: string
+  allowEmpty?: boolean
   renderRight?: (option: AdminExpandedCheckListOption) => ReactNode
 }
 
-export function AdminExpandedCheckList({ options, value, onChange, title = '已选', panelLabel = '选择项目', emptyText = '暂无可选项', renderRight }: AdminExpandedCheckListProps) {
+export function AdminExpandedCheckList({ options, value, onChange, title = '已选', panelLabel = '选择项目', emptyText = '暂无可选项', allowEmpty = true, renderRight }: AdminExpandedCheckListProps) {
   const [expanded, setExpanded] = useState(false)
   const optionValues = new Set(options.map((option) => option.value))
   const normalizedValue = Array.from(new Set((Array.isArray(value) ? value : []).filter((item) => optionValues.has(item))))
@@ -307,6 +309,7 @@ export function AdminExpandedCheckList({ options, value, onChange, title = '已�
       onChange(Array.from(new Set([...normalizedValue, optionValue])))
       return
     }
+    if (!allowEmpty && normalizedValue.length <= 1) return
     onChange(normalizedValue.filter((item) => item !== optionValue))
   }
 
@@ -326,7 +329,7 @@ export function AdminExpandedCheckList({ options, value, onChange, title = '已�
         <div className="admin-assignment-field__body">
           <div className="admin-assignment-field__toolbar">
             <span>{panelLabel}</span>
-            {options.length > 0 && (
+            {options.length > 0 && (!allSelected || allowEmpty) && (
               <button className="admin-assignment-field__bulk" type="button" onClick={() => onChange(allSelected ? [] : options.map((option) => option.value))}>
                 {allSelected ? '清空' : '全选'}
               </button>
@@ -338,7 +341,7 @@ export function AdminExpandedCheckList({ options, value, onChange, title = '已�
               const checked = selected.has(option.value)
               return (
                 <div className="admin-assignment-field__row" role="listitem" data-checked={checked} key={option.value}>
-                  <button className="admin-assignment-field__option" type="button" title={option.label} aria-pressed={checked} onClick={() => toggleValue(option.value, !checked)}>
+                  <button className="admin-assignment-field__option" type="button" title={option.label} aria-pressed={checked} disabled={!allowEmpty && checked && normalizedValue.length <= 1} onClick={() => toggleValue(option.value, !checked)}>
                     <span className="admin-assignment-field__check" aria-hidden="true">{checked && <SelectionCheckIcon />}</span>
                     <span className="admin-assignment-field__label">{option.label}</span>
                   </button>

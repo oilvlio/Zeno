@@ -303,7 +303,7 @@ claim token 并检查 RowsAffected。远端已接受后 Controller 在 ack 前�
 接收端应使用稳定 `event_id`。失败按退避策略最多尝试 5 次，Controller 重启后继续处理；投递
 历史只保存净化后的错误和不可逆绑定，不保存 Bot Token、明文接收目标或请求 URL。
 
-## alert_rules / alert_rule_node_scopes / alert_rule_states
+## alert_rules / alert_rule_node_scopes / alert_rule_renewal_days / alert_rule_states
 
 通知类型规则和内部命中状态。
 
@@ -336,6 +336,13 @@ CREATE TABLE alert_rule_node_scopes (
 
 CREATE INDEX idx_alert_rule_node_scopes_node ON alert_rule_node_scopes(node_id, rule_id);
 
+CREATE TABLE alert_rule_renewal_days (
+  rule_id TEXT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
+  days INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (rule_id, days)
+);
+
 CREATE TABLE alert_rule_states (
   node_id TEXT NOT NULL REFERENCES nodes(id),
   rule_id TEXT NOT NULL REFERENCES alert_rules(id),
@@ -351,6 +358,7 @@ CREATE INDEX idx_alert_rule_states_node_active ON alert_rule_states(node_id, act
 ```
 
 `alert_rule_node_scopes` 没有记录时表示规则作用于全部服务器；有记录时只作用于指定服务器。
+`alert_rule_renewal_days` 保存续费规则的多个提前提醒时间；每个 `(rule_id, days)` 唯一。`alert_rules.threshold` 继续保存最大提前天数，供旧客户端兼容读取和单值更新。
 
 ## settings
 

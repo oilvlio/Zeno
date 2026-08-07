@@ -456,9 +456,7 @@
   border-radius: var(--radius-field);
   background:
     linear-gradient(var(--appearance-preview-overlay), var(--appearance-preview-overlay)),
-    radial-gradient(circle at 18% 22%, color-mix(in srgb, var(--appearance-preview-color) 68%, transparent) 0 13%, transparent 14%),
-    radial-gradient(circle at 82% 76%, color-mix(in srgb, var(--appearance-preview-canvas-soft) 72%, transparent) 0 18%, transparent 19%),
-    linear-gradient(135deg, var(--appearance-preview-canvas), color-mix(in srgb, var(--appearance-preview-color) 22%, var(--appearance-preview-canvas)));
+    url('/assets/appearance-preview.webp') center / cover no-repeat;
 }
 .admin-appearance-preview__card {
   position: relative;
@@ -551,6 +549,7 @@
 .admin-color-field__row strong { color: var(--foreground); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .admin-channel-enabled-toggle { align-self: end; min-height: 42px; margin-top: 19px; }
 .admin-alert-rule-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; }
+.admin-alert-rule-settings-grid > .admin-assignment-field { grid-column: 1 / -1; }
 .admin-alert-rule-enabled-toggle { min-height: 36px; }
 .admin-billing-grid {
   display: grid;
@@ -894,13 +893,6 @@
 .admin-node-toggle input[type="checkbox"]:hover { border-color: color-mix(in srgb, var(--foreground) 52%, var(--border)); transform: none; }
 .admin-node-toggle input[type="checkbox"]:focus-visible,
 .admin-home-monitor-radio input[type="radio"]:focus-visible { outline: 2px solid color-mix(in srgb, var(--blue) 42%, transparent); outline-offset: 2px; }
-.admin-target-assignment-list {
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.admin-target-assignment-toggle { min-height: 34px; }
 /* Keep every admin overflow surface on the same theme-aware scrollbar. */
 :is(.admin-container, .admin-modal, .admin-select-popover, .admin-date-popover, .admin-install-platforms),
 :is(.admin-container, .admin-modal, .admin-select-popover, .admin-date-popover, .admin-install-platforms) * {
@@ -1394,10 +1386,6 @@
   overflow: hidden;
   pointer-events: none;
   border-radius: 0;
-  background: var(--zeno-overlay-surface);
-  box-shadow: var(--zeno-overlay-shadow-flat);
-  -webkit-backdrop-filter: var(--zeno-overlay-filter);
-  backdrop-filter: var(--zeno-overlay-filter);
   transform: translate3d(0, var(--admin-sort-drag-y), 0);
   will-change: transform;
 }
@@ -1686,8 +1674,6 @@
     align-self: auto;
     margin-top: 0;
   }
-  .admin-target-assignment-list,
-  .admin-rule-scope-list { grid-template-columns: 1fr; }
   .admin-rule-picker-row { grid-template-columns: 1fr; }
   .admin-assignment-field__header,
   .admin-node-edit-form .admin-assignment-field__header { min-height: 62px; }

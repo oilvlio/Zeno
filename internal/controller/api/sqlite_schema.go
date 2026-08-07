@@ -285,6 +285,12 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			PRIMARY KEY (rule_id, node_id)
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_rule_node_scopes_node ON alert_rule_node_scopes(node_id, rule_id);`,
+		`CREATE TABLE IF NOT EXISTS alert_rule_renewal_days (
+			rule_id TEXT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
+			days INTEGER NOT NULL,
+			created_at INTEGER NOT NULL,
+			PRIMARY KEY (rule_id, days)
+		);`,
 		`CREATE TABLE IF NOT EXISTS alert_rule_states (
 			node_id TEXT NOT NULL REFERENCES nodes(id),
 			rule_id TEXT NOT NULL REFERENCES alert_rules(id),

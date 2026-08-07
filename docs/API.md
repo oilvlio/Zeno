@@ -272,11 +272,11 @@ Controller 对下发给单个节点的探针配置做资源上限：最多 32 �
   "desktop_background_url": "",
   "mobile_background_url": "",
   "appearance_preset": "default",
-  "card_opacity": 0.82,
+  "card_opacity": 0.7,
   "card_blur": 0,
   "card_radius": 20,
-  "border_strength": 0.26,
-  "shadow_strength": 0.22,
+  "border_strength": 0.3,
+  "shadow_strength": 0.2,
   "background_overlay": 0,
   "theme_color": "#2563eb",
   "custom_code": ""
@@ -515,11 +515,11 @@ X-Admin-Token: <admin-token>
     "desktop_background_url": "",
     "mobile_background_url": "",
     "appearance_preset": "default",
-    "card_opacity": 0.82,
+    "card_opacity": 0.7,
     "card_blur": 0,
     "card_radius": 20,
-    "border_strength": 0.26,
-    "shadow_strength": 0.22,
+    "border_strength": 0.3,
+    "shadow_strength": 0.2,
     "background_overlay": 0,
     "theme_color": "#2563eb",
     "custom_code": "",
@@ -546,13 +546,13 @@ X-Admin-Token: <admin-token>
   "desktop_background_url": "https://example.com/desktop-bg.webp",
   "mobile_background_url": "https://example.com/mobile-bg.webp",
   "appearance_preset": "gaussian_blur",
-  "card_opacity": 0.58,
-  "card_blur": 18,
-  "card_radius": 24,
-  "border_strength": 0.34,
-  "shadow_strength": 0.34,
-  "background_overlay": 0.08,
-  "theme_color": "#6366f1",
+  "card_opacity": 0.5,
+  "card_blur": 15,
+  "card_radius": 20,
+  "border_strength": 0.3,
+  "shadow_strength": 0.3,
+  "background_overlay": 0.05,
+  "theme_color": "#2563eb",
   "custom_code": "<style>.home-top-card { border-color: #2563eb; }</style>"
 }
 ```
@@ -779,7 +779,7 @@ HTTP GET 示例：
 
 通知类型规则库存。Controller 启动或迁移时会 seed 一组默认规则。后台通知页只展示已启用/已添加的规则，未启用的预置规则通过“添加通知类型”弹窗选择。规则默认作用于全部服务器；`scope_node_ids` 非空时只作用于这些服务器。响应只包含规则配置、作用范围和通知事件标签，不返回 admin token、Agent token、token hash、通知渠道凭据、secret 或 credential 原文。
 
-默认规则覆盖：CPU、内存、磁盘、离线通知。资源规则映射到 `probe_unhealthy` / 异常；离线规则映射到 `node_offline` / 离线。
+默认规则覆盖：CPU、内存、磁盘、离线通知和续费提醒。资源规则映射到 `probe_unhealthy` / 异常；离线规则映射到 `node_offline` / 离线；续费规则映射到 `renewal_due` / 续费，并通过 `renewal_days` 返回一个或多个提前提醒时间。
 
 Controller 会在 Agent 上报时实际使用这些规则：
 
@@ -787,6 +787,7 @@ Controller 会在 Agent 上报时实际使用这些规则：
 - `/api/agent/v1/probe-results` 只写入探针历史，不再通过延迟或丢包阈值改变节点公共状态。
 - 资源规则命中状态会记录在 Controller 内部的 `alert_rule_states` 表，用来避免某一类健康上报误清另一类仍活跃的异常；`alert_rule_states` 只作为 Controller 内部命中状态存储。
 - 如果规则配置了 `scope_node_ids`，Agent 上报、规则命中和通知发送都会只对这些服务器生效；空数组表示全部服务器。离线规则的 `duration_sec` 同时作为公共在线/离线状态与离线通知的心跳超时时间，默认 60 秒；presence WebSocket 和服务探测结果不覆盖页面在线状态；Controller 启动后先留出一个完整心跳窗口，再每 5 秒补扫一次过期 `last_seen_at`，把漏掉的离线状态落库并进入同一条 `node_offline` 通知链路。
+- 续费规则的 `renewal_days` 是去重后的提前提醒天数数组，支持 `1`、`3`、`7`、`15` 和 `30`；每个选中时间点只触发一次，`30` 按自然月计算。兼容字段 `threshold` 保存数组中的最大值，旧客户端仍可只提交单个 `threshold`。
 - 通知发送同时要求：状态转换存在、对应通知类型启用、至少一条映射到该事件类型且对该服务器生效的规则启用、且存在启用并配置好的通知渠道。
 
 ```json
@@ -832,7 +833,7 @@ Controller 会在 Agent 上报时实际使用这些规则：
 
 ### PATCH /api/admin/v1/alert-rules/{rule_id}
 
-部分更新通知类型规则的安全可调字段。当前允许调整启用状态、阈值、统计窗口/确认时间和作用服务器范围；启用状态在 Admin 中表现为添加 / 移除通知类型。规则 id、名称、指标、比较符、通知事件类型等结构性字段由 seed/代码控制。`scope_node_ids` 省略表示保持原范围不变，空数组表示作用于全部服务器，非空数组表示只作用于这些服务器；数组里的 node id 必须存在且不能重复。前端保存通知类型时会等待该请求成功后才关闭弹窗；如后端后续提供原子化“规则 + 通知事件类型”接口，应优先改用原子接口，当前兼容路径失败时会留在弹窗并显示短错误。
+部分更新通知类型规则的安全可调字段。当前允许调整启用状态、阈值、续费提醒时间、统计窗口/确认时间和作用服务器范围；启用状态在 Admin 中表现为添加 / 移除通知类型。规则 id、名称、指标、比较符、通知事件类型等结构性字段由 seed/代码控制。`scope_node_ids` 省略表示保持原范围不变，空数组表示作用于全部服务器，非空数组表示只作用于这些服务器；数组里的 node id 必须存在且不能重复。`renewal_days` 只适用于续费规则，不能为空、不能重复，且不能和兼容字段 `threshold` 同时提交。前端保存通知类型时会等待该请求成功后才关闭弹窗；如后端后续提供原子化“规则 + 通知事件类型”接口，应优先改用原子接口，当前兼容路径失败时会留在弹窗并显示短错误。
 
 请求：
 
@@ -846,6 +847,16 @@ Controller 会在 Agent 上报时实际使用这些规则：
 ```
 
 字段均可部分提交；`threshold` 和 `duration_sec` 必须是非负数。成功响应返回更新后的单条规则：
+
+续费提醒多选请求示例：
+
+```json
+{
+  "enabled": true,
+  "renewal_days": [1, 3, 7],
+  "scope_node_ids": ["example-node-a", "backup"]
+}
+```
 
 ```json
 {

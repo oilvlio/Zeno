@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { appearancePresets, defaultSettings, shellStyleForSettings } from './appearance'
 
 describe('appearance presets', () => {
-  it('keeps the default theme comfortably opaque over configured backgrounds', () => {
+  it('keeps the default theme balanced over configured backgrounds', () => {
     expect(appearancePresets.default).toMatchObject({
       appearancePreset: 'default',
-      cardOpacity: 0.82,
+      cardOpacity: 0.7,
       cardBlur: 0,
+      cardRadius: 20,
+      borderStrength: 0.3,
+      shadowStrength: 0.2,
+      backgroundOverlay: 0,
     })
     expect(defaultSettings).toMatchObject(appearancePresets.default)
   })
@@ -16,25 +20,23 @@ describe('appearance presets', () => {
       appearancePreset: 'gaussian_blur',
       cardRadius: appearancePresets.default.cardRadius,
       themeColor: appearancePresets.default.themeColor,
-      cardOpacity: 0.66,
-      cardBlur: 18,
-      borderStrength: 0.34,
-      shadowStrength: 0.34,
-      backgroundOverlay: 0.08,
+      cardOpacity: 0.5,
+      cardBlur: 15,
+      borderStrength: 0.3,
+      shadowStrength: 0.3,
+      backgroundOverlay: 0.05,
     })
   })
 
-  it('uses an opaque unblurred overlay surface for the default appearance', () => {
+  it('uses one balanced unblurred overlay surface for the default appearance', () => {
     const style = shellStyleForSettings({ ...defaultSettings, theme: 'light', backgroundUrl: '/wallpaper.webp', desktopBackgroundUrl: '/wallpaper.webp' }) as unknown as Record<string, string>
-    expect(style['--zeno-overlay-surface']).toBe('rgba(255, 255, 255, 0.920)')
-    expect(style['--zeno-menu-surface']).toBe('transparent')
+    expect(style['--zeno-overlay-surface']).toBe('rgba(255, 255, 255, 0.800)')
     expect(style['--zeno-overlay-filter']).toBe('none')
   })
 
-  it('uses a theme-colored blurred overlay surface for the Gaussian appearance', () => {
-    const style = shellStyleForSettings({ ...defaultSettings, theme: 'dark', appearancePreset: 'gaussian_blur', cardOpacity: 0.66, cardBlur: 18, backgroundUrl: '/wallpaper.webp', desktopBackgroundUrl: '/wallpaper.webp' }) as unknown as Record<string, string>
-    expect(style['--zeno-overlay-surface']).toBe('rgba(15, 23, 42, 0.502)')
-    expect(style['--zeno-menu-surface']).toBe('rgba(15, 23, 42, 0.580)')
-    expect(style['--zeno-overlay-filter']).toBe('blur(18px) saturate(1.08)')
+  it('uses the same balanced blurred overlay surface for the Gaussian appearance', () => {
+    const style = shellStyleForSettings({ ...defaultSettings, theme: 'dark', appearancePreset: 'gaussian_blur', cardOpacity: 0.5, cardBlur: 15, backgroundUrl: '/wallpaper.webp', desktopBackgroundUrl: '/wallpaper.webp' }) as unknown as Record<string, string>
+    expect(style['--zeno-overlay-surface']).toBe('rgba(15, 23, 42, 0.640)')
+    expect(style['--zeno-overlay-filter']).toBe('blur(15px) saturate(1.08)')
   })
 })

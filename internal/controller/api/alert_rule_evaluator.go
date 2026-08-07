@@ -113,6 +113,19 @@ func alertRulesForMetrics(ctx context.Context, tx *sql.Tx, nodeID string, metric
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	for index := range rules {
+		if rules[index].Metric != "expiry_days" {
+			continue
+		}
+		days, err := loadAlertRuleRenewalDays(ctx, tx, rules[index])
+		if err != nil {
+			return nil, err
+		}
+		rules[index].RenewalDays = days
+	}
 	return rules, nil
 }
 

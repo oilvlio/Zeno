@@ -81,7 +81,7 @@ export function formatAlertRuleScope(rule: AdminAlertRule, nodes: AdminNode[]): 
 }
 
 export function formatAlertRuleNote(rule: AdminAlertRule): string {
-  if (rule.metric === 'expiry_days') return ''
+  if (rule.metric === 'expiry_days') return normalizeRenewalDays(rule.renewalDays, rule.threshold).map(formatRenewalDayOption).join('、')
   if (rule.category === 'resource' && rule.thresholdUnit === '%') {
     const windowLabel = rule.durationSec <= 0 ? '当前值' : `${formatDurationCompact(rule.durationSec)}平均`
     return `${windowLabel} ≥ ${formatPercentThreshold(rule.threshold)}%`
@@ -118,6 +118,11 @@ export function normalizeRenewalThreshold(value: number): number {
   const normalized = Math.max(0, Math.min(30, Math.round(value)))
   if (normalized <= 1) return 1
   return renewalDayOptions.includes(normalized) ? normalized : 3
+}
+
+export function normalizeRenewalDays(values: number[] | undefined, fallback: number): number[] {
+  const valid = Array.from(new Set((values ?? []).filter((value) => Number.isInteger(value) && renewalDayOptions.includes(value)))).sort((left, right) => left - right)
+  return valid.length > 0 ? valid : [normalizeRenewalThreshold(fallback)]
 }
 
 export function parsePositiveInt(value: string): number | null {

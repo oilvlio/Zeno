@@ -2,6 +2,7 @@ import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef,
 import { createPortal } from 'react-dom'
 import copy, { type Options as CopyOptions } from 'copy-to-clipboard'
 import type { AdminNodeInstallCommand } from '../../types'
+import { OverlaySurface } from '../OverlaySurface'
 import { calculateAnchoredPopoverStyle } from './AdminFields'
 import { AdminFormSection } from './AdminPrimitives'
 
@@ -93,11 +94,11 @@ function AdminInstallPlatformPopover({ state, style, popoverRef, onSelect }: {
 }) {
   if (state.kind !== 'ready') return null
   const popover = (
-    <div ref={popoverRef} className="admin-install-platforms" style={style} role="group" aria-label="选择 Agent 安装系统">
+    <OverlaySurface ref={popoverRef} className="admin-install-platforms" style={style} role="group" aria-label="选择 Agent 安装系统">
       {agentInstallPlatforms.map((platform) => (
         <button key={platform.value} type="button" data-active={state.platform === platform.value} onClick={() => onSelect(platform.value)}>{platform.label}</button>
       ))}
-    </div>
+    </OverlaySurface>
   )
   return typeof document === 'undefined' ? popover : createPortal(popover, document.body)
 }

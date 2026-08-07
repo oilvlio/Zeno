@@ -6,6 +6,7 @@ import { availableCurrencyOptions, formatCurrencyAmount, normalizeCurrencyCode, 
 import { defaultSettings } from '../lib/appearance'
 import { SlidingSelector } from './SlidingSelector'
 import type { AdminSettings, AdminTheme } from '../types'
+import { OverlaySurface } from './OverlaySurface'
 
 function compactBytes(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '0 B'
@@ -291,7 +292,7 @@ function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
         <span className="home-currency-select__value">{selectedOption?.shortLabel ?? value}</span>
       </button>
       {open && menuPosition && typeof document !== 'undefined' && createPortal(
-        <div ref={popoverRef} id={menuId} className="home-currency-popover" role="listbox" aria-label="金额单位" style={menuPosition}>
+        <OverlaySurface ref={popoverRef} id={menuId} className="home-currency-popover" role="listbox" aria-label="金额单位" style={menuPosition}>
           {options.map((option, index) => (
             <button
               key={option.value}
@@ -308,7 +309,7 @@ function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
               <span className="home-currency-option__code">{option.shortLabel}</span>
             </button>
           ))}
-        </div>,
+        </OverlaySurface>,
         document.body,
       )}
     </div>

@@ -85,6 +85,7 @@ func (request AdminNotificationTypeUpdateRequest) normalize() error {
 type AdminAlertRuleUpdateRequest struct {
 	Enabled      *bool     `json:"enabled,omitempty"`
 	Threshold    *float64  `json:"threshold,omitempty"`
+	RenewalDays  *[]int    `json:"renewal_days,omitempty"`
 	DurationSec  *int      `json:"duration_sec,omitempty"`
 	ScopeNodeIDs *[]string `json:"scope_node_ids,omitempty"`
 }
@@ -93,9 +94,28 @@ func (request *AdminAlertRuleUpdateRequest) normalize() error {
 	normalizer := newPatchNormalizer(errInvalidAdminAlertRuleUpdate)
 	normalizer.present(request.Enabled != nil)
 	normalizer.float(&request.Threshold, finiteNonNegativeFloat)
+	normalizer.present(request.RenewalDays != nil)
 	normalizer.number(&request.DurationSec, nonNegativeInt)
 	normalizer.identifierSet(&request.ScopeNodeIDs, normalizeAdminNodeID)
-	return normalizer.result()
+	if err := normalizer.result(); err != nil {
+		return err
+	}
+	if request.Threshold != nil && request.RenewalDays != nil {
+		return errInvalidAdminAlertRuleUpdate
+	}
+	if request.RenewalDays != nil {
+		if len(*request.RenewalDays) == 0 {
+			return errInvalidAdminAlertRuleUpdate
+		}
+		seen := make(map[int]bool, len(*request.RenewalDays))
+		for _, days := range *request.RenewalDays {
+			if seen[days] || !allowedRenewalNoticeDays[days] {
+				return errInvalidAdminAlertRuleUpdate
+			}
+			seen[days] = true
+		}
+	}
+	return nil
 }
 
 type AdminAlertRule struct {
@@ -105,6 +125,7 @@ type AdminAlertRule struct {
 	Metric                string   `json:"metric"`
 	Comparator            string   `json:"comparator"`
 	Threshold             float64  `json:"threshold"`
+	RenewalDays           []int    `json:"renewal_days,omitempty"`
 	ThresholdUnit         string   `json:"threshold_unit"`
 	DurationSec           int      `json:"duration_sec"`
 	Enabled               bool     `json:"enabled"`

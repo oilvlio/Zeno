@@ -1,6 +1,6 @@
 import { type CSSProperties, type FormEvent, useEffect, useState } from 'react'
 import { AdminSettingsConflictError, type AdminSettingsUpdateInput } from '../../api/adminClient'
-import { appearancePresetOptions, appearancePresets, appearanceValuesForSettings, resolvedTheme, shellStyleForSettings, themeOptions, type AppearanceValues } from '../../lib/appearance'
+import { appearancePresetOptions, appearancePresets, appearanceValuesForSettings, shellStyleForSettings, themeOptions, type AppearanceValues } from '../../lib/appearance'
 import { validateAdminSettingsInput } from '../../lib/adminSettings'
 import { runMaybePromise, type MaybePromise } from '../../lib/maybePromise'
 import type { AdminSettings, AppearancePreset } from '../../types'
@@ -228,7 +228,6 @@ function AdminAppearancePresetSlider({ value, onChange }: { value: AppearancePre
 }
 
 function AdminAppearancePreview({ appearance, settings, theme }: { appearance: AppearanceValues; settings: AdminSettings; theme: AdminSettings['theme'] }) {
-  const previewTheme = resolvedTheme(theme)
   const previewShellStyle = shellStyleForSettings({
     ...settings,
     ...appearance,
@@ -240,15 +239,13 @@ function AdminAppearancePreview({ appearance, settings, theme }: { appearance: A
   const previewStyle = {
     '--appearance-preview-color': String(previewShellStyle?.['--blue'] ?? appearance.themeColor),
     '--appearance-preview-radius': String(previewShellStyle?.['--radius-card'] ?? `${Math.max(10, appearance.cardRadius - 4)}px`),
-    '--appearance-preview-surface': String(previewShellStyle?.['--page-surface'] ?? 'rgba(255, 255, 255, 0.82)'),
+    '--appearance-preview-surface': String(previewShellStyle?.['--page-surface'] ?? 'rgba(255, 255, 255, 0.7)'),
     '--appearance-preview-border': String(previewShellStyle?.['--border'] ?? appearance.themeColor),
     '--appearance-preview-shadow': String(previewShellStyle?.['--zeno-card-shadow'] ?? 'none'),
     '--appearance-preview-filter': appearance.cardBlur > 0 ? `blur(${appearance.cardBlur}px) saturate(1.06)` : 'none',
     '--appearance-preview-overlay': String(previewShellStyle?.['--zeno-background-overlay-color'] ?? 'transparent'),
     '--appearance-preview-foreground': String(previewShellStyle?.['--foreground'] ?? 'var(--foreground)'),
     '--appearance-preview-muted': String(previewShellStyle?.['--muted'] ?? 'var(--muted)'),
-    '--appearance-preview-canvas': previewTheme === 'dark' ? '#0f172a' : '#f8fafc',
-    '--appearance-preview-canvas-soft': previewTheme === 'dark' ? '#475569' : '#cbd5e1',
   } as CSSProperties
   return (
     <div className="admin-appearance-preview" style={previewStyle} aria-hidden="true">

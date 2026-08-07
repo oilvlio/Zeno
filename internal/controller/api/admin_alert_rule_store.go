@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"sort"
 	"strings"
 	"time"
 )
@@ -63,6 +64,7 @@ var defaultAdminAlertRules = []AdminAlertRule{
 		Metric:                "expiry_days",
 		Comparator:            "<=",
 		Threshold:             3,
+		RenewalDays:           []int{3},
 		ThresholdUnit:         "d",
 		DurationSec:           0,
 		Enabled:               false,
@@ -110,6 +112,9 @@ func (s *sqliteAdminAlertRules) ensureDefaultAlertRules(ctx context.Context) err
 	if err := s.migrateRemovedSameDayRenewalThreshold(ctx); err != nil {
 		return err
 	}
+	if err := s.ensureRenewalNoticeDays(ctx); err != nil {
+		return err
+	}
 	if err := s.migrateDefaultAlertRuleDurations(ctx); err != nil {
 		return err
 	}
@@ -125,13 +130,64 @@ func (s *sqliteAdminAlertRules) ensureDefaultAlertRules(ctx context.Context) err
 	return nil
 }
 
-func (s *sqliteAdminAlertRules) migrateRemovedSameDayRenewalThreshold(ctx context.Context) error {
+func (s *sqliteAdminAlertRules) ensureRenewalNoticeDays(ctx context.Context) error {
+	var count int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM alert_rule_renewal_days WHERE rule_id = 'renewal_due'`).Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	var threshold float64
+	if err := s.db.QueryRowContext(ctx, `SELECT threshold FROM alert_rules WHERE id = 'renewal_due'`).Scan(&threshold); err != nil {
+		return err
+	}
+	days := int(threshold)
+	if threshold != float64(days) || !allowedRenewalNoticeDays[days] {
+		days = 3
+	}
 	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO alert_rule_renewal_days (rule_id, days, created_at)
+		VALUES ('renewal_due', ?, ?)
+	`, days, time.Now().UTC().Unix())
+	return err
+}
+
+func (s *sqliteAdminAlertRules) migrateRemovedSameDayRenewalThreshold(ctx context.Context) error {
+	now := time.Now().UTC().Unix()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { rollbackUnlessCommitted(tx) }()
+	result, err := tx.ExecContext(ctx, `
 		UPDATE alert_rules
 		SET threshold = 1, updated_at = ?
 		WHERE id = 'renewal_due' AND threshold = 0
-	`, time.Now().UTC().Unix())
-	return err
+	`, now)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed > 0 {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM alert_rule_renewal_days WHERE rule_id = 'renewal_due'`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO alert_rule_renewal_days (rule_id, days, created_at)
+			VALUES ('renewal_due', 1, ?)
+		`, now); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	tx = nil
+	return nil
 }
 
 func (s *sqliteAdminAlertRules) migrateDefaultAlertRuleDurations(ctx context.Context) error {
@@ -378,7 +434,7 @@ func (s *sqliteAdminAlertRules) AdminAlertRules(ctx context.Context) ([]AdminAle
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return s.attachAlertRuleScopes(ctx, rules)
+	return s.attachAlertRuleMetadata(ctx, rules)
 }
 
 func (s *sqliteAdminAlertRules) UpdateAdminAlertRule(ctx context.Context, ruleID string, update AdminAlertRuleUpdateRequest) (AdminAlertRule, error) {
@@ -402,16 +458,15 @@ func (s *sqliteAdminAlertRules) UpdateAdminAlertRule(ctx context.Context, ruleID
 		}
 		return AdminAlertRule{}, err
 	}
-	if update.Threshold != nil && metric == "expiry_days" {
-		threshold := *update.Threshold
-		thresholdDays := int(threshold)
-		if threshold != float64(thresholdDays) || !allowedRenewalNoticeDays[thresholdDays] {
-			return AdminAlertRule{}, errInvalidAdminAlertRuleUpdate
-		}
+	renewalDays, replaceRenewalDays, err := normalizedAlertRuleRenewalUpdate(update, metric)
+	if err != nil {
+		return AdminAlertRule{}, err
 	}
 	patch := newSQLPatch(4)
 	patch.addBoolInt("enabled", update.Enabled)
-	if update.Threshold != nil {
+	if update.RenewalDays != nil {
+		patch.set("threshold", renewalDays[len(renewalDays)-1])
+	} else if update.Threshold != nil {
 		patch.set("threshold", *update.Threshold)
 	}
 	patch.addInt("duration_sec", update.DurationSec)
@@ -422,7 +477,7 @@ func (s *sqliteAdminAlertRules) UpdateAdminAlertRule(ctx context.Context, ruleID
 		if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
 			return AdminAlertRule{}, err
 		}
-	} else if update.ScopeNodeIDs != nil {
+	} else if update.ScopeNodeIDs != nil || update.RenewalDays != nil {
 		// Scope-only edits still bump updated_at so clients can tell the rule
 		// changed even though no column on the rule row differs.
 		if _, err := tx.ExecContext(ctx, `UPDATE alert_rules SET updated_at = ? WHERE id = ?`, now, ruleID); err != nil {
@@ -434,11 +489,36 @@ func (s *sqliteAdminAlertRules) UpdateAdminAlertRule(ctx context.Context, ruleID
 			return AdminAlertRule{}, err
 		}
 	}
+	if replaceRenewalDays {
+		if err := replaceAlertRuleRenewalDays(ctx, tx, ruleID, renewalDays, now); err != nil {
+			return AdminAlertRule{}, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return AdminAlertRule{}, err
 	}
 	tx = nil
 	return s.adminAlertRuleByID(ctx, ruleID)
+}
+
+func normalizedAlertRuleRenewalUpdate(update AdminAlertRuleUpdateRequest, metric string) ([]int, bool, error) {
+	if update.RenewalDays != nil {
+		if metric != "expiry_days" {
+			return nil, false, errInvalidAdminAlertRuleUpdate
+		}
+		days := append([]int(nil), (*update.RenewalDays)...)
+		sort.Ints(days)
+		return days, true, nil
+	}
+	if update.Threshold == nil || metric != "expiry_days" {
+		return nil, false, nil
+	}
+	threshold := *update.Threshold
+	days := int(threshold)
+	if threshold != float64(days) || !allowedRenewalNoticeDays[days] {
+		return nil, false, errInvalidAdminAlertRuleUpdate
+	}
+	return []int{days}, true, nil
 }
 
 func (s *sqliteAdminAlertRules) adminAlertRuleByID(ctx context.Context, ruleID string) (AdminAlertRule, error) {
@@ -452,7 +532,7 @@ func (s *sqliteAdminAlertRules) adminAlertRuleByID(ctx context.Context, ruleID s
 	if err != nil {
 		return AdminAlertRule{}, err
 	}
-	rules, err := s.attachAlertRuleScopes(ctx, []AdminAlertRule{rule})
+	rules, err := s.attachAlertRuleMetadata(ctx, []AdminAlertRule{rule})
 	if err != nil {
 		return AdminAlertRule{}, err
 	}
@@ -460,6 +540,24 @@ func (s *sqliteAdminAlertRules) adminAlertRuleByID(ctx context.Context, ruleID s
 		return AdminAlertRule{}, errAlertRuleNotFound
 	}
 	return rules[0], nil
+}
+
+func (s *sqliteAdminAlertRules) attachAlertRuleMetadata(ctx context.Context, rules []AdminAlertRule) ([]AdminAlertRule, error) {
+	rules, err := s.attachAlertRuleScopes(ctx, rules)
+	if err != nil {
+		return nil, err
+	}
+	for index := range rules {
+		if rules[index].Metric != "expiry_days" {
+			continue
+		}
+		days, err := loadAlertRuleRenewalDays(ctx, s.db, rules[index])
+		if err != nil {
+			return nil, err
+		}
+		rules[index].RenewalDays = days
+	}
+	return rules, nil
 }
 
 func (s *sqliteAdminAlertRules) attachAlertRuleScopes(ctx context.Context, rules []AdminAlertRule) ([]AdminAlertRule, error) {
@@ -528,6 +626,72 @@ func replaceAlertRuleNodeScopes(ctx context.Context, tx *sql.Tx, ruleID string, 
 		`, ruleID, nodeID, now); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func replaceAlertRuleRenewalDays(ctx context.Context, tx *sql.Tx, ruleID string, days []int, now int64) error {
+	if len(days) == 0 {
+		return errInvalidAdminAlertRuleUpdate
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM alert_rule_renewal_days WHERE rule_id = ?`, ruleID); err != nil {
+		return err
+	}
+	for _, day := range days {
+		if !allowedRenewalNoticeDays[day] {
+			return errInvalidAdminAlertRuleUpdate
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO alert_rule_renewal_days (rule_id, days, created_at)
+			VALUES (?, ?, ?)
+		`, ruleID, day, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type alertRuleQueryer interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+func loadAlertRuleRenewalDays(ctx context.Context, queryer alertRuleQueryer, rule AdminAlertRule) ([]int, error) {
+	rows, err := queryer.QueryContext(ctx, `
+		SELECT days
+		FROM alert_rule_renewal_days
+		WHERE rule_id = ?
+		ORDER BY days ASC
+	`, rule.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	days := make([]int, 0)
+	for rows.Next() {
+		var day int
+		if err := rows.Scan(&day); err != nil {
+			return nil, err
+		}
+		if allowedRenewalNoticeDays[day] {
+			days = append(days, day)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(days) > 0 {
+		return days, nil
+	}
+	return effectiveRenewalNoticeDays(rule), nil
+}
+
+func effectiveRenewalNoticeDays(rule AdminAlertRule) []int {
+	if len(rule.RenewalDays) > 0 {
+		return rule.RenewalDays
+	}
+	days := int(rule.Threshold)
+	if rule.Threshold == float64(days) && allowedRenewalNoticeDays[days] {
+		return []int{days}
 	}
 	return nil
 }

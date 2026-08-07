@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatRenewalDayOption, normalizeRenewalThreshold, parseRenewalThreshold, renewalDayOptions } from './adminOperationalModel'
+import { formatRenewalDayOption, normalizeRenewalDays, normalizeRenewalThreshold, parseRenewalThreshold, renewalDayOptions } from './adminOperationalModel'
 
 describe('renewal reminder options', () => {
   it('removes same-day reminders and preserves supported lead times', () => {
@@ -12,5 +12,10 @@ describe('renewal reminder options', () => {
     expect(formatRenewalDayOption(1)).toBe('提前1天')
     expect(formatRenewalDayOption(15)).toBe('提前半个月')
     expect(formatRenewalDayOption(30)).toBe('提前1个月')
+  })
+
+  it('normalizes multiple reminder days without duplicates and keeps the legacy threshold fallback', () => {
+    expect(normalizeRenewalDays([7, 1, 7, 2], 3)).toEqual([1, 7])
+    expect(normalizeRenewalDays([], 15)).toEqual([15])
   })
 })

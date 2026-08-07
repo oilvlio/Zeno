@@ -221,6 +221,7 @@ export interface AdminAlertRule {
   metric: string
   comparator: string
   threshold: number
+  renewalDays: number[]
   thresholdUnit: string
   durationSec: number
   enabled: boolean

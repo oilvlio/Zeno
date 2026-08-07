@@ -3,6 +3,7 @@ import type { StatePoint } from '../types'
 import { formatBps, formatBytes, formatPercent } from '../lib/format'
 import { availableHistoryRanges } from '../lib/historyRange'
 import { HistoryRangeSelector } from './HistoryRangeSelector'
+import { OverlaySurface } from './OverlaySurface'
 
 interface StateHistoryPanelProps {
   points: StatePoint[]
@@ -76,14 +77,14 @@ export function StateHistoryPanel({ points, range, loading = false, error, canUs
           key: 'memory',
           label: '内存',
           values: chartPoints.map(memoryPercent),
-          tooltipValues: chartPoints.map((point) => formatResourceUsage(point.memoryUsedBytes, point.memoryTotalBytes)),
+          tooltipValues: chartPoints.map((point) => formatResourceValue(point.memoryUsedBytes, point.memoryTotalBytes)),
           color: '#2563eb',
         },
         {
           key: 'swap',
           label: 'Swap',
           values: chartPoints.map(swapPercent),
-          tooltipValues: chartPoints.map((point) => formatResourceUsage(point.swapUsedBytes, point.swapTotalBytes)),
+          tooltipValues: chartPoints.map((point) => formatResourceValue(point.swapUsedBytes, point.swapTotalBytes)),
           color: '#0ea5e9',
         },
       ],
@@ -100,7 +101,7 @@ export function StateHistoryPanel({ points, range, loading = false, error, canUs
         key: 'disk',
         label: '磁盘',
         values: chartPoints.map(diskPercent),
-        tooltipValues: chartPoints.map((point) => formatResourceUsage(point.diskUsedBytes, point.diskTotalBytes)),
+        tooltipValues: chartPoints.map((point) => formatResourceValue(point.diskUsedBytes, point.diskTotalBytes)),
         color: '#9333ea',
       }],
     },
@@ -225,7 +226,7 @@ function ResourceMetricCard({ metric, timestamps }: { metric: MetricConfig; time
           {hoverIndex !== null && hoverTimestamp !== null && (
             <>
               <span className="resource-chart-hover-line" style={{ left: `${hoverPercent}%` }} aria-hidden="true" />
-              <div className={`resource-chart-tooltip${hoverPercent < 24 ? ' is-left-edge' : ''}${hoverPercent > 76 ? ' is-right-edge' : ''}`} style={{ left: `${hoverPercent}%` }}>
+              <OverlaySurface className={`resource-chart-tooltip${hoverPercent < 24 ? ' is-left-edge' : ''}${hoverPercent > 76 ? ' is-right-edge' : ''}`} style={{ left: `${hoverPercent}%` }}>
                 <time>{formatTooltipTime(hoverTimestamp)}</time>
                 {metric.lines.map((line) => (
                   <span key={line.key}>
@@ -234,7 +235,7 @@ function ResourceMetricCard({ metric, timestamps }: { metric: MetricConfig; time
                     <strong>{line.tooltipValues?.[hoverIndex] ?? formatTooltipValue(line.values[hoverIndex], metric.unitLabel)}</strong>
                   </span>
                 ))}
-              </div>
+              </OverlaySurface>
             </>
           )}
         </div>
@@ -351,12 +352,17 @@ function latestResourceUsage(
 }
 
 export function formatResourceUsage(used: number | null | undefined, total: number | null | undefined): string {
+  const pair = formatResourceValue(used, total)
+  if (pair === 'No data') return pair
+  const percent = ratioPercent(used, total)
+  return percent === null ? pair : `${pair} · ${formatPercent(percent)}`
+}
+
+function formatResourceValue(used: number | null | undefined, total: number | null | undefined): string {
   const safeUsed = finiteOrNull(used)
   const safeTotal = finiteOrNull(total)
   if (safeUsed === null && safeTotal === null) return 'No data'
-  const pair = `${safeUsed === null ? '--' : formatBytes(safeUsed)} / ${safeTotal === null ? '--' : formatBytes(safeTotal)}`
-  const percent = ratioPercent(safeUsed, safeTotal)
-  return percent === null ? pair : `${pair} · ${formatPercent(percent)}`
+  return `${safeUsed === null ? '--' : formatBytes(safeUsed)} / ${safeTotal === null ? '--' : formatBytes(safeTotal)}`
 }
 
 function memoryPercent(point: StatePoint): number | null {

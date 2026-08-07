@@ -230,19 +230,17 @@ func renewalRulesMatch(rules []AdminAlertRule, dueDate, today time.Time) bool {
 		if rule.NotificationEventType != "renewal_due" || rule.Metric != "expiry_days" || !rule.Enabled {
 			continue
 		}
-		threshold := int(rule.Threshold)
-		if rule.Threshold != float64(threshold) || !allowedRenewalNoticeDays[threshold] {
-			continue
-		}
-		reminderDate := dueDate.AddDate(0, 0, -threshold)
-		if threshold == renewalNoticeCalendarMonthThreshold {
-			// “提前 1 个月” is a calendar operation, not a 30-day duration.
-			// Clamping preserves end-of-month intent: Mar 31 -> Feb 28/29,
-			// May 31 -> Apr 30, and leap-year dates remain deterministic.
-			reminderDate = addMonthsFromAnchorClampedUTC(dueDate, -1)
-		}
-		if dateOnlyUTC(reminderDate).Equal(today) {
-			return true
+		for _, threshold := range effectiveRenewalNoticeDays(rule) {
+			reminderDate := dueDate.AddDate(0, 0, -threshold)
+			if threshold == renewalNoticeCalendarMonthThreshold {
+				// “提前 1 个月” is a calendar operation, not a 30-day duration.
+				// Clamping preserves end-of-month intent: Mar 31 -> Feb 28/29,
+				// May 31 -> Apr 30, and leap-year dates remain deterministic.
+				reminderDate = addMonthsFromAnchorClampedUTC(dueDate, -1)
+			}
+			if dateOnlyUTC(reminderDate).Equal(today) {
+				return true
+			}
 		}
 	}
 	return false

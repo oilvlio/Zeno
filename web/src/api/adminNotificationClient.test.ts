@@ -63,6 +63,7 @@ describe('admin alert rules', () => {
     expect(normalized.rules[0].durationSec).toBe(300)
     expect(normalized.rules[0].notificationLabel).toBe('异常')
     expect(normalized.rules[0].scopeNodeIds).toEqual(['example-node-a'])
+    expect(normalized.rules[0].renewalDays).toEqual([])
 
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(apiPayload), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     globalThis.fetch = fetchMock as unknown as typeof fetch
@@ -116,6 +117,43 @@ describe('admin alert rules', () => {
     })
     const calls = fetchMock.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit?]>
     expect(String(calls[0]?.[0])).not.toContain('admin-pass')
+  })
+
+  it('serializes multiple renewal reminder days', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      rule: {
+        id: 'renewal_due',
+        name: '续费提醒',
+        category: 'billing',
+        metric: 'expiry_days',
+        comparator: '<=',
+        threshold: 7,
+        renewal_days: [1, 3, 7],
+        threshold_unit: 'd',
+        duration_sec: 0,
+        enabled: true,
+        notification_event_type: 'renewal_due',
+        notification_label: '续费',
+        description: '',
+        scope_node_ids: [],
+        created_at: '2026-07-03T00:00:00Z',
+        updated_at: '2026-08-07T00:00:00Z',
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const rule = await updateAdminAlertRule('admin-pass', 'renewal_due', { renewalDays: [1, 3, 7] })
+
+    expect(rule.renewalDays).toEqual([1, 3, 7])
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/v1/alert-rules/renewal_due', {
+      method: 'PATCH',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Admin-Token': 'admin-pass',
+      },
+      body: JSON.stringify({ renewal_days: [1, 3, 7] }),
+    })
   })
 
 })

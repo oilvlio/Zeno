@@ -35,6 +35,7 @@ func TestAdminAlertRulesListAndPatchWithoutSensitiveLeak(t *testing.T) {
 			Metric                string   `json:"metric"`
 			Comparator            string   `json:"comparator"`
 			Threshold             float64  `json:"threshold"`
+			RenewalDays           []int    `json:"renewal_days"`
 			ThresholdUnit         string   `json:"threshold_unit"`
 			DurationSec           int      `json:"duration_sec"`
 			Enabled               bool     `json:"enabled"`
@@ -57,6 +58,7 @@ func TestAdminAlertRulesListAndPatchWithoutSensitiveLeak(t *testing.T) {
 		Metric                string   `json:"metric"`
 		Comparator            string   `json:"comparator"`
 		Threshold             float64  `json:"threshold"`
+		RenewalDays           []int    `json:"renewal_days"`
 		ThresholdUnit         string   `json:"threshold_unit"`
 		DurationSec           int      `json:"duration_sec"`
 		Enabled               bool     `json:"enabled"`
@@ -88,6 +90,9 @@ func TestAdminAlertRulesListAndPatchWithoutSensitiveLeak(t *testing.T) {
 	if renewalRule.Name != "续费提醒" || renewalRule.Category != "billing" || renewalRule.Metric != "expiry_days" || renewalRule.Comparator != "<=" || renewalRule.Threshold != 3 || renewalRule.ThresholdUnit != "d" || renewalRule.Enabled || renewalRule.NotificationEventType != "renewal_due" || renewalRule.NotificationLabel != "续费" {
 		t.Fatalf("renewal_due rule = %+v, want disabled billing renewal rule", renewalRule)
 	}
+	if len(renewalRule.RenewalDays) != 1 || renewalRule.RenewalDays[0] != 3 {
+		t.Fatalf("renewal_due days = %v, want default [3]", renewalRule.RenewalDays)
+	}
 	for _, retiredRuleID := range []string{"probe_latency_high", "probe_loss_high", "node_recovered"} {
 		if _, ok := rulesByID[retiredRuleID]; ok {
 			t.Fatalf("retired rule %s still present: %+v", retiredRuleID, rulesByID)
@@ -115,6 +120,26 @@ func TestAdminAlertRulesListAndPatchWithoutSensitiveLeak(t *testing.T) {
 	}
 	if patchResponse.Rule.ID != "cpu_high" || patchResponse.Rule.Enabled || patchResponse.Rule.Threshold != 95.5 || patchResponse.Rule.DurationSec != 600 {
 		t.Fatalf("patched rule = %+v, want updated enabled/threshold/duration", patchResponse.Rule)
+	}
+
+	renewalPatchRecorder := httptest.NewRecorder()
+	renewalPatchRequest := httptest.NewRequest(http.MethodPatch, "/api/admin/v1/alert-rules/renewal_due", bytes.NewBufferString(`{"enabled":true,"renewal_days":[1,3,7]}`))
+	renewalPatchRequest.Header.Set("X-Admin-Token", "admin-pass")
+	handler.ServeHTTP(renewalPatchRecorder, renewalPatchRequest)
+	if renewalPatchRecorder.Code != http.StatusOK {
+		t.Fatalf("renewal patch status = %d, want 200; body=%s", renewalPatchRecorder.Code, renewalPatchRecorder.Body.String())
+	}
+	var renewalPatchResponse struct {
+		Rule struct {
+			Threshold   float64 `json:"threshold"`
+			RenewalDays []int   `json:"renewal_days"`
+		} `json:"rule"`
+	}
+	if err := json.NewDecoder(bytes.NewBufferString(renewalPatchRecorder.Body.String())).Decode(&renewalPatchResponse); err != nil {
+		t.Fatalf("decode patched renewal rule: %v", err)
+	}
+	if renewalPatchResponse.Rule.Threshold != 7 || len(renewalPatchResponse.Rule.RenewalDays) != 3 || renewalPatchResponse.Rule.RenewalDays[0] != 1 || renewalPatchResponse.Rule.RenewalDays[1] != 3 || renewalPatchResponse.Rule.RenewalDays[2] != 7 {
+		t.Fatalf("patched renewal rule = %+v, want sorted days [1 3 7] and compatibility threshold 7", renewalPatchResponse.Rule)
 	}
 }
 
@@ -382,6 +407,11 @@ func TestAdminAlertRulesRejectUnauthorizedUnknownAndInvalidRequests(t *testing.T
 		{name: "patch renewal threshold unsupported days", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/renewal_due", body: `{"threshold":2}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "patch renewal threshold above 30 days", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/renewal_due", body: `{"threshold":31}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "patch renewal threshold fractional days", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/renewal_due", body: `{"threshold":1.5}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
+		{name: "patch empty renewal days", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/renewal_due", body: `{"renewal_days":[]}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
+		{name: "patch duplicate renewal days", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/renewal_due", body: `{"renewal_days":[1,1]}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
+		{name: "patch unsupported renewal days", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/renewal_due", body: `{"renewal_days":[1,2]}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
+		{name: "patch renewal days on resource rule", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/cpu_high", body: `{"renewal_days":[1,3]}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
+		{name: "patch threshold and renewal days together", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/renewal_due", body: `{"threshold":3,"renewal_days":[1,3]}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "patch negative duration", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/cpu_high", body: `{"duration_sec":-1}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "patch blank scope node", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/cpu_high", body: `{"scope_node_ids":[""]}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "patch duplicate scope node", method: http.MethodPatch, path: "/api/admin/v1/alert-rules/cpu_high", body: `{"scope_node_ids":["example-node-a","example-node-a"]}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
@@ -431,6 +461,13 @@ func TestRemovedSameDayRenewalThresholdMigratesToOneDay(t *testing.T) {
 	}
 	if threshold != 1 {
 		t.Fatalf("renewal threshold = %g, want closest supported value 1", threshold)
+	}
+	var renewalDay int
+	if err := reopened.db.QueryRowContext(ctx, `SELECT days FROM alert_rule_renewal_days WHERE rule_id = 'renewal_due'`).Scan(&renewalDay); err != nil {
+		t.Fatalf("read migrated renewal day: %v", err)
+	}
+	if renewalDay != 1 {
+		t.Fatalf("renewal day = %d, want migrated one-day reminder", renewalDay)
 	}
 }
 

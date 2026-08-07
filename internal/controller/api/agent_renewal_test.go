@@ -158,6 +158,27 @@ func TestRenewalRulesMatchCalendarMonthBoundaries(t *testing.T) {
 		t.Fatal("removed same-day reminder still matched")
 	}
 
+	multiDayRule := []AdminAlertRule{{
+		Metric:                "expiry_days",
+		NotificationEventType: "renewal_due",
+		Enabled:               true,
+		Threshold:             7,
+		RenewalDays:           []int{1, 3, 7},
+	}}
+	multiDayDue := time.Date(2026, 8, 8, 0, 0, 0, 0, time.UTC)
+	for _, reminderDay := range []time.Time{
+		time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 8, 7, 0, 0, 0, 0, time.UTC),
+	} {
+		if !renewalRulesMatch(multiDayRule, multiDayDue, reminderDay) {
+			t.Fatalf("multi-day renewal reminder did not match %s", reminderDay.Format("2006-01-02"))
+		}
+	}
+	if renewalRulesMatch(multiDayRule, multiDayDue, time.Date(2026, 8, 6, 0, 0, 0, 0, time.UTC)) {
+		t.Fatal("multi-day renewal reminder matched an unselected day")
+	}
+
 	monthRule := []AdminAlertRule{{
 		Metric:                "expiry_days",
 		NotificationEventType: "renewal_due",

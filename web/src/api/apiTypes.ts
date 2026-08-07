@@ -260,6 +260,7 @@ export interface ApiAdminAlertRule {
   metric: string
   comparator: string
   threshold: number
+  renewal_days?: number[] | null
   threshold_unit: string
   duration_sec: number
   enabled: boolean
@@ -481,6 +482,7 @@ export interface AdminNotificationChannelUpdateInput {
 export interface AdminAlertRuleUpdateInput {
   enabled?: boolean
   threshold?: number
+  renewalDays?: number[]
   durationSec?: number
   scopeNodeIds?: string[]
 }

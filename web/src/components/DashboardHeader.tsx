@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { defaultSettings, fallbackLogoUrl, resolvedTheme, themeOptions } from '../lib/appearance'
 import type { AdminSettings, AdminTheme } from '../types'
+import { OverlaySurface } from './OverlaySurface'
 
 export interface DashboardHeaderProps {
   settings?: AdminSettings
@@ -142,13 +143,13 @@ export function DashboardHeader({ settings = defaultSettings, onHome, onAdmin, o
         {trailingAction}
       </nav>
       {themeMenuOpen && themeMenuPosition && typeof document !== 'undefined' && createPortal(
-        <div ref={themePopoverRef} className="theme-menu-popover" role="menu" style={themeMenuPosition}>
+        <OverlaySurface ref={themePopoverRef} className="theme-menu-popover" role="menu" style={themeMenuPosition}>
           {themeOptions.map((option) => (
             <button key={option.value} type="button" role="menuitemradio" aria-checked={themeMode === option.value} data-active={themeMode === option.value} onClick={() => selectTheme(option.value)}>
               <span>{option.label}</span>
             </button>
           ))}
-        </div>,
+        </OverlaySurface>,
         document.body,
       )}
     </header>

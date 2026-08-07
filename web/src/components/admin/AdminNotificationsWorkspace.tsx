@@ -2,9 +2,9 @@ import { type FormEvent, useState } from 'react'
 import type { AdminAlertRuleUpdateInput, AdminNotificationChannelCreateInput, AdminNotificationChannelUpdateInput } from '../../api/adminClient'
 import { runMaybePromise } from '../../lib/maybePromise'
 import type { AdminAlertRule, AdminNode, AdminNotificationChannel } from '../../types'
-import { AdminSegmentedField } from './AdminFields'
+import { AdminExpandedCheckList } from './AdminFields'
 import { AdminCredentialField, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions, AdminWorkspaceHeading } from './AdminPrimitives'
-import { formatAlertRuleNote, formatAlertRuleScope, formatRenewalDayOption, normalizeRenewalThreshold, parseNonNegativeInt, parsePercentage, parseRenewalThreshold, renewalDayOptions } from './adminOperationalModel'
+import { formatAlertRuleNote, formatAlertRuleScope, formatRenewalDayOption, normalizeRenewalDays, parseNonNegativeInt, parsePercentage, renewalDayOptions } from './adminOperationalModel'
 import type { AdminNotificationsWorkspaceProps, MaybePromise } from './adminOperationalTypes'
 
 function AdminAlertRulesSection({ rules, nodes, onUpdate }: { rules: AdminAlertRule[]; nodes: AdminNode[]; onUpdate: (ruleId: string, input: AdminAlertRuleUpdateInput) => MaybePromise }) {
@@ -114,25 +114,26 @@ function AdminAlertRuleEditModal({ rule, nodes, onUpdate, onClose }: { rule: Adm
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const initialScopeNodeIds = rule.scopeNodeIds.length === 0 ? nodes.map((node) => node.id) : rule.scopeNodeIds
+  const [scopeNodeIds, setScopeNodeIds] = useState(initialScopeNodeIds)
   const isRenewalRule = rule.metric === 'expiry_days'
+  const [renewalDays, setRenewalDays] = useState(() => normalizeRenewalDays(rule.renewalDays, rule.threshold))
   const isResourceRule = rule.category === 'resource' && rule.thresholdUnit === '%'
   const supportsDuration = !isRenewalRule
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (submitting) return
     const formData = new FormData(event.currentTarget)
-    const scopeNodeIds = nodes.filter((node) => formData.get(`rule-scope-${node.id}`) === 'on').map((node) => node.id)
-    const renewalThreshold = isRenewalRule ? parseRenewalThreshold(String(formData.get('rule-renewal-days') ?? '')) : null
     const resourceThreshold = isResourceRule ? parsePercentage(String(formData.get('rule-threshold-percent') ?? '')) : null
     const durationSec = supportsDuration ? parseNonNegativeInt(String(formData.get('rule-duration-sec') ?? '')) : null
+    const persistedScopeNodeIds = scopeNodeIds.length === nodes.length ? [] : scopeNodeIds
     setSubmitting(true)
     setFormError(null)
     runMaybePromise(() => onUpdate(rule.id, {
       enabled: formData.get('rule-enabled') === 'on',
-      ...(isRenewalRule && renewalThreshold !== null ? { threshold: renewalThreshold } : {}),
+      ...(isRenewalRule ? { renewalDays } : {}),
       ...(isResourceRule && resourceThreshold !== null ? { threshold: resourceThreshold } : {}),
       ...(supportsDuration && durationSec !== null ? { durationSec } : {}),
-      scopeNodeIds,
+      scopeNodeIds: persistedScopeNodeIds,
     }))
       .then(() => onClose())
       .catch((error: unknown) => setFormError(error instanceof Error ? error.message : '保存失败'))
@@ -145,11 +146,13 @@ function AdminAlertRuleEditModal({ rule, nodes, onUpdate, onClose }: { rule: Adm
         <AdminFormSection title="通知设置">
           <div className="admin-form-grid admin-alert-rule-settings-grid">
             {isRenewalRule && (
-              <AdminSegmentedField
-                name="rule-renewal-days"
-                label="提前提醒"
-                defaultValue={String(normalizeRenewalThreshold(rule.threshold))}
+              <AdminExpandedCheckList
+                title="已选提醒时间"
+                panelLabel="选择提醒时间"
                 options={renewalDayOptions.map((days) => ({ value: String(days), label: formatRenewalDayOption(days) }))}
+                value={renewalDays.map(String)}
+                onChange={(values) => setRenewalDays(values.map(Number))}
+                allowEmpty={false}
               />
             )}
             {supportsDuration && (
@@ -174,14 +177,14 @@ function AdminAlertRuleEditModal({ rule, nodes, onUpdate, onClose }: { rule: Adm
         </AdminFormSection>
         {nodes.length > 0 && (
           <AdminFormSection title="作用服务器">
-            <div className="admin-rule-scope-list admin-target-assignment-list">
-              {nodes.map((node) => (
-                <label className="admin-node-toggle admin-target-assignment-toggle" key={node.id}>
-                  <input name={`rule-scope-${node.id}`} type="checkbox" defaultChecked={initialScopeNodeIds.includes(node.id)} />
-                  <span>{node.displayName || node.id}</span>
-                </label>
-              ))}
-            </div>
+            <AdminExpandedCheckList
+              title="已选服务器"
+              panelLabel="选择服务器"
+              options={nodes.map((node) => ({ value: node.id, label: node.displayName || node.id }))}
+              value={scopeNodeIds}
+              onChange={setScopeNodeIds}
+              allowEmpty={false}
+            />
           </AdminFormSection>
         )}
         <AdminActionFooter error={formError}>

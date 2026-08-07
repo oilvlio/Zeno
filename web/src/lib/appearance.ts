@@ -5,11 +5,11 @@ export type AppearanceValues = Pick<AdminSettings, 'appearancePreset' | 'cardOpa
 
 const defaultAppearancePreset: AppearanceValues = {
   appearancePreset: 'default',
-  cardOpacity: 0.82,
+  cardOpacity: 0.7,
   cardBlur: 0,
   cardRadius: 20,
-  borderStrength: 0.26,
-  shadowStrength: 0.22,
+  borderStrength: 0.3,
+  shadowStrength: 0.2,
   backgroundOverlay: 0,
   themeColor: '#2563eb',
 }
@@ -32,11 +32,11 @@ export const appearancePresets: Record<AppearancePreset, AppearanceValues> = {
   gaussian_blur: {
     ...defaultAppearancePreset,
     appearancePreset: 'gaussian_blur',
-    cardOpacity: 0.66,
-    cardBlur: 18,
-    borderStrength: 0.34,
-    shadowStrength: 0.34,
-    backgroundOverlay: 0.08,
+    cardOpacity: 0.5,
+    cardBlur: 15,
+    borderStrength: 0.3,
+    shadowStrength: 0.3,
+    backgroundOverlay: 0.05,
   },
 }
 
@@ -129,13 +129,8 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
   const backgroundOverlayBase = resolved === 'dark' ? '0, 0, 0' : '255, 255, 255'
   const pageSurface = hasBackgroundImage ? `rgba(${surfaceBase}, ${cardOpacity.toFixed(3)})` : `rgb(${surfaceBase})`
   const gaussianOverlay = appearance.appearancePreset === 'gaussian_blur'
-  const overlayOpacity = gaussianOverlay
-    ? (hasBackgroundImage ? Math.min(0.64, Math.max(0.46, cardOpacity * 0.76)) : 0.88)
-    : (hasBackgroundImage ? 0.92 : 0.96)
-  const overlayFilter = gaussianOverlay ? `blur(${Math.max(12, appearance.cardBlur)}px) saturate(1.08)` : 'none'
-  const menuSurface = gaussianOverlay
-    ? `rgba(${surfaceBase}, ${resolved === 'dark' ? '0.580' : '0.620'})`
-    : 'transparent'
+  const overlayOpacity = Math.min(0.84, Math.max(0.62, cardOpacity + (gaussianOverlay ? 0.14 : 0.1)))
+  const overlayFilter = appearance.cardBlur > 0 ? `blur(${appearance.cardBlur}px) saturate(1.08)` : 'none'
   return {
     '--zeno-desktop-background-image': desktopBackgroundUrl === '' ? 'none' : backgroundImageValue(desktopBackgroundUrl),
     '--zeno-mobile-background-image': hasDedicatedMobileBackground ? backgroundImageValue(mobileBackgroundUrl) : (desktopBackgroundUrl === '' ? 'none' : backgroundImageValue(desktopBackgroundUrl)),
@@ -156,7 +151,6 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
     '--usage-track-bg': highContrastGaussian ? 'rgba(148, 163, 184, 0.22)' : resolved === 'dark' ? 'rgba(148, 163, 184, 0.12)' : 'rgba(148, 163, 184, 0.08)',
     '--usage-track-border': highContrastGaussian ? 'rgba(203, 213, 225, 0.24)' : resolved === 'dark' ? 'rgba(148, 163, 184, 0.14)' : 'rgba(148, 163, 184, 0.12)',
     '--zeno-overlay-surface': `rgba(${surfaceBase}, ${overlayOpacity.toFixed(3)})`,
-    '--zeno-menu-surface': menuSurface,
     '--zeno-overlay-filter': overlayFilter,
     '--radius-panel': `${appearance.cardRadius}px`,
     '--radius-card': `${Math.max(10, appearance.cardRadius - 4)}px`,
@@ -189,7 +183,6 @@ const documentThemeVariableNames = [
   '--usage-track-bg',
   '--usage-track-border',
   '--zeno-overlay-surface',
-  '--zeno-menu-surface',
   '--zeno-overlay-filter',
   '--radius-panel',
   '--radius-card',

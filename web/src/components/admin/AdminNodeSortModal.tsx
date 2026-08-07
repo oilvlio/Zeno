@@ -285,7 +285,7 @@ export function AdminNodeSortModal({ nodes, onSave, onClose }: { nodes: AdminNod
       </AdminActionFooter>
       {dragState && activeDragNode && typeof document !== 'undefined' && createPortal(
         <article
-          className="admin-server-sort-row is-drag-preview"
+          className="zeno-overlay-surface admin-server-sort-row is-drag-preview"
           aria-hidden="true"
           style={{
             '--admin-sort-drag-y': `${dragState.currentY - dragState.startY}px`,

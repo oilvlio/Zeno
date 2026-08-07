@@ -75,7 +75,7 @@ type AdminSettingsUpdateRequest struct {
 
 const (
 	maxSettingsCustomCodeRunes = 60000
-	defaultCardOpacity         = 0.82
+	defaultCardOpacity         = 0.70
 	legacyDefaultCardOpacity   = 0.72
 )
 
@@ -94,8 +94,8 @@ func defaultSiteSettings() SiteSettings {
 		CardOpacity:          defaultCardOpacity,
 		CardBlur:             0,
 		CardRadius:           20,
-		BorderStrength:       0.26,
-		ShadowStrength:       0.22,
+		BorderStrength:       0.30,
+		ShadowStrength:       0.20,
 		BackgroundOverlay:    0,
 		ThemeColor:           "#2563eb",
 		CustomCode:           "",

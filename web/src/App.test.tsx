@@ -200,8 +200,7 @@ describe('HomeTopPanel', () => {
       '--control-bg': 'transparent',
       '--usage-track-bg': 'rgba(148, 163, 184, 0.22)',
       '--usage-track-border': 'rgba(203, 213, 225, 0.24)',
-      '--zeno-overlay-surface': 'rgba(15, 23, 42, 0.460)',
-      '--zeno-menu-surface': 'rgba(15, 23, 42, 0.580)',
+      '--zeno-overlay-surface': 'rgba(15, 23, 42, 0.720)',
       '--zeno-overlay-filter': 'blur(18px) saturate(1.08)',
       '--radius-panel': '24px',
       '--radius-card': '20px',
@@ -219,7 +218,7 @@ describe('HomeTopPanel', () => {
       '--zeno-card-blur': '18px',
       '--page-surface': 'rgb(15, 23, 42)',
       '--admin-secondary-surface': 'rgb(15, 23, 42)',
-      '--zeno-overlay-surface': 'rgba(15, 23, 42, 0.880)',
+      '--zeno-overlay-surface': 'rgba(15, 23, 42, 0.720)',
     })
     expect(shellStyleForSettings({ ...settings, mobileBackgroundUrl: '' })).toMatchObject({
       '--zeno-mobile-background-image': 'url("https://example.com/desktop-bg.webp")',
@@ -228,19 +227,19 @@ describe('HomeTopPanel', () => {
       ...settings,
       theme: 'light' as const,
       appearancePreset: 'default' as const,
-      cardOpacity: 0.82,
+      cardOpacity: 0.7,
       cardBlur: 0,
       cardRadius: 20,
-      borderStrength: 0.26,
-      shadowStrength: 0.22,
+      borderStrength: 0.3,
+      shadowStrength: 0.2,
       backgroundOverlay: 0,
       themeColor: '#2563eb',
     }
     const defaultWithBackgroundStyle = shellStyleForSettings(defaultAppearanceSettings)
     expect(defaultWithBackgroundStyle).toMatchObject({
-      '--page-surface': 'rgba(255, 255, 255, 0.820)',
+      '--page-surface': 'rgba(255, 255, 255, 0.700)',
       '--admin-secondary-surface': 'rgb(255, 255, 255)',
-      '--zeno-overlay-surface': 'rgba(255, 255, 255, 0.920)',
+      '--zeno-overlay-surface': 'rgba(255, 255, 255, 0.800)',
       '--surface-strong': 'transparent',
       '--surface': 'transparent',
     })
@@ -249,7 +248,7 @@ describe('HomeTopPanel', () => {
     expect(shellStyleForSettings({ ...defaultAppearanceSettings, backgroundUrl: '', desktopBackgroundUrl: '', mobileBackgroundUrl: '' })).toMatchObject({
       '--page-surface': 'rgb(255, 255, 255)',
       '--admin-secondary-surface': 'rgb(255, 255, 255)',
-      '--zeno-overlay-surface': 'rgba(255, 255, 255, 0.960)',
+      '--zeno-overlay-surface': 'rgba(255, 255, 255, 0.800)',
     })
   })
 
