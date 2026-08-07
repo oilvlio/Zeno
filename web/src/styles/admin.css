@@ -254,7 +254,7 @@
   color: var(--foreground);
   font-size: 13px;
   font-weight: 500;
-  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  transition: box-shadow 150ms ease;
 }
 .admin-list-row > span {
   min-width: 0;
@@ -268,7 +268,7 @@
 .admin-list-main .admin-node-title span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-list-flag { flex: none; font-size: 15px; }
 .admin-list-main small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; line-height: 1.28; font-weight: 500; }
-.admin-list-row:hover { position: relative; z-index: 1; background: transparent; box-shadow: inset 3px 0 0 color-mix(in srgb, var(--blue) 72%, transparent); }
+.admin-list-row:hover { position: relative; z-index: 1; box-shadow: inset 3px 0 0 color-mix(in srgb, var(--blue) 72%, transparent); }
 .admin-node-section .admin-list-main strong,
 .admin-target-section .admin-list-main strong,
 .admin-notification-section .admin-list-main strong,
@@ -1545,13 +1545,8 @@
     background: transparent;
   }
   .admin-list > .admin-list-row:last-child { border-bottom: 0; }
-  .admin-list-row:hover,
-  .admin-list-row:active,
-  .admin-list-row:focus-within {
-    z-index: 1;
-    background: transparent;
-    box-shadow: none;
-  }
+  .admin-list-row:hover { box-shadow: none; }
+  .admin-list-row:focus-within { z-index: 1; }
   .admin-node-section .admin-list-row,
   .admin-target-list .admin-list-row,
   .admin-notification-list .admin-list-row,
@@ -1665,7 +1660,8 @@
     min-height: 46px;
     padding: 0 10px;
   }
-  .admin-modal.admin-notification-channel-modal {
+  .admin-modal.admin-notification-channel-modal,
+  .admin-modal.admin-alert-rule-modal {
     height: auto;
     min-height: 0;
     max-height: calc(100dvh - 16px);

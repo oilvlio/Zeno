@@ -10,6 +10,7 @@ const baseStyles = readFileSync(join(stylesDirectory, 'styles.css'), 'utf8')
 const detailStyles = readFileSync(join(stylesDirectory, 'styles/detail.css'), 'utf8')
 const adminShellStyles = readFileSync(join(stylesDirectory, 'styles/admin-shell.css'), 'utf8')
 const adminStyles = readFileSync(join(stylesDirectory, 'styles/admin.css'), 'utf8')
+const adminNotificationsSource = readFileSync(join(stylesDirectory, 'components/admin/AdminNotificationsWorkspace.tsx'), 'utf8')
 const styles = [baseStyles, detailStyles, adminShellStyles, adminStyles].join('\n')
 const nonPreviewStyles = [baseStyles, detailStyles, adminShellStyles].join('\n')
 
@@ -52,6 +53,14 @@ describe('stylesheet structure', () => {
 
   it('limits gradients to the self-contained appearance preview fixture', () => {
     expect(gradientSelectors(styles, 'all styles')).toEqual(['.admin-appearance-preview'])
+  })
+})
+
+describe('notification type modal visual contract', () => {
+  it('uses a stable content-height card and a title without the rule-name subtitle', () => {
+    expect(adminNotificationsSource).toContain('<AdminModal title="编辑通知类型" className="admin-alert-rule-modal"')
+    expect(adminNotificationsSource).not.toContain('编辑通知类型 ·')
+    expect(adminStyles).toMatch(/\.admin-modal\.admin-notification-channel-modal,\s*\.admin-modal\.admin-alert-rule-modal\s*\{[^}]*height: auto;[^}]*min-height: 0;[^}]*max-height: calc\(100dvh - 16px\);[^}]*\}/)
   })
 })
 
@@ -443,7 +452,12 @@ describe('homepage and admin shell layout', () => {
     expect(styles).toContain('.admin-node-section')
     expect(adminStyles).toMatch(/\.admin-node-section,[\s\S]*?\.admin-settings-section\s*\{[^}]*background: transparent;[^}]*box-shadow: none;[^}]*\}/)
     expect(adminStyles).toMatch(/\.admin-list\s*\{[^}]*background: transparent;[^}]*\}/)
-    expect(adminStyles).toContain('.admin-list-row:hover { position: relative; z-index: 1; background: transparent;')
+    expect(adminStyles).toContain('.admin-list-row:hover { position: relative; z-index: 1; box-shadow: inset 3px 0 0')
+    expect(adminStyles).toContain('transition: box-shadow 150ms ease;')
+    expect(adminStyles).not.toContain('transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;')
+    expect(adminStyles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.admin-list-row:hover\s*\{[^}]*box-shadow: none;[^}]*\}/)
+    expect(adminStyles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.admin-list-row:focus-within\s*\{[^}]*z-index: 1;[^}]*\}/)
+    expect(adminStyles).not.toContain('.admin-list-row:active')
     expect(styles).toContain(".admin-section-nav button[data-active='true']")
     expect(styles).toContain('.admin-node-status')
     expect(styles).toContain('.admin-status-indicator.status-online .admin-status-dot')

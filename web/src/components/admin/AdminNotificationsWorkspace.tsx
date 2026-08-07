@@ -141,7 +141,7 @@ function AdminAlertRuleEditModal({ rule, nodes, onUpdate, onClose }: { rule: Adm
   }
 
   return (
-    <AdminModal title={`编辑通知类型 · ${rule.name}`} closeDisabled={submitting} onClose={onClose}>
+    <AdminModal title="编辑通知类型" className="admin-alert-rule-modal" closeDisabled={submitting} onClose={onClose}>
       <form className="admin-alert-rule-edit-form admin-node-edit-form is-sectioned" aria-label={`${rule.name} 通知类型编辑`} aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
         <AdminFormSection title="通知设置">
           <div className="admin-form-grid admin-alert-rule-settings-grid">
