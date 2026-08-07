@@ -1,53 +1,49 @@
 # Zeno
 
 [![CI](https://github.com/shui1iao/Zeno/actions/workflows/ci.yml/badge.svg)](https://github.com/shui1iao/Zeno/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/shui1iao/Zeno/actions/workflows/codeql.yml/badge.svg)](https://github.com/shui1iao/Zeno/actions/workflows/codeql.yml)
 [![Docker](https://github.com/shui1iao/Zeno/actions/workflows/docker.yml/badge.svg)](https://github.com/shui1iao/Zeno/actions/workflows/docker.yml)
 [![Release](https://img.shields.io/github/v/release/shui1iao/Zeno?color=2563eb)](https://github.com/shui1iao/Zeno/releases)
 [![License](https://img.shields.io/github/license/shui1iao/Zeno)](LICENSE)
 
-**Zeno is a lightweight, self-hosted server monitoring dashboard.**
+**A lightweight, self-hosted dashboard for server health, traffic, latency, and renewal costs.**
 
-It has two parts: a Controller for the web UI, APIs, SQLite storage and notifications, and an Agent that runs on each server to report host metrics, traffic and probe results. Zeno is software you download and run on your own server; there is no hosted SaaS, vendor cloud account, or managed monitoring service.
+[Live demo](https://shuijiao.de/) · [Quick start](#quick-start) · [Deployment guide](docs/SELF_HOSTING.md) · [简体中文](README.md)
 
-[简体中文](README.md) · [English](README.en.md)
+![Zeno server monitoring dashboard](docs/assets/zeno-dashboard.png)
 
----
+Zeno is built for individuals and small teams managing their own VPSs and servers. The Controller provides the web dashboard, APIs, SQLite storage, probes, and notifications; Agents actively report metrics from each server. Your data and credentials stay in your own infrastructure.
 
-## Features
+It is not a hosted SaaS and does not provide remote shells or command execution. Zeno stays focused on being auditable, easy to deploy, and safe to roll back.
 
-- **Server overview**: online status, OS info, CPU, memory, disk, load, uptime and Agent version.
-- **Live resource metrics**: upload/download speed, controller-persisted lifetime traffic, CPU / memory / disk usage and history. Lifetime traffic survives server and interface restarts.
-- **Monthly traffic accounting**: calculated from network counter deltas, with per-node reset day and billing mode.
-- **Renewal spending**: store each server's renewal amount, currency and cycle; the homepage defaults to CNY but can switch the top monthly spend and all server cards together using current-day Google Finance rates.
-- **Latency and service probes**: ICMP Ping, TCP Ping and HTTP GET with latency, packet loss and history charts.
-- **Public status page**: server cards, top summary, node details and service latency details for desktop and mobile.
-- **Admin dashboard**: manage servers, probe targets, notifications, branding, Agent endpoint and account settings.
-- **Telegram notifications**: offline/recovery, resource threshold and test notifications with per-server scope.
-- **Docker Compose deployment**: Controller binds to `127.0.0.1:18980` by default and is intended to sit behind Caddy or Nginx.
+## Why Zeno
 
----
+- **See every server at a glance** — online state, system information, CPU, memory, disk, load, boot time, and Agent version in one dashboard.
+- **Keep traffic totals across restarts** — lifetime traffic is persisted by the Controller; monthly accounting supports inbound, outbound, sum, max, and per-server reset days.
+- **Find network problems faster** — inspect latency, packet loss, and history with ICMP Ping, TCP Ping, and HTTP GET probes.
+- **Track what your servers cost** — record renewal amount, currency, and billing cycle, then normalize monthly spend with a daily cached exchange rate.
+- **Get notified when something breaks** — Telegram supports offline, resource-threshold, and test notifications scoped to selected servers.
+- **Share a responsive public status page** — server cards, overview metrics, node details, and service-latency details work on desktop and mobile.
+- **Stay lightweight and self-hosted** — the Controller uses SQLite; the official Compose file binds to `127.0.0.1:18980` by default and runs with a non-root user and a read-only root filesystem.
 
-## Scope
+## Quick start
 
-Zeno focuses on lightweight monitoring. It is not a remote-control platform:
+### 1. Install the Controller
 
-- No remote terminal, remote command execution, file manager or script runner.
-- No compatibility layer for Nezha, Komari or Kulin APIs, databases or Agent protocols.
-- No built-in multi-tenancy, OAuth, complex RBAC or notification template system.
+Prepare a Linux server with:
 
----
+- `amd64`, `arm64`, or `arm/v6`
+- Docker Engine 24+
+- Docker Compose 2.20+
+- At least 1 vCPU, 512 MiB available memory, and 1 GiB available disk space recommended
 
-## Install Controller
-
-Prepare a Linux server (`amd64`, `arm64`, or `arm/v6`) with Docker Engine and Docker Compose v2, then run:
+Run as root:
 
 ```bash
 bash <(curl -fsSL https://zeno.shuijiao.de)
 ```
 
-The quick installer uses the publisher's currently recommended stable image and is convenient for a first install. For reproducible operations, pin upgrades to `vX.Y.Z` or a digest. The installer requires root (run as root or through `sudo`). The current validation baseline is Docker Engine 24+, Compose 2.20+, 1 vCPU, 512 MiB free memory, and 1 GiB free disk.
-
-Default layout:
+The installer deploys the currently recommended stable image and creates:
 
 ```text
 /opt/zeno/docker-compose.yml
@@ -63,11 +59,62 @@ The Controller listens on:
 http://127.0.0.1:18980
 ```
 
-> Do not expose `18980` directly. Put it behind Caddy, Nginx or another HTTPS reverse proxy.
+Do not expose `18980` directly to the internet. Put Caddy, Nginx, or another HTTPS reverse proxy in front of it and make sure WebSocket proxying is enabled.
 
-Complete account setup immediately after the first Admin visit, and configure a valid HTTPS hostname before enrolling remote Agents. The reverse proxy must support WebSocket upgrades. If it is not on the same host/loopback, add only its actual source address to `ZENO_TRUSTED_PROXIES`.
+```caddyfile
+zeno.example.com {
+    reverse_proxy 127.0.0.1:18980
+}
+```
 
-Optional environment variables:
+Then open the admin panel and finish account setup. See [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) for complete public deployment, trusted-proxy, and first-login instructions.
+
+### 2. Connect an Agent
+
+The Agent lives in the separate [`shui1iao/Zeno-Agent`](https://github.com/shui1iao/Zeno-Agent) repository.
+
+Create a server in the Zeno admin panel, select Linux, macOS, or Windows, and run the generated installation command on the target machine. The command contains a node-specific enrollment token that can be used once and expires after 10 minutes.
+
+Official Agent support:
+
+| System | Architectures | Service manager |
+| --- | --- | --- |
+| Linux | `amd64`, `arm64`, `armv6`, `armv7` | systemd |
+| macOS | Intel, Apple Silicon | LaunchDaemon |
+| Windows | `amd64`, `arm64` | Windows Service |
+
+Controller and Agent releases are independent. See [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for tested combinations, minimum versions, and deprecation policy.
+
+## How it works
+
+```mermaid
+flowchart LR
+    Browser[Public status / Admin dashboard] --> Controller[Zeno Controller]
+    Agents[Linux / macOS / Windows Agents] -->|Active HTTPS reports| Controller
+    Controller --> SQLite[(SQLite)]
+    Controller --> Probes[ICMP / TCP / HTTP probes]
+    Controller --> Telegram[Telegram notifications]
+```
+
+- **Controller** — web dashboard, Public/Admin APIs, Agent API, history, probes, and notifications.
+- **Agent** — collects and actively reports metrics only; it exposes no remote command entry point and never modifies the Controller.
+- **Storage** — local SQLite by default, with runtime data and secrets under `/opt/zeno`.
+
+## Scope
+
+Zeno is a good fit for individuals and small teams that want to control their own data and need focused monitoring plus a public status page.
+
+It intentionally does not provide:
+
+- Remote terminals, command execution, file management, or script jobs
+- Multi-tenancy, OAuth, complex permissions, or notification-template systems
+- Compatibility layers for Nezha, Komari, or Kulin APIs, databases, or Agent protocols
+
+These boundaries keep deployment, upgrades, backups, and security review straightforward.
+
+## Custom installation
+
+The recommended stable image is convenient for a first deployment. For long-lived environments, pin `vX.Y.Z` or a digest during upgrades for reproducibility.
 
 ```bash
 ZENO_INSTALL_DIR=/opt/zeno \
@@ -77,49 +124,11 @@ ZENO_DB_CHECK_TIMEOUT=10m \
 bash <(curl -fsSL https://zeno.shuijiao.de)
 ```
 
-`ZENO_DB_CHECK_TIMEOUT` limits the upgrade-time SQLite `quick_check`. It defaults to `10m`, accepts `s`, `m`, or `h`, and is capped at `24h`. Large databases can take several minutes to check; the installer persists this value and still rolls back automatically if the check fails or times out.
+`ZENO_DB_CHECK_TIMEOUT` controls the SQLite `quick_check` timeout during upgrades. It defaults to `10m`, accepts `s`, `m`, or `h`, and is capped at `24h`. The installer attempts an automatic rollback if the check fails or times out.
 
-### Caddy example
+## Upgrade and rollback
 
-```caddyfile
-zeno.example.com {
-    reverse_proxy 127.0.0.1:18980
-}
-```
-
----
-
-## Install Agent
-
-The Agent is maintained in a separate repository: [`shui1iao/Zeno-Agent`](https://github.com/shui1iao/Zeno-Agent).
-
-Recommended flow: create a server in the Zeno admin dashboard, choose Linux / macOS / Windows, and run the generated install command on the target server. The command downloads the matching Agent release; Linux installs `zeno-agent.service`, macOS installs a LaunchDaemon, and Windows installs the `zeno-agent` service.
-
-Manual example (generate the one-time enrollment token for this node in Admin and use it within 10 minutes):
-
-```bash
-ZENO_CONTROLLER_URL=https://zeno.example.com \
-ZENO_NODE_ID=<node-id> \
-ZENO_ENROLLMENT_TOKEN=<one-time-enrollment-token> \
-ZENO_INSTALL_URL=https://zeno.shuijiao.de/agent/install.sh \
-bash -o pipefail -c 'curl -fsSL "$ZENO_INSTALL_URL" | sudo env ZENO_CONTROLLER_URL="$ZENO_CONTROLLER_URL" ZENO_NODE_ID="$ZENO_NODE_ID" ZENO_ENROLLMENT_TOKEN="$ZENO_ENROLLMENT_TOKEN" bash'
-```
-
-Generating another command immediately revokes the previous unused enrollment for that node. It does not interrupt the currently installed Agent's runtime token; the runtime token changes only after the newly enrolled Agent first authenticates successfully.
-
-Run the Windows command from an elevated PowerShell window. The macOS command requires sudo privileges.
-
-Official Agent targets are Linux systemd (`amd64` / `arm64` / `armv6` / `armv7`), macOS (Intel / Apple Silicon), and Windows (`amd64` / `arm64`). Controller and Agent are versioned independently; see [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for verified combinations, minimum versions, and deprecation policy.
-
-The Agent only reports metrics and probe results. It does not modify the Controller or expose a remote command channel.
-
----
-
-## Update
-
-See [`docs/UPGRADE.md`](docs/UPGRADE.md) for upgrade and rollback notes.
-
-Run the safety installer again with an explicit version. It verifies provenance, creates an offline backup, checks SQLite, and automatically restores a failed upgrade:
+Download and verify an installer for an explicit version:
 
 ```bash
 version=vX.Y.Z
@@ -130,39 +139,37 @@ sudo env ZENO_IMAGE="ghcr.io/shui1iao/zeno:$version" bash install.sh
 rm -f install.sh install.sh.sha256
 ```
 
-Health check:
+Before upgrading, confirm the automatic backup directory and keep an additional off-host copy. The installer performs provenance checks, an offline backup, SQLite validation, and failure recovery. A manual rollback must restore compatible database schema and `secrets/`, not only the previous image.
+
+See [`docs/UPGRADE.md`](docs/UPGRADE.md) for the complete procedure. After an upgrade, check:
 
 ```bash
 curl -fsS http://127.0.0.1:18980/ready
 ```
 
-Confirm the automatic backup directory before upgrading and keep an off-host copy. The installer attempts to restore the previous image and complete backup after a failed start. A manual rollback must not change only the image while ignoring the database schema and `secrets/`.
+## Documentation
 
----
+| Topic | Document |
+| --- | --- |
+| Self-hosting, HTTPS, reverse proxies, and first login | [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) |
+| Upgrades, backups, and rollback | [`docs/UPGRADE.md`](docs/UPGRADE.md) |
+| Controller and Agent compatibility matrix | [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) |
+| Public exposure, credentials, and notification keyrings | [`docs/SECURITY.md`](docs/SECURITY.md) |
+| API | [`docs/API.md`](docs/API.md) |
+| Support | [`SUPPORT.md`](SUPPORT.md) |
 
-## Operations and troubleshooting
-
-- Self-hosting, HTTPS/reverse proxy, and first login: [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md)
-- Upgrades, automatic backups, failed-upgrade recovery, and rollback: [`docs/UPGRADE.md`](docs/UPGRADE.md)
-- Controller ↔ Agent support matrix: [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)
-- Public exposure, credentials, notification keyrings, and private vulnerability reporting: [`docs/SECURITY.md`](docs/SECURITY.md)
-
-Start with `curl -fsS http://127.0.0.1:18980/ready`, `docker compose ps`, Controller container logs, and the Agent service status on the target host. Redact Issue reports: never paste tokens, complete install commands, Authorization headers, databases, or notification credentials.
-
----
+Redact diagnostics before opening an Issue. Never paste tokens, complete installation commands, Authorization headers, databases, backup contents, or notification credentials. Report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md).
 
 ## Data and security
 
-- SQLite database: `/opt/zeno/data/zeno.db`.
-- Admin and Agent tokens: `/opt/zeno/secrets/`; secret files should remain `root:10001` with mode `0640`.
-- The official Compose stack runs as non-root UID/GID `10001:10001`. `data/` is owned by that UID/GID; `secrets/` remains root-owned and read-only to the runtime group. The installer hardens existing directories automatically.
+- The SQLite database is stored at `/opt/zeno/data/zeno.db` by default.
+- Admin and Agent tokens are stored under `/opt/zeno/secrets/` by default.
+- Secret files should remain `root:10001` and `0640`; the official Compose file runs as UID/GID `10001:10001`.
+- `data/` is owned by the runtime user; `secrets/` remains root-owned and read-only to the runtime group.
 - Back up `/opt/zeno/data` and `/opt/zeno/secrets` regularly.
-- Keep the Controller bound locally and expose it through an HTTPS reverse proxy.
-- See [`docs/SECURITY.md`](docs/SECURITY.md) for public deployment, token rotation and security boundaries.
+- Public access should use an HTTPS domain with a verifiable certificate. If the reverse proxy is not on the same loopback host, add only its actual source address to `ZENO_TRUSTED_PROXIES`.
 
----
-
-## Development
+## Development and contributing
 
 ```bash
 go test ./...
@@ -171,24 +178,24 @@ npm --prefix web test -- --run
 npm --prefix web run build
 ```
 
-Build a local Controller binary:
+Build the Controller locally:
 
 ```bash
 CGO_ENABLED=0 go build -o zeno-controller ./cmd/controller
 ```
 
----
+Focused, verifiable contributions are welcome. Open an Issue first for protocol, database-schema, installer, or Public API changes. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the complete contribution requirements.
 
-## Stack
+## Tech stack
 
 - Controller: Go + SQLite
-- Agent: separate Zeno-Agent release (Linux systemd / macOS LaunchDaemon / Windows service)
 - Web: React + TypeScript + Vite
+- Agent: separate Zeno-Agent releases
 - Deployment: Docker Compose
-- Communication: agent-initiated HTTPS/JSON reporting; controlled networks may explicitly opt in to direct-IP HTTP with an explicit port, with separate Public/Admin/Agent APIs
-
----
+- Communication: Agents actively report over HTTPS/JSON; Public/Admin APIs and the Agent API are separated
 
 ## License
 
-MIT
+[MIT](LICENSE)
+
+If Zeno helps you, consider starring the repository so other people looking for lightweight self-hosted monitoring can find it.
