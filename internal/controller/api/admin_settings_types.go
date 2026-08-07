@@ -74,9 +74,12 @@ type AdminSettingsUpdateRequest struct {
 }
 
 const (
-	maxSettingsCustomCodeRunes = 60000
-	defaultCardOpacity         = 0.70
-	legacyDefaultCardOpacity   = 0.72
+	maxSettingsCustomCodeRunes    = 60000
+	defaultCardOpacity            = 0.70
+	previousDefaultCardOpacity    = 0.82
+	legacyDefaultCardOpacity      = 0.72
+	previousDefaultBorderStrength = 0.26
+	previousDefaultShadowStrength = 0.22
 )
 
 var settingsThemeColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)

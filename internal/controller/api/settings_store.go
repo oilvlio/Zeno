@@ -164,7 +164,7 @@ func (s *sqliteSchemaStore) migrateDefaultCardOpacity(ctx context.Context) error
 		UPDATE settings
 		SET value = ?, updated_at = ?
 		WHERE key = ? AND CAST(value AS REAL) = ?
-	`, formatSettingsFloat(defaultCardOpacity), time.Now().UTC().Unix(), settingKeyCardOpacity, legacyDefaultCardOpacity)
+	`, formatSettingsFloat(previousDefaultCardOpacity), time.Now().UTC().Unix(), settingKeyCardOpacity, legacyDefaultCardOpacity)
 	if err != nil {
 		return err
 	}
@@ -179,16 +179,63 @@ func (s *sqliteSchemaStore) migrateDefaultCardOpacity(ctx context.Context) error
 }
 
 func (s *sqliteSchemaStore) legacyDefaultAppearanceStored(ctx context.Context) (bool, error) {
+	return s.defaultAppearanceValuesStored(ctx, legacyDefaultCardOpacity, previousDefaultBorderStrength, previousDefaultShadowStrength)
+}
+
+func (s *sqliteSchemaStore) previousDefaultAppearanceStored(ctx context.Context) (bool, error) {
+	return s.defaultAppearanceValuesStored(ctx, previousDefaultCardOpacity, previousDefaultBorderStrength, previousDefaultShadowStrength)
+}
+
+func (s *sqliteSchemaStore) defaultAppearanceValuesStored(ctx context.Context, cardOpacity, borderStrength, shadowStrength float64) (bool, error) {
 	settings, err := (&sqliteSettings{db: s.db}).siteSettings(ctx)
 	if err != nil {
 		return false, err
 	}
 	return settings.AppearancePreset == "default" &&
-		settings.CardOpacity == legacyDefaultCardOpacity &&
+		settings.CardOpacity == cardOpacity &&
 		settings.CardBlur == 0 &&
 		settings.CardRadius == 20 &&
-		settings.BorderStrength == 0.26 &&
-		settings.ShadowStrength == 0.22 &&
+		settings.BorderStrength == borderStrength &&
+		settings.ShadowStrength == shadowStrength &&
 		settings.BackgroundOverlay == 0 &&
 		strings.EqualFold(settings.ThemeColor, "#2563eb"), nil
+}
+
+func (s *sqliteSchemaStore) defaultAppearanceV3MigrationCurrent(ctx context.Context) (bool, error) {
+	previous, err := s.previousDefaultAppearanceStored(ctx)
+	return !previous, err
+}
+
+func (s *sqliteSchemaStore) migrateDefaultAppearanceV3(ctx context.Context) error {
+	previous, err := s.previousDefaultAppearanceStored(ctx)
+	if err != nil || !previous {
+		return err
+	}
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE settings
+		SET value = CASE key
+			WHEN ? THEN ?
+			WHEN ? THEN ?
+			WHEN ? THEN ?
+		END,
+		updated_at = ?
+		WHERE key IN (?, ?, ?)
+	`,
+		settingKeyCardOpacity, formatSettingsFloat(defaultCardOpacity),
+		settingKeyBorderStrength, formatSettingsFloat(defaultSiteSettings().BorderStrength),
+		settingKeyShadowStrength, formatSettingsFloat(defaultSiteSettings().ShadowStrength),
+		time.Now().UTC().Unix(),
+		settingKeyCardOpacity, settingKeyBorderStrength, settingKeyShadowStrength,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows != 3 {
+		return fmt.Errorf("migrate default appearance v3: updated %d rows, want 3", rows)
+	}
+	return nil
 }

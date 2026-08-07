@@ -95,13 +95,19 @@ func TestLegacyDefaultCardOpacityMigratesOnReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite store: %v", err)
 	}
-	if _, err := store.db.Exec(`
-		INSERT INTO settings (key, value, updated_at)
-		VALUES (?, ?, 1)
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-	`, settingKeyCardOpacity, "0.72"); err != nil {
-		store.Close()
-		t.Fatalf("seed legacy card opacity: %v", err)
+	for key, value := range map[string]string{
+		settingKeyCardOpacity:    "0.72",
+		settingKeyBorderStrength: "0.26",
+		settingKeyShadowStrength: "0.22",
+	} {
+		if _, err := store.db.Exec(`
+			INSERT INTO settings (key, value, updated_at)
+			VALUES (?, ?, 1)
+			ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+		`, key, value); err != nil {
+			store.Close()
+			t.Fatalf("seed legacy appearance %s: %v", key, err)
+		}
 	}
 	if err := store.Close(); err != nil {
 		t.Fatalf("close legacy store: %v", err)
@@ -119,12 +125,59 @@ func TestLegacyDefaultCardOpacityMigratesOnReopen(t *testing.T) {
 	if settings.CardOpacity != defaultCardOpacity {
 		t.Fatalf("card opacity after migration = %.2f, want %.2f", settings.CardOpacity, defaultCardOpacity)
 	}
+	if settings.BorderStrength != 0.30 || settings.ShadowStrength != 0.20 {
+		t.Fatalf("appearance strengths after migration = border %.2f shadow %.2f, want 0.30/0.20", settings.BorderStrength, settings.ShadowStrength)
+	}
 	var marker int
 	if err := store.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE name = '20260803_default_card_opacity_v2'`).Scan(&marker); err != nil {
 		t.Fatalf("read opacity migration marker: %v", err)
 	}
 	if marker != 1 {
 		t.Fatalf("opacity migration markers = %d, want 1", marker)
+	}
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE name = '20260807_default_appearance_v3'`).Scan(&marker); err != nil {
+		t.Fatalf("read appearance v3 migration marker: %v", err)
+	}
+	if marker != 1 {
+		t.Fatalf("appearance v3 migration markers = %d, want 1", marker)
+	}
+}
+
+func TestPreviousDefaultAppearanceMigratesToCurrentDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zeno.db")
+	store, err := OpenSQLiteStore(path)
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	for key, value := range map[string]string{
+		settingKeyCardOpacity:    "0.82",
+		settingKeyBorderStrength: "0.26",
+		settingKeyShadowStrength: "0.22",
+	} {
+		if _, err := store.db.Exec(`
+			INSERT INTO settings (key, value, updated_at)
+			VALUES (?, ?, 1)
+			ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+		`, key, value); err != nil {
+			store.Close()
+			t.Fatalf("seed previous appearance %s: %v", key, err)
+		}
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close previous-default store: %v", err)
+	}
+
+	store, err = OpenSQLiteStore(path)
+	if err != nil {
+		t.Fatalf("reopen previous-default store: %v", err)
+	}
+	defer store.Close()
+	settings, err := store.PublicSettings(context.Background())
+	if err != nil {
+		t.Fatalf("public settings after previous-default migration: %v", err)
+	}
+	if settings.CardOpacity != 0.70 || settings.BorderStrength != 0.30 || settings.ShadowStrength != 0.20 {
+		t.Fatalf("appearance after migration = opacity %.2f border %.2f shadow %.2f, want 0.70/0.30/0.20", settings.CardOpacity, settings.BorderStrength, settings.ShadowStrength)
 	}
 }
 
