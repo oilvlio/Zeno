@@ -148,7 +148,7 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
     '--metric-bg': 'transparent',
     '--field-bg': 'transparent',
     '--control-bg': 'transparent',
-    '--usage-track-bg': highContrastGaussian ? 'rgba(148, 163, 184, 0.22)' : resolved === 'dark' ? 'rgba(148, 163, 184, 0.12)' : 'rgba(148, 163, 184, 0.08)',
+    '--usage-track-bg': resolved === 'dark' ? 'rgba(226, 232, 240, 0.32)' : 'rgba(148, 163, 184, 0.22)',
     '--usage-track-border': highContrastGaussian ? 'rgba(203, 213, 225, 0.24)' : resolved === 'dark' ? 'rgba(148, 163, 184, 0.14)' : 'rgba(148, 163, 184, 0.12)',
     '--zeno-overlay-surface': `rgba(${surfaceBase}, ${overlayOpacity.toFixed(3)})`,
     '--zeno-overlay-filter': overlayFilter,
