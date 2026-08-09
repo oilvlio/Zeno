@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   AdminInstallCommand,
   calculateInstallPlatformMenuStyle,
+  copyTextToClipboard,
   installCommandButtonDisabled,
-  installCommandCopyOptions,
   installCommandForPlatform,
   installCommandReady,
   isCurrentInstallCommandRequest,
@@ -34,7 +34,17 @@ describe('AdminInstallCommand state', () => {
     expect(shouldOpenInstallPlatformPicker(true, false)).toBe(true)
     expect(shouldOpenInstallPlatformPicker(true, true)).toBe(false)
     expect(shouldOpenInstallPlatformPicker(false, false)).toBe(false)
-    expect(installCommandCopyOptions).toEqual({ fallbackToPrompt: false })
+  })
+
+  it('uses the native clipboard and falls back cleanly when unavailable', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    await expect(copyTextToClipboard('install-command', { writeText })).resolves.toBe(true)
+    expect(writeText).toHaveBeenCalledWith('install-command')
+
+    await expect(copyTextToClipboard('install-command', {
+      writeText: vi.fn().mockRejectedValue(new Error('clipboard denied')),
+    })).resolves.toBe(false)
+    await expect(copyTextToClipboard('install-command', undefined)).resolves.toBe(false)
   })
 
   it('accepts only the latest response for the active node', () => {

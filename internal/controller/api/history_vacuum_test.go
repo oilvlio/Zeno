@@ -34,19 +34,26 @@ func TestReclaimFreePagesShrinksDatabaseFile(t *testing.T) {
 	`); err != nil {
 		t.Fatalf("seed samples: %v", err)
 	}
+	if _, err := store.db.ExecContext(ctx, `
+		CREATE TABLE vacuum_payloads (payload BLOB NOT NULL);
+		WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x < 3000)
+		INSERT INTO vacuum_payloads (payload) SELECT zeroblob(4096) FROM c;
+	`); err != nil {
+		t.Fatalf("seed multi-chunk vacuum payload: %v", err)
+	}
 	if _, err := store.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
 		t.Fatalf("checkpoint: %v", err)
 	}
 	grownSize := databaseFileSize(t, path)
 
-	if _, err := store.db.ExecContext(ctx, `DELETE FROM state_samples`); err != nil {
+	if _, err := store.db.ExecContext(ctx, `DELETE FROM state_samples; DELETE FROM vacuum_payloads;`); err != nil {
 		t.Fatalf("delete samples: %v", err)
 	}
 	if _, err := store.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
 		t.Fatalf("checkpoint after delete: %v", err)
 	}
-	if freelist := readFreelistCount(ctx, t, store); freelist == 0 {
-		t.Fatal("freelist is empty after deleting every sample, cannot exercise reclaim")
+	if freelist := readFreelistCount(ctx, t, store); freelist <= historyRetentionVacuumStepPages {
+		t.Fatalf("freelist = %d, want more than one %d-page reclaim chunk", freelist, historyRetentionVacuumStepPages)
 	}
 
 	if err := store.reclaimFreePages(ctx); err != nil {

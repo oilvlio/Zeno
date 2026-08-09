@@ -356,6 +356,26 @@ class InstallSafetyTest(unittest.TestCase):
         self.assertTrue(manifest_ok)
         self.assertEqual(backup_db, 'old-db')
 
+    def test_backup_excludes_pre_vacuum_snapshots_and_persists_retention(self):
+        def seed_backup_policy(install_dir: pathlib.Path) -> None:
+            with (install_dir / '.env').open('a') as env_file:
+                env_file.write('ZENO_BACKUP_KEEP_COUNT=1\n')
+            (install_dir / 'data' / 'zeno.db.prevacuum-20260731-213739').write_text('stale-offline-snapshot')
+            (install_dir / 'data' / 'runtime-metadata').write_text('keep-runtime-data')
+
+        with tempfile.TemporaryDirectory() as td:
+            result, install_dir, _ = self.run_install(pathlib.Path(td), setup=seed_backup_policy)
+            backup_dir = self.latest_backup(install_dir)
+            backup_files = {path.name for path in (backup_dir / 'data').iterdir()}
+            env_text = (install_dir / '.env').read_text()
+            manifest_ok = self.manifest_verifies(backup_dir)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('zeno.db', backup_files)
+        self.assertIn('runtime-metadata', backup_files)
+        self.assertNotIn('zeno.db.prevacuum-20260731-213739', backup_files)
+        self.assertIn('ZENO_BACKUP_KEEP_COUNT=1', env_text)
+        self.assertTrue(manifest_ok)
+
     def test_legacy_root_private_runtime_dirs_upgrade_without_mounting_backup_into_check_container(self):
         def make_legacy_private(install_dir: pathlib.Path) -> None:
             os.chmod(install_dir / 'data', 0o700)

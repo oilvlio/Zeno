@@ -62,6 +62,43 @@ func TestHistoryRetentionOffsetsHourlyMaintenanceFromRenewalScan(t *testing.T) {
 	}
 }
 
+func TestHistoryMaintenanceStagesContinueAfterOneStageTimesOut(t *testing.T) {
+	var calls []string
+	err := runHistoryMaintenanceStages(context.Background(), []historyMaintenanceStage{
+		{
+			name:    "reclaim existing free pages",
+			timeout: time.Second,
+			run: func(context.Context) error {
+				calls = append(calls, "reclaim-before")
+				return nil
+			},
+		},
+		{
+			name:    "compact raw history",
+			timeout: 10 * time.Millisecond,
+			run: func(ctx context.Context) error {
+				calls = append(calls, "raw")
+				<-ctx.Done()
+				return ctx.Err()
+			},
+		},
+		{
+			name:    "reclaim newly freed pages",
+			timeout: time.Second,
+			run: func(context.Context) error {
+				calls = append(calls, "reclaim-after")
+				return nil
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "compact raw history: context deadline exceeded") {
+		t.Fatalf("maintenance error = %v, want named timeout", err)
+	}
+	if got, want := strings.Join(calls, ","), "reclaim-before,raw,reclaim-after"; got != want {
+		t.Fatalf("maintenance calls = %q, want %q", got, want)
+	}
+}
+
 func TestHistoryRetentionUsesTimeIndexesWhenNothingIsExpired(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {

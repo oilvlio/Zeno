@@ -400,6 +400,16 @@ func TestNotificationFlapDuringRecoveryWindowSuppressesRedundantPair(t *testing.
 	}
 
 	queue("offline", "online", "2026-07-13T12:00:02Z")
+	// Make the incident boundary cross a wall-clock second without sleeping.
+	// The delivered alert must remain the user-visible state while its delayed
+	// recovery is still pending; second-resolution timestamps previously made
+	// this test pass only when every transition happened within one second.
+	if _, err := store.db.ExecContext(ctx, `
+		UPDATE notification_deliveries SET created_at = created_at - 10, updated_at = updated_at - 10;
+		UPDATE notification_event_marks SET created_at = created_at - 10;
+	`); err != nil {
+		t.Fatalf("age pending recovery incident: %v", err)
+	}
 	queue("online", "offline", "2026-07-13T12:00:20Z")
 
 	var total, delivered, canceled, pending int

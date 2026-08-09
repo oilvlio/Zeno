@@ -30,7 +30,7 @@ ROLLBACK_ACTIVE=0
 STEP_MESSAGE=""
 ZENO_UID=10001
 ZENO_GID=10001
-BACKUP_KEEP_COUNT="${ZENO_BACKUP_KEEP_COUNT:-5}"
+BACKUP_KEEP_COUNT="${ZENO_BACKUP_KEEP_COUNT:-}"
 FAILED_STATE_KEEP_COUNT="${ZENO_FAILED_STATE_KEEP_COUNT:-3}"
 BUILD_KEEP_COUNT="${ZENO_BUILD_KEEP_COUNT:-3}"
 MIN_FREE_BYTES="${ZENO_MIN_FREE_BYTES:-67108864}"
@@ -218,6 +218,9 @@ load_existing_env_defaults() {
   if [ -z "$DB_CHECK_TIMEOUT" ] && value=$(read_env_value ZENO_DB_CHECK_TIMEOUT); then
     DB_CHECK_TIMEOUT="$value"
   fi
+  if [ -z "$BACKUP_KEEP_COUNT" ] && value=$(read_env_value ZENO_BACKUP_KEEP_COUNT); then
+    BACKUP_KEEP_COUNT="$value"
+  fi
 
   IMAGE="${IMAGE:-$DEFAULT_IMAGE}"
   HOST_PORT="${HOST_PORT:-18980}"
@@ -229,6 +232,7 @@ load_existing_env_defaults() {
   TRUSTED_PROXIES="${TRUSTED_PROXIES:-${DOCKER_GATEWAY}/32}"
   NOTIFICATIONS_DISABLED="${NOTIFICATIONS_DISABLED:-false}"
   DB_CHECK_TIMEOUT="${DB_CHECK_TIMEOUT:-10m}"
+  BACKUP_KEEP_COUNT="${BACKUP_KEEP_COUNT:-5}"
   validate_image_reference "$IMAGE"
   validate_positive_int "$BACKUP_KEEP_COUNT" ZENO_BACKUP_KEEP_COUNT
   validate_positive_int "$FAILED_STATE_KEEP_COUNT" ZENO_FAILED_STATE_KEEP_COUNT
@@ -419,13 +423,19 @@ path_size_bytes() {
 
 backup_source_size_bytes() {
   local total=0
-  local name size
-  for name in .env docker-compose.yml data secrets; do
+  local name size path
+  for name in .env docker-compose.yml secrets; do
     if [ -e "$INSTALL_DIR/$name" ]; then
       size=$(path_size_bytes "$INSTALL_DIR/$name")
       total=$((total + size))
     fi
   done
+  if [ -d "$INSTALL_DIR/data" ]; then
+    while IFS= read -r -d '' path; do
+      size=$(path_size_bytes "$path")
+      total=$((total + size))
+    done < <(find "$INSTALL_DIR/data" -mindepth 1 -maxdepth 1 ! -name 'zeno.db.prevacuum-*' -print0)
+  fi
   printf '%s\n' "$total"
 }
 
@@ -734,11 +744,18 @@ copy_backup_payload() {
   local source="$1"
   local target="$2"
   local name
-  for name in .env docker-compose.yml data secrets; do
+  for name in .env docker-compose.yml secrets; do
     if [ -e "$source/$name" ]; then
       cp -a "$source/$name" "$target/" || return 1
     fi
   done
+  if [ -d "$source/data" ]; then
+    # Pre-vacuum snapshots are operator recovery artefacts, not live runtime
+    # state. Copying them into every install backup multiplies multi-gigabyte
+    # files and then copies them once more into the quick-check scratch tree.
+    tar -C "$source" --exclude='data/zeno.db.prevacuum-*' -cpf - data \
+      | tar -C "$target" -xpf - || return 1
+  fi
 }
 
 copy_restore_snapshot() {
@@ -1006,6 +1023,7 @@ ZENO_DOCKER_SUBNET=${DOCKER_SUBNET}
 ZENO_DOCKER_GATEWAY=${DOCKER_GATEWAY}
 ZENO_CONTAINER_IP=${CONTAINER_IP}
 ZENO_DB_CHECK_TIMEOUT=${DB_CHECK_TIMEOUT}
+ZENO_BACKUP_KEEP_COUNT=${BACKUP_KEEP_COUNT}
 EOF_ENV
   chmod 600 "$dir/.env"
 }

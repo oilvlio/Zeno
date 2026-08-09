@@ -313,6 +313,19 @@ func claimStatusNotificationTx(ctx context.Context, tx *sql.Tx, event notificati
 		} else if err != nil {
 			return false, err
 		}
+	} else if clearMark != "" {
+		// A delayed recovery can still be pending when the node flaps back to the
+		// alert state. Keep the original incident boundary in that case: the user
+		// still sees the delivered alert, so canceling the unseen recovery must not
+		// create a redundant second alert. Once the recovery is delivered, failed,
+		// or canceled, a later alert starts a genuinely new incident as before.
+		carriedCreatedAt, err := pendingRecoveryIncidentCreatedAtTx(ctx, tx, eventType, nodeID, status, clearMark)
+		if err != nil {
+			return false, err
+		}
+		if carriedCreatedAt > 0 {
+			markCreatedAt = carriedCreatedAt
+		}
 	}
 	if mark == "" {
 		return false, nil
@@ -337,4 +350,27 @@ func claimStatusNotificationTx(ctx context.Context, tx *sql.Tx, event notificati
 		}
 	}
 	return claimed > 0, nil
+}
+
+func pendingRecoveryIncidentCreatedAtTx(ctx context.Context, tx *sql.Tx, eventType, nodeID, status, recoveredMark string) (int64, error) {
+	var createdAt int64
+	err := tx.QueryRowContext(ctx, `
+		SELECT nem.created_at
+		FROM notification_event_marks nem
+		WHERE nem.event_type = ? AND nem.node_id = ? AND nem.mark = ?
+		  AND EXISTS (
+		    SELECT 1
+		    FROM notification_deliveries recovery
+		    WHERE recovery.event_type = nem.event_type
+		      AND recovery.node_id = nem.node_id
+		      AND recovery.previous_status = ?
+		      AND recovery.status = 'online'
+		      AND recovery.state IN ('pending', 'leased')
+		      AND recovery.created_at >= nem.created_at
+		  )
+	`, eventType, nodeID, recoveredMark, status).Scan(&createdAt)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return createdAt, err
 }

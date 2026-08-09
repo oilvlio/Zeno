@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -23,6 +25,24 @@ const (
 	historyRetentionMaxBatchCycles        = history.MaxBatchCycles
 	historyRetentionScheduleOffset        = history.ScheduleOffset
 	historyRetentionVacuumPages           = history.VacuumPagesPerPass
+)
+
+const (
+	// One slow backlog must not consume the whole maintenance pass and starve
+	// rollup expiry, notification expiry, or incremental vacuum indefinitely.
+	// Each stage releases SQLite's writer between small batches; these budgets
+	// bound total background work without turning maintenance into one long
+	// transaction.
+	historyRetentionPassTimeout        = 4 * time.Minute
+	historyRetentionVacuumBudget       = 30 * time.Second
+	historyRetentionRawBudget          = 90 * time.Second
+	historyRetentionRollupBudget       = 30 * time.Second
+	historyRetentionNotificationBudget = 15 * time.Second
+	// A single 20k-page PRAGMA exceeded 15 seconds on the production-sized
+	// database. One thousand pages stayed below the shared 8-second writer
+	// lease, so a pass is split into resumable chunks that release the scheduler
+	// between each filesystem truncation.
+	historyRetentionVacuumStepPages = 1000
 )
 
 // sqliteAutoVacuumIncremental is the PRAGMA auto_vacuum value for INCREMENTAL.
@@ -75,20 +95,65 @@ func (s *sqliteHistoryStore) PruneRawHistory(ctx context.Context, before time.Ti
 func (s *sqliteHistoryStore) MaintainHistory(ctx context.Context, now time.Time) error {
 	now = now.UTC()
 	cutoffs := history.CutoffsAt(now)
-	rollupReady, err := s.historyRollupReady(ctx, now)
-	if err != nil {
-		return err
+	return runHistoryMaintenanceStages(ctx, []historyMaintenanceStage{
+		{
+			name:    "reclaim existing free pages",
+			timeout: historyRetentionVacuumBudget,
+			run:     s.reclaimFreePages,
+		},
+		{
+			name:    "compact raw history",
+			timeout: historyRetentionRawBudget,
+			run: func(stageCtx context.Context) error {
+				rollupReady, err := s.historyRollupReady(stageCtx, now)
+				if err != nil {
+					return err
+				}
+				return s.pruneRawHistoryTier(stageCtx, cutoffs, rollupReady)
+			},
+		},
+		{
+			name:    "prune rollup history",
+			timeout: historyRetentionRollupBudget,
+			run:     func(stageCtx context.Context) error { return s.pruneRollupTiers(stageCtx, cutoffs) },
+		},
+		{
+			name:    "prune notification history",
+			timeout: historyRetentionNotificationBudget,
+			run:     func(stageCtx context.Context) error { return s.pruneNotificationHistory(stageCtx, cutoffs) },
+		},
+		{
+			name:    "reclaim newly freed pages",
+			timeout: historyRetentionVacuumBudget,
+			run:     s.reclaimFreePages,
+		},
+	})
+}
+
+type historyMaintenanceStage struct {
+	name    string
+	timeout time.Duration
+	run     func(context.Context) error
+}
+
+// runHistoryMaintenanceStages gives every independent maintenance domain a
+// chance to progress. A timed-out raw-history backlog is reported, but it no
+// longer prevents rollup/notification expiry or the bounded vacuum stages.
+func runHistoryMaintenanceStages(ctx context.Context, stages []historyMaintenanceStage) error {
+	var stageErrors []error
+	for _, stage := range stages {
+		if err := ctx.Err(); err != nil {
+			stageErrors = append(stageErrors, err)
+			break
+		}
+		stageCtx, cancel := context.WithTimeout(ctx, stage.timeout)
+		err := stage.run(stageCtx)
+		cancel()
+		if err != nil {
+			stageErrors = append(stageErrors, fmt.Errorf("%s: %w", stage.name, err))
+		}
 	}
-	if err := s.pruneRawHistoryTier(ctx, cutoffs, rollupReady); err != nil {
-		return err
-	}
-	if err := s.pruneRollupTiers(ctx, cutoffs); err != nil {
-		return err
-	}
-	if err := s.pruneNotificationHistory(ctx, cutoffs); err != nil {
-		return err
-	}
-	return s.reclaimFreePages(ctx)
+	return errors.Join(stageErrors...)
 }
 
 // reclaimFreePages returns pages freed by this pass to the filesystem so a
@@ -111,10 +176,23 @@ func (s *sqliteHistoryStore) reclaimFreePages(ctx context.Context) error {
 	if freelist <= 0 {
 		return nil
 	}
-	return s.writes.withAgentWrite(ctx, historyRetentionWriteKey, func(writeCtx context.Context) error {
-		_, err := s.db.ExecContext(writeCtx, `PRAGMA incremental_vacuum(`+strconv.Itoa(historyRetentionVacuumPages)+`)`)
-		return err
-	})
+	remaining := min(freelist, int64(historyRetentionVacuumPages))
+	for remaining > 0 {
+		pages := min(remaining, int64(historyRetentionVacuumStepPages))
+		if err := s.writes.withAgentWrite(ctx, historyRetentionWriteKey, func(writeCtx context.Context) error {
+			_, err := s.db.ExecContext(writeCtx, `PRAGMA incremental_vacuum(`+strconv.FormatInt(pages, 10)+`)`)
+			return err
+		}); err != nil {
+			return err
+		}
+		remaining -= pages
+		if remaining > 0 {
+			if err := pauseHistoryRetentionBatch(ctx); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // pruneRawHistoryTier either compacts raw rows into rollups or, during the
@@ -222,7 +300,7 @@ func (h *handler) runHistoryRetention(ctx context.Context, interval time.Duratio
 		return
 	}
 	prune := func() {
-		pruneCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		pruneCtx, cancel := context.WithTimeout(ctx, historyRetentionPassTimeout)
 		defer cancel()
 		if err := store.MaintainHistory(pruneCtx, time.Now().UTC()); err != nil {
 			log.Printf("history retention cleanup failed: %v", err)

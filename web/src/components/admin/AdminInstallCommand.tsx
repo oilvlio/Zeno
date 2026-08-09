@@ -1,6 +1,5 @@
 import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import copy, { type Options as CopyOptions } from 'copy-to-clipboard'
 import type { AdminNodeInstallCommand } from '../../types'
 import { OverlaySurface } from '../OverlaySurface'
 import { calculateAnchoredPopoverStyle } from './AdminFields'
@@ -49,8 +48,6 @@ export function installCommandButtonDisabled(blocked: boolean, state: InstallCom
 export function isCurrentInstallCommandRequest(requestSequence: number, currentSequence: number, requestNodeId: string, currentNodeId: string): boolean {
   return requestSequence === currentSequence && requestNodeId === currentNodeId
 }
-
-export const installCommandCopyOptions: CopyOptions = { fallbackToPrompt: false }
 
 export function shouldOpenInstallPlatformPicker(openAfterGenerate: boolean, blocked: boolean): boolean {
   return openAfterGenerate && !blocked
@@ -265,6 +262,19 @@ export function AdminInstallCommand({ nodeId, initialMessage, blocked = false, o
   )
 }
 
-async function copyTextToClipboard(text: string): Promise<boolean> {
-  return copy(text, installCommandCopyOptions)
+interface ClipboardWriter {
+  writeText: (text: string) => Promise<void>
+}
+
+export async function copyTextToClipboard(
+  text: string,
+  clipboard: ClipboardWriter | undefined = typeof navigator === 'undefined' ? undefined : navigator.clipboard,
+): Promise<boolean> {
+  if (!clipboard || typeof clipboard.writeText !== 'function') return false
+  try {
+    await clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
 }
