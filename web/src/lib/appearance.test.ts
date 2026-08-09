@@ -30,12 +30,14 @@ describe('appearance presets', () => {
 
   it('uses one balanced unblurred overlay surface for the default appearance', () => {
     const style = shellStyleForSettings({ ...defaultSettings, theme: 'light', backgroundUrl: '/wallpaper.webp', desktopBackgroundUrl: '/wallpaper.webp' }) as unknown as Record<string, string>
+    expect(style['--usage-track-bg']).toBe('rgba(148, 163, 184, 0.12)')
     expect(style['--zeno-overlay-surface']).toBe('rgba(255, 255, 255, 0.800)')
     expect(style['--zeno-overlay-filter']).toBe('none')
   })
 
   it('uses the same balanced blurred overlay surface for the Gaussian appearance', () => {
     const style = shellStyleForSettings({ ...defaultSettings, theme: 'dark', appearancePreset: 'gaussian_blur', cardOpacity: 0.5, cardBlur: 15, backgroundUrl: '/wallpaper.webp', desktopBackgroundUrl: '/wallpaper.webp' }) as unknown as Record<string, string>
+    expect(style['--usage-track-bg']).toBe('rgba(226, 232, 240, 0.17)')
     expect(style['--zeno-overlay-surface']).toBe('rgba(15, 23, 42, 0.640)')
     expect(style['--zeno-overlay-filter']).toBe('blur(15px) saturate(1.08)')
   })

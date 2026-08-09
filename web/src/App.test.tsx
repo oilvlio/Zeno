@@ -198,7 +198,7 @@ describe('HomeTopPanel', () => {
       '--metric-bg': 'transparent',
       '--field-bg': 'transparent',
       '--control-bg': 'transparent',
-      '--usage-track-bg': 'rgba(226, 232, 240, 0.32)',
+      '--usage-track-bg': 'rgba(226, 232, 240, 0.17)',
       '--usage-track-border': 'rgba(203, 213, 225, 0.24)',
       '--zeno-overlay-surface': 'rgba(15, 23, 42, 0.720)',
       '--zeno-overlay-filter': 'blur(18px) saturate(1.08)',
