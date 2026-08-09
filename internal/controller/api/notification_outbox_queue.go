@@ -139,6 +139,7 @@ func notificationRecoveryDelayTx(ctx context.Context, tx *sql.Tx, event notifica
 
 func notificationVisibleStatusTx(ctx context.Context, tx *sql.Tx, channel notificationDispatchChannel,
 	event notificationEvent) (string, bool, error) {
+	incidentMark := statusNotificationIncidentMark(event)
 	var status string
 	err := tx.QueryRowContext(ctx, `
 		SELECT status
@@ -146,14 +147,16 @@ func notificationVisibleStatusTx(ctx context.Context, tx *sql.Tx, channel notifi
 		WHERE channel_id = ? AND channel_version = ?
 		  AND destination_fingerprint = ?
 		  AND event_type = ? AND node_id = ?
-		  AND (
-		    state = 'delivered' OR state = 'leased' OR
-		    last_error = ? OR last_error LIKE 'delivery outcome unknown; superseded%'
-		  )
+		  AND state IN ('delivered', 'leased')
+		  AND created_at >= COALESCE((
+		    SELECT created_at
+		    FROM notification_event_marks
+		    WHERE event_type = ? AND node_id = ? AND mark = ?
+		  ), 0)
 		ORDER BY id DESC
 		LIMIT 1
 	`, channel.ID, channel.DeliveryVersion, channel.DestinationFingerprint,
-		event.EventType, event.NodeID, notificationDeliveryOutcomeUnknownMessage).Scan(&status)
+		event.EventType, event.NodeID, event.EventType, event.NodeID, incidentMark).Scan(&status)
 	if err == sql.ErrNoRows {
 		return "", false, nil
 	}
@@ -277,6 +280,13 @@ func notificationEventIsRecovery(event notificationEvent) bool {
 		strings.TrimSpace(event.PreviousStatus) != "online"
 }
 
+func statusNotificationIncidentMark(event notificationEvent) string {
+	if notificationEventIsRecovery(event) {
+		return recoveredStatusNotificationMark(event.PreviousStatus)
+	}
+	return activeStatusNotificationMark(event.Status)
+}
+
 func claimStatusNotificationTx(ctx context.Context, tx *sql.Tx, event notificationEvent) (bool, error) {
 	eventType := strings.TrimSpace(event.EventType)
 	nodeID := strings.TrimSpace(event.NodeID)
@@ -285,6 +295,7 @@ func claimStatusNotificationTx(ctx context.Context, tx *sql.Tx, event notificati
 	if eventType == "" || nodeID == "" || status == "" || previousStatus == status {
 		return false, nil
 	}
+	markCreatedAt := time.Now().UTC().Unix()
 	mark := activeStatusNotificationMark(status)
 	clearMark := recoveredStatusNotificationMark(status)
 	if status == "online" && previousStatus != "" {
@@ -293,17 +304,14 @@ func claimStatusNotificationTx(ctx context.Context, tx *sql.Tx, event notificati
 		if clearMark == "" {
 			return false, nil
 		}
-		var activeIncident int
 		if err := tx.QueryRowContext(ctx, `
-			SELECT EXISTS (
-				SELECT 1 FROM notification_event_marks
-				WHERE event_type = ? AND node_id = ? AND mark = ?
-			)
-		`, eventType, nodeID, clearMark).Scan(&activeIncident); err != nil {
-			return false, err
-		}
-		if activeIncident == 0 {
+			SELECT created_at
+			FROM notification_event_marks
+			WHERE event_type = ? AND node_id = ? AND mark = ?
+		`, eventType, nodeID, clearMark).Scan(&markCreatedAt); err == sql.ErrNoRows {
 			return false, nil
+		} else if err != nil {
+			return false, err
 		}
 	}
 	if mark == "" {
@@ -312,7 +320,7 @@ func claimStatusNotificationTx(ctx context.Context, tx *sql.Tx, event notificati
 	result, err := tx.ExecContext(ctx, `
 		INSERT OR IGNORE INTO notification_event_marks (event_type, node_id, mark, created_at)
 		VALUES (?, ?, ?, ?)
-	`, eventType, nodeID, mark, time.Now().UTC().Unix())
+	`, eventType, nodeID, mark, markCreatedAt)
 	if err != nil {
 		return false, err
 	}

@@ -171,11 +171,14 @@ func (s *sqliteNotificationDomain) claimNextNotificationDelivery(ctx context.Con
 		          AND prior.event_type = current.event_type
 		          AND prior.node_id = current.node_id
 		          AND prior.id < current.id
-		          AND (
-		            prior.state = 'delivered' OR
-		            prior.last_error = ? OR
-		            prior.last_error LIKE 'delivery outcome unknown; superseded%'
-		          )
+		          AND prior.state = 'delivered'
+		          AND prior.created_at >= COALESCE((
+		            SELECT nem.created_at
+		            FROM notification_event_marks nem
+		            WHERE nem.event_type = current.event_type
+		              AND nem.node_id = current.node_id
+		              AND nem.mark = 'status-recovered:' || current.previous_status
+		          ), 0)
 		        ORDER BY prior.id DESC
 		        LIMIT 1
 		      ), '') <> current.previous_status
@@ -190,17 +193,20 @@ func (s *sqliteNotificationDomain) claimNextNotificationDelivery(ctx context.Con
 		          AND prior.event_type = current.event_type
 		          AND prior.node_id = current.node_id
 		          AND prior.id < current.id
-		          AND (
-		            prior.state = 'delivered' OR
-		            prior.last_error = ? OR
-		            prior.last_error LIKE 'delivery outcome unknown; superseded%'
-		          )
+		          AND prior.state = 'delivered'
+		          AND prior.created_at >= COALESCE((
+		            SELECT nem.created_at
+		            FROM notification_event_marks nem
+		            WHERE nem.event_type = current.event_type
+		              AND nem.node_id = current.node_id
+		              AND nem.mark = 'status-active:' || current.status
+		          ), 0)
 		        ORDER BY prior.id DESC
 		        LIMIT 1
 		      ), '') = current.status
 		    )
 		  )
-	`, nowUnix, notificationDeliveryOutcomeUnknownMessage, notificationDeliveryOutcomeUnknownMessage); err != nil {
+	`, nowUnix); err != nil {
 		return queuedNotificationDelivery{}, false, false, err
 	}
 	var deliveryID int64

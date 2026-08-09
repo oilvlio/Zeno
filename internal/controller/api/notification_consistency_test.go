@@ -116,6 +116,125 @@ func TestNotificationRecoveryCancelsFailedPredecessorInsteadOfReplayingBacklog(t
 	}
 }
 
+func TestNotificationRecoverySuppressesWhenAlertDeliveryOutcomeIsUnknown(t *testing.T) {
+	store, channel := newNotificationConsistencyStore(t)
+	ctx := context.Background()
+	offline := notificationEvent{EventType: "node_offline", NodeID: "node-a", PreviousStatus: "online", Status: "offline", TS: "2026-07-13T12:00:01Z"}
+	if queued, err := store.QueueNotificationEvent(ctx, offline, []notificationDispatchChannel{dispatchChannelFromAdmin(channel)}); err != nil || !queued {
+		t.Fatalf("queue offline: queued=%v err=%v", queued, err)
+	}
+	attemptAt := time.Now().UTC()
+	claimed, err := store.PendingNotificationDeliveries(ctx, attemptAt, 1)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim offline: %+v err=%v", claimed, err)
+	}
+	if err := store.RecordNotificationDeliveryAttempt(ctx, claimed[0], fmt.Errorf("%w: response lost", errNotificationDeliveryOutcomeUnknown), attemptAt); err != nil {
+		t.Fatalf("record ambiguous offline attempt: %v", err)
+	}
+	recovery := notificationEvent{EventType: "node_offline", NodeID: "node-a", PreviousStatus: "offline", Status: "online", TS: "2026-07-13T12:00:02Z"}
+	if queued, err := store.QueueNotificationEvent(ctx, recovery, []notificationDispatchChannel{dispatchChannelFromAdmin(channel)}); err != nil || !queued {
+		t.Fatalf("queue recovery transition: queued=%v err=%v", queued, err)
+	}
+	var recoveryCount int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM notification_deliveries WHERE status = 'online'`).Scan(&recoveryCount); err != nil {
+		t.Fatalf("count recovery rows: %v", err)
+	}
+	if recoveryCount != 0 {
+		t.Fatalf("recovery rows=%d, want none after ambiguous offline delivery", recoveryCount)
+	}
+	if pending, err := store.PendingNotificationDeliveries(ctx, attemptAt.Add(time.Second), 1); err != nil || len(pending) != 0 {
+		t.Fatalf("ambiguous pair became deliverable: %+v err=%v", pending, err)
+	}
+}
+
+func TestNotificationAmbiguousOldAlertDoesNotSuppressNextIncident(t *testing.T) {
+	store, channel := newNotificationConsistencyStore(t)
+	ctx := context.Background()
+	queue := func(previousStatus, status, ts string) {
+		t.Helper()
+		event := notificationEvent{EventType: "node_offline", NodeID: "node-a", PreviousStatus: previousStatus, Status: status, TS: ts}
+		if queued, err := store.QueueNotificationEvent(ctx, event, []notificationDispatchChannel{dispatchChannelFromAdmin(channel)}); err != nil || !queued {
+			t.Fatalf("queue %s -> %s: queued=%v err=%v", previousStatus, status, queued, err)
+		}
+	}
+
+	queue("online", "offline", "2026-07-13T12:00:01Z")
+	first, err := store.PendingNotificationDeliveries(ctx, time.Now().UTC(), 1)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("claim ambiguous alert: %+v err=%v", first, err)
+	}
+	if err := store.RecordNotificationDeliveryAttempt(ctx, first[0], fmt.Errorf("%w: response lost", errNotificationDeliveryOutcomeUnknown), time.Now().UTC()); err != nil {
+		t.Fatalf("record ambiguous alert: %v", err)
+	}
+	queue("offline", "online", "2026-07-13T12:00:02Z")
+
+	queue("online", "offline", "2026-07-13T13:00:01Z")
+	second, err := store.PendingNotificationDeliveries(ctx, time.Now().UTC(), 1)
+	if err != nil || len(second) != 1 || second[0].Event.Status != "offline" {
+		t.Fatalf("next incident alert: %+v err=%v", second, err)
+	}
+	if err := store.RecordNotificationDeliveryAttempt(ctx, second[0], nil, time.Now().UTC()); err != nil {
+		t.Fatalf("deliver next incident alert: %v", err)
+	}
+	queue("offline", "online", "2026-07-13T13:01:02Z")
+	var recoveryCount int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM notification_deliveries WHERE status = 'online' AND state = 'pending'`).Scan(&recoveryCount); err != nil {
+		t.Fatalf("count pending recovery rows: %v", err)
+	}
+	if recoveryCount != 1 {
+		t.Fatalf("pending recovery rows=%d, want one after confirmed next alert", recoveryCount)
+	}
+}
+
+func TestNotificationStatusPairingDoesNotCrossIncidentBoundary(t *testing.T) {
+	store, channel := newNotificationConsistencyStore(t)
+	ctx := context.Background()
+	queue := func(previousStatus, status, ts string) {
+		t.Helper()
+		event := notificationEvent{EventType: "node_offline", NodeID: "node-a", PreviousStatus: previousStatus, Status: status, TS: ts}
+		if queued, err := store.QueueNotificationEvent(ctx, event, []notificationDispatchChannel{dispatchChannelFromAdmin(channel)}); err != nil || !queued {
+			t.Fatalf("queue %s -> %s: queued=%v err=%v", previousStatus, status, queued, err)
+		}
+	}
+
+	queue("online", "offline", "2026-07-13T12:00:01Z")
+	first, err := store.PendingNotificationDeliveries(ctx, time.Now().UTC(), 1)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("claim first incident alert: %+v err=%v", first, err)
+	}
+	if err := store.RecordNotificationDeliveryAttempt(ctx, first[0], nil, time.Now().UTC()); err != nil {
+		t.Fatalf("deliver first incident alert: %v", err)
+	}
+	queue("offline", "online", "2026-07-13T12:01:02Z")
+	if _, err := store.db.ExecContext(ctx, `
+		UPDATE notification_deliveries SET state = 'canceled', last_error = 'test recovery not delivered' WHERE status = 'online';
+		UPDATE notification_deliveries SET created_at = created_at - 3600, updated_at = updated_at - 3600;
+		UPDATE notification_event_marks SET created_at = created_at - 3600;
+	`); err != nil {
+		t.Fatalf("age first incident: %v", err)
+	}
+
+	queue("online", "offline", "2026-07-13T13:00:01Z")
+	second, err := store.PendingNotificationDeliveries(ctx, time.Now().UTC(), 1)
+	if err != nil || len(second) != 1 || second[0].Event.Status != "offline" {
+		t.Fatalf("claim second incident alert: %+v err=%v", second, err)
+	}
+	if err := store.RecordNotificationDeliveryAttempt(ctx, second[0], fmt.Errorf("%w: response lost", errNotificationDeliveryOutcomeUnknown), time.Now().UTC()); err != nil {
+		t.Fatalf("record ambiguous second alert: %v", err)
+	}
+	queue("offline", "online", "2026-07-13T13:01:02Z")
+	var secondRecoveryCount int
+	if err := store.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM notification_deliveries
+		WHERE status = 'online' AND created_at >= strftime('%s', 'now') - 60
+	`).Scan(&secondRecoveryCount); err != nil {
+		t.Fatalf("count second incident recovery rows: %v", err)
+	}
+	if secondRecoveryCount != 0 {
+		t.Fatalf("second incident recovery rows=%d, want none without a confirmed second alert", secondRecoveryCount)
+	}
+}
+
 func TestNotificationRecoveryQueuedBehindLeaseIsSuppressedWhenAlertFails(t *testing.T) {
 	store, channel := newNotificationConsistencyStore(t)
 	ctx := context.Background()
