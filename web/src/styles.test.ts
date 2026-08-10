@@ -657,7 +657,7 @@ describe('Kulin-inspired color polish', () => {
     expect(styles).toContain('.home-summary__metric-value > span')
     expect(styles).toContain('.home-summary__metric-value--rate > span')
     expect(styles).toContain('.metric-label { min-width: 0; overflow: hidden; color: var(--metric-accent)')
-    expect(styles).toContain('.node-title-line p { max-width: calc(100% - 23px); min-width: 0; flex: none; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--foreground); font-size: 13px; font-weight: 600')
+    expect(styles).toContain('.node-title-line p { max-width: calc(100% - 23px); min-width: 0; flex: none; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--foreground); font-size: 13px; font-weight: 600; line-height: 1.25')
     expect(styles).toContain('.detail-title-button > span:last-child { min-height: 24px; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; line-height: 24px; }')
     expect(styles).toContain('.node-metric strong')
     expect(styles).toContain('.node-metric strong { max-width: 100%; min-width: 0; flex: 1; overflow: hidden; color: var(--metric-accent); font-size: 11px; font-weight: 500; line-height: 1.15; text-align: right; text-overflow: ellipsis; white-space: nowrap;')
