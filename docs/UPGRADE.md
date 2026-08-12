@@ -74,7 +74,7 @@ Agent 安装器和多平台 release 来自独立 Zeno-Agent 仓库；公开安�
 
 ## 5. 安装器版本与校验边界
 
-默认 `https://zeno.shuijiao.de` 是发布方维护的便利入口，适合解析当前推荐稳定版本。可复现升级应使用第一方不可变版本路由：
+默认 `https://zeno.shuijiao.de/install.sh` 是发布方维护的便利入口，适合解析当前推荐稳定版本。可复现升级应使用第一方不可变版本路由：
 
 ```text
 https://zeno.shuijiao.de/vX.Y.Z/install.sh
@@ -85,4 +85,4 @@ https://zeno.shuijiao.de/vX.Y.Z/install.sh.sha256
 
 ## English summary
 
-Use the installer for upgrades; it creates a stopped, complete backup, checks SQLite, pins the previous image ID, waits for readiness, and restores the complete snapshot on failure. SQLite checks default to 10 minutes; large databases may take several minutes, so set `ZENO_DB_CHECK_TIMEOUT=20m` when needed (integer `s`, `m`, or `h`, maximum `24h`). The value is persisted and passed to the Controller's dedicated `-check-db-timeout`; timeout or check failure still rolls back. Upgrade and rollback to an immutable `vX.Y.Z` or digest—not `latest`—and restore `.env`, Compose, `data/`, and `secrets/` from the same backup. For reproducible upgrades, download `/vX.Y.Z/install.sh` and `/vX.Y.Z/install.sh.sha256`, verify the checksum, and pin `ZENO_IMAGE` to that same version. The unversioned URL remains a convenience entry point for the currently recommended stable release.
+Use the installer for upgrades; it creates a stopped, complete backup, checks SQLite, pins the previous image ID, waits for readiness, and restores the complete snapshot on failure. SQLite checks default to 10 minutes; large databases may take several minutes, so set `ZENO_DB_CHECK_TIMEOUT=20m` when needed (integer `s`, `m`, or `h`, maximum `24h`). The value is persisted and passed to the Controller's dedicated `-check-db-timeout`; timeout or check failure still rolls back. Upgrade and rollback to an immutable `vX.Y.Z` or digest—not `latest`—and restore `.env`, Compose, `data/`, and `secrets/` from the same backup. For reproducible upgrades, download `/vX.Y.Z/install.sh` and `/vX.Y.Z/install.sh.sha256`, verify the checksum, and pin `ZENO_IMAGE` to that same version. The unversioned `/install.sh` URL remains a convenience entry point for the currently recommended stable release.

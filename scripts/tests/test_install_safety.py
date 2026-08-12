@@ -326,6 +326,8 @@ class InstallSafetyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             result, install_dir, log_text = self.run_install(pathlib.Path(td))
             backup_dir = self.latest_backup(install_dir)
+            install_marker = (install_dir / '.zeno-installation').read_text()
+            install_marker_mode = stat.S_IMODE((install_dir / '.zeno-installation').stat().st_mode)
             dirs = {name: stat.S_IMODE((install_dir / name).stat().st_mode) for name in ('data', 'secrets', 'backups', 'builds')}
             secret_modes = {p.name: stat.S_IMODE(p.stat().st_mode) for p in (install_dir / 'secrets').iterdir() if p.is_file()}
             authority_ring = json.loads((install_dir / 'secrets' / 'zeno_notification_authority_keyring.json').read_text())
@@ -333,10 +335,13 @@ class InstallSafetyTest(unittest.TestCase):
             authority_secret = (install_dir / 'secrets' / 'zeno_notification_authority').read_text().strip()
             credential_secret = (install_dir / 'secrets' / 'zeno_notification_credential_key').read_text().strip()
             self.assertTrue((backup_dir / '.zeno-backup-complete').exists())
+            self.assertEqual((backup_dir / '.zeno-installation').read_text(), 'repository=shui1iao/Zeno\n')
             self.assertTrue((backup_dir / 'MANIFEST.sha256').exists())
             self.assertTrue((backup_dir / 'secrets' / 'zeno_notification_credential_key').exists())
             self.assertFalse(list((install_dir / 'backups').glob('.partial-install-*')))
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(install_marker, 'repository=shui1iao/Zeno\n')
+        self.assertEqual(install_marker_mode, 0o600)
         self.assertEqual(dirs, {'data': 0o700, 'secrets': 0o750, 'backups': 0o700, 'builds': 0o700})
         self.assertTrue(secret_modes)
         self.assertTrue(all(mode == 0o640 for mode in secret_modes.values()))
@@ -441,6 +446,8 @@ class InstallSafetyTest(unittest.TestCase):
             self.assertFalse((install_dir / '.env').exists())
             self.assertFalse((install_dir / 'data').exists())
             self.assertFalse((install_dir / 'secrets').exists())
+            self.assertEqual((install_dir / '.zeno-installation').read_text(), 'repository=shui1iao/Zeno\n')
+            self.assertFalse((failed_state / '.zeno-installation').exists())
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn('首次安装失败现场已隔离', result.stderr)
         self.assertIn('compose:down:', log_text)
@@ -462,6 +469,109 @@ class InstallSafetyTest(unittest.TestCase):
         self.assertIn('包含符号链接', result.stderr)
         self.assertEqual(value, 'do-not-touch')
         self.assertNotIn('compose:stop:', log_text)
+
+    def test_legacy_token_symlink_after_stop_triggers_automatic_restore(self):
+        def install_legacy_symlink(install_dir: pathlib.Path) -> None:
+            target = install_dir.parent / 'external-legacy-admin-token'
+            target.write_text('do-not-use')
+            (install_dir / 'secrets' / 'zeno_admin_token').unlink()
+            (install_dir / 'data' / 'admin-token').symlink_to(target)
+
+        with tempfile.TemporaryDirectory() as td:
+            result, install_dir, log_text = self.run_install(pathlib.Path(td), setup=install_legacy_symlink)
+            env_text = (install_dir / '.env').read_text()
+            install_marker = (install_dir / '.zeno-installation').read_text()
+            stop_count = sum(1 for line in log_text.splitlines() if 'compose:stop:' in line)
+            up_count = sum(1 for line in log_text.splitlines() if 'compose:up:' in line)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('legacy admin token 不能是符号链接', result.stderr)
+        self.assertIn('已恢复旧版本', result.stderr)
+        self.assertIn('ZENO_IMAGE=zeno-rollback:', env_text)
+        self.assertEqual(install_marker, 'repository=shui1iao/Zeno\n')
+        self.assertEqual(stop_count, 2)
+        self.assertEqual(up_count, 1)
+
+    def test_nonempty_unrecognized_install_directory_is_rejected_without_chmod_or_files(self):
+        def seed_unrelated_directory(install_dir: pathlib.Path) -> None:
+            install_dir.mkdir(parents=True)
+            install_dir.chmod(0o755)
+            (install_dir / 'unrelated-business-file').write_text('keep')
+
+        with tempfile.TemporaryDirectory() as td:
+            result, install_dir, log_text = self.run_install(
+                pathlib.Path(td), existing=False, setup=seed_unrelated_directory)
+            mode = stat.S_IMODE(install_dir.stat().st_mode)
+            unrelated = (install_dir / 'unrelated-business-file').read_text()
+            installer_files = [
+                name for name in ('.env', 'docker-compose.yml', 'data', 'secrets', 'backups', 'builds')
+                if (install_dir / name).exists()
+            ]
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('安装目录非空且不是可识别的 Zeno 安装', result.stderr)
+        self.assertEqual(mode, 0o755)
+        self.assertEqual(unrelated, 'keep')
+        self.assertEqual(installer_files, [])
+        self.assertNotIn('compose:pull:', log_text)
+
+    def test_wrong_install_marker_is_rejected_before_mutation(self):
+        def seed_wrong_marker(install_dir: pathlib.Path) -> None:
+            (install_dir / '.zeno-installation').write_text('repository=someone/else\n')
+
+        with tempfile.TemporaryDirectory() as td:
+            result, install_dir, log_text = self.run_install(pathlib.Path(td), setup=seed_wrong_marker)
+            marker = (install_dir / '.zeno-installation').read_text()
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('安装标记不属于 Zeno', result.stderr)
+        self.assertEqual(marker, 'repository=someone/else\n')
+        self.assertNotIn('compose:pull:', log_text)
+
+    def test_install_directory_symlink_is_rejected_before_target_mutation(self):
+        captured = {}
+
+        def prepare_symlink(install_dir: pathlib.Path, env: dict) -> None:
+            target = install_dir.parent / 'install-target'
+            link = install_dir.parent / 'install-link'
+            target.mkdir()
+            target.chmod(0o755)
+            link.symlink_to(target, target_is_directory=True)
+            env['ZENO_INSTALL_DIR'] = str(link)
+            captured['target'] = target
+
+        with tempfile.TemporaryDirectory() as td:
+            result, _, log_text = self.run_install(
+                pathlib.Path(td), existing=False, prepare_env=prepare_symlink)
+            target = captured['target']
+            mode = stat.S_IMODE(target.stat().st_mode)
+            contents = list(target.iterdir())
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('ZENO_INSTALL_DIR 不能是符号链接', result.stderr)
+        self.assertEqual(mode, 0o755)
+        self.assertEqual(contents, [])
+        self.assertNotIn('compose:pull:', log_text)
+
+    def test_install_directory_with_symlinked_parent_is_rejected_before_target_mutation(self):
+        captured = {}
+
+        def prepare_symlinked_parent(install_dir: pathlib.Path, env: dict) -> None:
+            target_parent = install_dir.parent / 'target-parent'
+            linked_parent = install_dir.parent / 'linked-parent'
+            target_parent.mkdir()
+            target_parent.chmod(0o755)
+            linked_parent.symlink_to(target_parent, target_is_directory=True)
+            env['ZENO_INSTALL_DIR'] = str(linked_parent / 'zeno')
+            captured['target_parent'] = target_parent
+
+        with tempfile.TemporaryDirectory() as td:
+            result, _, log_text = self.run_install(
+                pathlib.Path(td), existing=False, prepare_env=prepare_symlinked_parent)
+            target_parent = captured['target_parent']
+            contents = list(target_parent.iterdir())
+            mode = stat.S_IMODE(target_parent.stat().st_mode)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('ZENO_INSTALL_DIR 不能经过符号链接', result.stderr)
+        self.assertEqual(contents, [])
+        self.assertEqual(mode, 0o755)
+        self.assertNotIn('compose:pull:', log_text)
 
     def test_data_symlink_is_rejected_before_stopping_existing_service(self):
         external = {}
@@ -657,6 +767,8 @@ class InstallSafetyTest(unittest.TestCase):
             self.assertIn('127.0.0.1:${ZENO_HOST_PORT:-18980}:18980', text)
         self.assertIn('https://zeno.shuijiao.de/agent/install.sh', script)
         self.assertIn('https://zeno.shuijiao.de/agent/install.ps1', script)
+        self.assertIn('PUBLIC_INSTALL_URL="https://zeno.shuijiao.de/install.sh"', script)
+        self.assertIn('INSTALL_MARKER_NAME=".zeno-installation"', script)
         self.assertIn('ZENO_NOTIFICATION_AUTHORITY_KEYRING_FILE: /run/secrets/zeno_notification_authority_keyring.json', compose)
         self.assertIn('ZENO_NOTIFICATION_CREDENTIAL_KEYRING_FILE: /run/secrets/zeno_notification_credential_keyring.json', compose)
         self.assertIn('ZENO_NOTIFICATION_AUTHORITY_KEYRING_FILE: /run/secrets/zeno_notification_authority_keyring.json', script)
@@ -691,6 +803,25 @@ class InstallSafetyTest(unittest.TestCase):
         self.assertIn('for repo_candidate in "$REPO" "$LEGACY_REPO"', script)
         self.assertIn('--bundle-from-oci', script)
         self.assertNotIn('|| true', script)
+        post_stop = script.split('STEP_MESSAGE="停止旧版本失败"', 1)[1]
+        self.assertNotIn('|| fail', post_stop)
+
+    def test_documented_install_commands_download_valid_path_before_execution(self):
+        files = [
+            ROOT / 'README.md',
+            ROOT / 'README.en.md',
+            ROOT / 'docs' / 'SELF_HOSTING.md',
+            ROOT / 'docs' / 'UPGRADE.md',
+        ]
+        combined = '\n'.join(path.read_text() for path in files)
+        self.assertNotIn('bash <(curl', combined)
+        self.assertNotIn('https://zeno.shuijiao.de | bash', combined)
+        self.assertIn('https://zeno.shuijiao.de/install.sh', combined)
+        for path in files[:3]:
+            text = path.read_text()
+            self.assertIn('installer=$(mktemp)', text)
+            self.assertIn("trap 'rm -f \"$installer\"' EXIT", text)
+            self.assertIn('curl -fsSL https://zeno.shuijiao.de/install.sh -o "$installer"', text)
 
     def test_release_workflow_publishes_github_signed_image_attestation(self):
         workflow = (ROOT / '.github' / 'workflows' / 'docker.yml').read_text()

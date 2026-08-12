@@ -1138,14 +1138,16 @@ svg { display: block; }
   touch-action: manipulation;
   transition: background-color 150ms ease, color 150ms ease;
 }
-.latency-target-grid button:not(:nth-child(7n + 1)) {
-  border-left: 1px solid var(--divider);
-}
-.latency-target-grid button:last-child:not(:nth-child(7n)) {
-  border-right: 1px solid var(--divider);
-}
-.latency-target-grid button:nth-child(n + 8) {
-  border-top: 0;
+@media (min-width: 768px) {
+  .latency-target-grid button:not(:nth-child(7n + 1)) {
+    border-left: 1px solid var(--divider);
+  }
+  .latency-target-grid button:last-child:not(:nth-child(7n)):not(:nth-child(7n + 1)) {
+    border-right: 1px solid var(--divider);
+  }
+  .latency-target-grid button:nth-child(n + 8) {
+    border-top: 0;
+  }
 }
 .latency-target-grid button[data-active='true'] {
   background: color-mix(in srgb, var(--blue) 11%, transparent);
@@ -1429,13 +1431,10 @@ svg { display: block; }
     padding: 9px 10px;
     text-align: left;
   }
-  .latency-target-grid button:not(:nth-child(7n + 1)) { border-left: 0; }
-  .latency-target-grid button:last-child { border-right: 0; }
-  .latency-target-grid button:nth-child(n + 8) { border-top: 0; }
   .latency-target-grid button:not(:nth-child(3n + 1)) {
     border-left: 1px solid var(--divider);
   }
-  .latency-target-grid button:last-child:not(:nth-child(3n)) {
+  .latency-target-grid button:last-child:not(:nth-child(3n)):not(:nth-child(3n + 1)) {
     border-right: 1px solid var(--divider);
   }
   .latency-target-grid button:nth-child(n + 4) {

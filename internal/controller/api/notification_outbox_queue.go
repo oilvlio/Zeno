@@ -15,6 +15,16 @@ func (s *sqliteNotificationDomain) QueueNotificationEvent(ctx context.Context, e
 	}
 	now := time.Now().UTC()
 	event = notificationEventWithIdentity(event, now)
+	var queued bool
+	err := s.writes.withAgentWrite(ctx, notificationOutboxWriteKey, func(writeCtx context.Context) error {
+		var queueErr error
+		queued, queueErr = s.queueNotificationEventOnce(writeCtx, event, channels, now)
+		return queueErr
+	})
+	return queued, err
+}
+
+func (s *sqliteNotificationDomain) queueNotificationEventOnce(ctx context.Context, event notificationEvent, channels []notificationDispatchChannel, now time.Time) (bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err

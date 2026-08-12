@@ -40,12 +40,19 @@ Prepare a Linux server with:
 Run as root:
 
 ```bash
-bash <(curl -fsSL https://zeno.shuijiao.de)
+(
+  set -Eeuo pipefail
+  installer=$(mktemp)
+  trap 'rm -f "$installer"' EXIT
+  curl -fsSL https://zeno.shuijiao.de/install.sh -o "$installer"
+  bash "$installer"
+)
 ```
 
 The installer deploys the currently recommended stable image and creates:
 
 ```text
+/opt/zeno/.zeno-installation
 /opt/zeno/docker-compose.yml
 /opt/zeno/.env
 /opt/zeno/data/zeno.db
@@ -117,11 +124,18 @@ These boundaries keep deployment, upgrades, backups, and security review straigh
 The recommended stable image is convenient for a first deployment. For long-lived environments, pin `vX.Y.Z` or a digest during upgrades for reproducibility.
 
 ```bash
-ZENO_INSTALL_DIR=/opt/zeno \
-ZENO_HOST_PORT=18980 \
-ZENO_IMAGE=ghcr.io/shui1iao/zeno:vX.Y.Z \
-ZENO_DB_CHECK_TIMEOUT=10m \
-bash <(curl -fsSL https://zeno.shuijiao.de)
+(
+  set -Eeuo pipefail
+  installer=$(mktemp)
+  trap 'rm -f "$installer"' EXIT
+  curl -fsSL https://zeno.shuijiao.de/install.sh -o "$installer"
+  env \
+    ZENO_INSTALL_DIR=/opt/zeno \
+    ZENO_HOST_PORT=18980 \
+    ZENO_IMAGE=ghcr.io/shui1iao/zeno:vX.Y.Z \
+    ZENO_DB_CHECK_TIMEOUT=10m \
+    bash "$installer"
+)
 ```
 
 `ZENO_DB_CHECK_TIMEOUT` controls the SQLite `quick_check` timeout during upgrades. It defaults to `10m`, accepts `s`, `m`, or `h`, and is capped at `24h`. The installer attempts an automatic rollback if the check fails or times out.

@@ -7,18 +7,27 @@ Zeno Controller 官方自部署方式是 Docker Compose 一键安装器。Contro
 准备一台支持 `amd64`、`arm64` 或 `arm/v6`、已安装 Docker Engine 24+ 和 Docker Compose 2.20+ 的 Linux 服务器。安装器必须以 root 运行（直接 root 或 `sudo`）。建议至少 1 vCPU、512 MiB 可用内存、1 GiB 可用磁盘；节点数、历史保留和 SQLite 备份增长时应相应增加。执行：
 
 ```bash
-sudo bash -o pipefail -c 'curl -fsSL https://zeno.shuijiao.de | bash'
+(
+  set -Eeuo pipefail
+  installer=$(mktemp)
+  trap 'rm -f "$installer"' EXIT
+  curl -fsSL https://zeno.shuijiao.de/install.sh -o "$installer"
+  sudo bash "$installer"
+)
 ```
 
 默认目录：
 
 ```text
+/opt/zeno/.zeno-installation
 /opt/zeno/.env
 /opt/zeno/docker-compose.yml
 /opt/zeno/data/zeno.db
 /opt/zeno/secrets/
 /opt/zeno/backups/
 ```
+
+`.zeno-installation` 是安装器的目录身份标记。不要删除该文件，也不要把它复制到无关目录；安装器会拒绝接管没有有效标记、且无法识别为旧版 Zeno 的非空目录。
 
 默认监听 `127.0.0.1:18980`，Controller 容器以固定非 root 用户 `10001:10001` 运行。不要把该端口直接暴露到公网；请通过 Caddy、Nginx 或其他 HTTPS 反向代理提供访问。
 
@@ -27,12 +36,18 @@ sudo bash -o pipefail -c 'curl -fsSL https://zeno.shuijiao.de | bash'
 指定安装目录、端口或明确镜像版本时，把变量传给安装器：
 
 ```bash
-sudo env \
-  ZENO_INSTALL_DIR=/opt/zeno \
-  ZENO_HOST_PORT=18980 \
-  ZENO_IMAGE=ghcr.io/shui1iao/zeno:vX.Y.Z \
-  ZENO_DB_CHECK_TIMEOUT=10m \
-  bash -o pipefail -c 'curl -fsSL https://zeno.shuijiao.de | bash'
+(
+  set -Eeuo pipefail
+  installer=$(mktemp)
+  trap 'rm -f "$installer"' EXIT
+  curl -fsSL https://zeno.shuijiao.de/install.sh -o "$installer"
+  sudo env \
+    ZENO_INSTALL_DIR=/opt/zeno \
+    ZENO_HOST_PORT=18980 \
+    ZENO_IMAGE=ghcr.io/shui1iao/zeno:vX.Y.Z \
+    ZENO_DB_CHECK_TIMEOUT=10m \
+    bash "$installer"
+)
 ```
 
 重复运行同一安装器会执行镜像 provenance 校验、停服前预检、一致性离线备份、SQLite `quick_check`、原子配置替换、readiness 检查和失败自动恢复。升级与恢复细节见 [`UPGRADE.md`](UPGRADE.md)。
@@ -72,8 +87,13 @@ server {
 同机反代通常使用安装器默认的 Docker gateway trusted proxy。反代在另一台机器时，重新运行安装器并设置其**实际来源 IP/CIDR**，不要信任整个互联网或宽泛私网：
 
 ```bash
-sudo env ZENO_TRUSTED_PROXIES=192.0.2.10/32 \
-  bash -o pipefail -c 'curl -fsSL https://zeno.shuijiao.de | bash'
+(
+  set -Eeuo pipefail
+  installer=$(mktemp)
+  trap 'rm -f "$installer"' EXIT
+  curl -fsSL https://zeno.shuijiao.de/install.sh -o "$installer"
+  sudo env ZENO_TRUSTED_PROXIES=192.0.2.10/32 bash "$installer"
+)
 ```
 
 验证 Controller：

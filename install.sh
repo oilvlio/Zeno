@@ -9,7 +9,7 @@ DEFAULT_IMAGE="ghcr.io/shui1iao/zeno:latest"
 LEGACY_REPO="shuijiao1/Zeno"
 OFFICIAL_IMAGE_REPO="ghcr.io/shui1iao/zeno"
 OFFICIAL_SOURCE_URLS=("https://github.com/shui1iao/Zeno" "https://github.com/shuijiao1/Zeno")
-PUBLIC_INSTALL_URL="https://zeno.shuijiao.de"
+PUBLIC_INSTALL_URL="https://zeno.shuijiao.de/install.sh"
 AGENT_INSTALL_URL="https://zeno.shuijiao.de/agent/install.sh"
 AGENT_WINDOWS_INSTALL_URL="https://zeno.shuijiao.de/agent/install.ps1"
 NOTIFICATION_CREDENTIAL_KEY_FILE="/run/secrets/zeno_notification_credential_key"
@@ -17,6 +17,7 @@ IMAGE="${ZENO_IMAGE:-}"
 REQUESTED_IMAGE=""
 TARGET_VERSION_LABEL=""
 INSTALL_DIR="${ZENO_INSTALL_DIR:-/opt/zeno}"
+INSTALL_MARKER_NAME=".zeno-installation"
 HOST_PORT="${ZENO_HOST_PORT:-}"
 CONTAINER_NAME="${ZENO_CONTAINER_NAME:-}"
 TZ_VALUE="${TZ:-}"
@@ -63,6 +64,106 @@ fail() {
 
 need() {
   command -v "$1" >/dev/null 2>&1 || fail "未找到 $1"
+}
+
+normalize_install_dir() {
+  local raw="$INSTALL_DIR"
+  local trimmed="${raw%/}"
+  local current=""
+  local canonical=""
+  if [[ "$raw" != /* ]]; then
+    fail "ZENO_INSTALL_DIR 必须是绝对路径"
+  fi
+  if [[ "$raw" == *$'\n'* || "$raw" == *$'\r'* ]]; then
+    fail "ZENO_INSTALL_DIR 不能包含换行符"
+  fi
+  [ -n "$trimmed" ] || trimmed="/"
+  if [ -L "$trimmed" ]; then
+    fail "ZENO_INSTALL_DIR 不能是符号链接: $raw"
+  fi
+
+  # Refuse every existing symlink component, not only a symlink at the final
+  # path. Otherwise /safe/link/zeno can escape into an unrelated tree before
+  # the installer creates the marker or changes ownership.
+  current="/"
+  IFS='/' read -r -a install_parts <<< "${trimmed#/}"
+  for part in "${install_parts[@]}"; do
+    [ -n "$part" ] || continue
+    if [ "$current" = "/" ]; then
+      current="/$part"
+    else
+      current="$current/$part"
+    fi
+    if [ -L "$current" ]; then
+      fail "ZENO_INSTALL_DIR 不能经过符号链接: $current"
+    fi
+  done
+
+  canonical=$(realpath -m -- "$trimmed") || fail "无法解析 ZENO_INSTALL_DIR: $raw"
+  case "$canonical" in
+    /|/bin|/boot|/dev|/etc|/home|/lib|/lib64|/media|/mnt|/opt|/proc|/root|/run|/sbin|/srv|/sys|/tmp|/usr|/var|/usr/local|/var/lib|/var/log|/var/run)
+      fail "ZENO_INSTALL_DIR 不能使用系统目录: $canonical"
+      ;;
+  esac
+  if [[ "${canonical#/}" != */* ]]; then
+    fail "ZENO_INSTALL_DIR 路径过浅，必须使用专用子目录"
+  fi
+  INSTALL_DIR="$canonical"
+}
+
+is_legacy_zeno_install() {
+  [ ! -L "$INSTALL_DIR/.env" ] || return 1
+  [ ! -L "$INSTALL_DIR/docker-compose.yml" ] || return 1
+  [ -f "$INSTALL_DIR/.env" ] || return 1
+  [ -f "$INSTALL_DIR/docker-compose.yml" ] || return 1
+  grep -Eq '^ZENO_(UPDATE_)?IMAGE=' "$INSTALL_DIR/.env" || return 1
+  grep -Eq '^[[:space:]]*zeno:[[:space:]]*$' "$INSTALL_DIR/docker-compose.yml" || return 1
+}
+
+validate_install_dir_identity() {
+  [ -e "$INSTALL_DIR" ] || return 0
+  reject_symlink "$INSTALL_DIR" "安装目录" || fail "安装目录不能是符号链接"
+  [ -d "$INSTALL_DIR" ] || fail "安装路径必须是目录: $INSTALL_DIR"
+
+  local marker="$INSTALL_DIR/$INSTALL_MARKER_NAME"
+  if [ -e "$marker" ] || [ -L "$marker" ]; then
+    reject_symlink "$marker" "安装标记" || fail "安装标记不能是符号链接"
+    [ -f "$marker" ] || fail "安装标记必须是普通文件: $marker"
+    grep -Fxq 'repository=shui1iao/Zeno' "$marker" || fail "安装标记不属于 Zeno: $marker"
+    return 0
+  fi
+
+  local first_entry=""
+  first_entry=$(find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 -print -quit) \
+    || fail "无法检查安装目录内容: $INSTALL_DIR"
+  if [ -z "$first_entry" ]; then
+    return 0
+  fi
+  if is_legacy_zeno_install; then
+    return 0
+  fi
+  fail "安装目录非空且不是可识别的 Zeno 安装: $INSTALL_DIR"
+}
+
+ensure_install_marker() {
+  local marker="$INSTALL_DIR/$INSTALL_MARKER_NAME"
+  local tmp="${marker}.new.$$"
+  if [ -e "$marker" ] || [ -L "$marker" ]; then
+    reject_symlink "$marker" "安装标记" || return 1
+    [ -f "$marker" ] || return 1
+    grep -Fxq 'repository=shui1iao/Zeno' "$marker" || return 1
+    chown 0:0 "$marker" || return 1
+    chmod 600 "$marker" || return 1
+    return 0
+  fi
+  rm -f -- "$tmp"
+  if ! printf 'repository=shui1iao/Zeno\n' > "$tmp" \
+      || ! chown 0:0 "$tmp" \
+      || ! chmod 600 "$tmp" \
+      || ! mv -f -- "$tmp" "$marker"; then
+    rm -f -- "$tmp"
+    return 1
+  fi
 }
 
 cleanup_staging() {
@@ -744,7 +845,7 @@ copy_backup_payload() {
   local source="$1"
   local target="$2"
   local name
-  for name in .env docker-compose.yml secrets; do
+  for name in .zeno-installation .env docker-compose.yml secrets; do
     if [ -e "$source/$name" ]; then
       cp -a "$source/$name" "$target/" || return 1
     fi
@@ -952,7 +1053,7 @@ restore_backup() {
   preserve_failed_state || return 1
 
   local name
-  for name in .env docker-compose.yml data secrets; do
+  for name in .zeno-installation .env docker-compose.yml data secrets; do
     if [ -e "$restore_stage/$name" ]; then
       mv "$restore_stage/$name" "$INSTALL_DIR/" || return 1
     fi
@@ -1115,7 +1216,7 @@ atomic_install_file() {
 }
 
 if [ "$(id -u)" -ne 0 ]; then
-  fail "请用 root 执行，或使用 sudo bash <(curl -fsSL ${PUBLIC_INSTALL_URL})"
+  fail "请用 root 执行，或先下载 ${PUBLIC_INSTALL_URL} 后使用 sudo bash 执行"
 fi
 
 need docker
@@ -1123,18 +1224,22 @@ need curl
 need sha256sum
 need timeout
 need tar
+need realpath
 if ! docker compose version >/dev/null 2>&1; then
   fail "未找到 docker compose 插件，请先安装 Docker Compose v2"
 fi
 
+normalize_install_dir
+validate_install_dir_identity
+validate_existing_install_paths
 load_existing_env_defaults
 REQUESTED_IMAGE="$IMAGE"
 mkdir -p "$INSTALL_DIR"
 reject_symlink "$INSTALL_DIR" "安装目录" || fail "安装目录不能是符号链接"
 chown 0:0 "$INSTALL_DIR"
 chmod 700 "$INSTALL_DIR"
+ensure_install_marker || fail "创建或验证 Zeno 安装标记失败"
 mark_existing_install
-validate_existing_install_paths
 capture_rollback_image
 set_lifecycle_permissions
 preflight_disk_space
@@ -1204,7 +1309,9 @@ sqlite_quick_check_current
 STEP_MESSAGE="初始化密钥失败"
 if [ ! -s "$admin_secret" ]; then
   if [ -s "$legacy_admin" ]; then
-    reject_symlink "$legacy_admin" "legacy admin token" || fail "legacy admin token 不能是符号链接"
+    STEP_MESSAGE="legacy admin token 不能是符号链接"
+    reject_symlink "$legacy_admin" "legacy admin token"
+    STEP_MESSAGE="初始化密钥失败"
     install -o 0 -g "$ZENO_GID" -m 640 "$legacy_admin" "$admin_secret"
   else
     umask 077
@@ -1213,7 +1320,9 @@ if [ ! -s "$admin_secret" ]; then
 fi
 if [ ! -s "$agent_secret" ]; then
   if [ -s "$legacy_agent" ]; then
-    reject_symlink "$legacy_agent" "legacy agent token" || fail "legacy agent token 不能是符号链接"
+    STEP_MESSAGE="legacy agent token 不能是符号链接"
+    reject_symlink "$legacy_agent" "legacy agent token"
+    STEP_MESSAGE="初始化密钥失败"
     install -o 0 -g "$ZENO_GID" -m 640 "$legacy_agent" "$agent_secret"
   else
     umask 077
@@ -1222,8 +1331,11 @@ if [ ! -s "$agent_secret" ]; then
 fi
 chown "0:$ZENO_GID" "$admin_secret" "$agent_secret" "$notification_authority_secret" "$notification_credential_secret"
 chmod 640 "$admin_secret" "$agent_secret" "$notification_authority_secret" "$notification_credential_secret"
-ensure_single_keyring_file "$notification_authority_keyring" "$notification_authority_secret" || fail "生成通知 authority keyring 失败"
-ensure_single_keyring_file "$notification_credential_keyring" "$notification_credential_secret" || fail "生成通知凭据 keyring 失败"
+STEP_MESSAGE="生成通知 authority keyring 失败"
+ensure_single_keyring_file "$notification_authority_keyring" "$notification_authority_secret"
+STEP_MESSAGE="生成通知凭据 keyring 失败"
+ensure_single_keyring_file "$notification_credential_keyring" "$notification_credential_secret"
+STEP_MESSAGE="初始化密钥失败"
 chown "0:$ZENO_GID" "$notification_authority_keyring" "$notification_credential_keyring"
 chmod 640 "$notification_authority_keyring" "$notification_credential_keyring"
 set_install_permissions

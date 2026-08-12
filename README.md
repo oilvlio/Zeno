@@ -40,12 +40,19 @@ Zeno 面向管理自有 VPS 和服务器的个人与小团队。Controller 提�
 以 root 身份执行：
 
 ```bash
-bash <(curl -fsSL https://zeno.shuijiao.de)
+(
+  set -Eeuo pipefail
+  installer=$(mktemp)
+  trap 'rm -f "$installer"' EXIT
+  curl -fsSL https://zeno.shuijiao.de/install.sh -o "$installer"
+  bash "$installer"
+)
 ```
 
 安装器会部署当前推荐的稳定镜像，并创建：
 
 ```text
+/opt/zeno/.zeno-installation
 /opt/zeno/docker-compose.yml
 /opt/zeno/.env
 /opt/zeno/data/zeno.db
@@ -117,11 +124,18 @@ Zeno 适合希望自己掌控数据、只需要轻量监控与公开状态页的
 首次体验可以使用安装器推荐的稳定镜像；长期运维建议升级时固定 `vX.Y.Z` 或 digest，以获得可复现部署。
 
 ```bash
-ZENO_INSTALL_DIR=/opt/zeno \
-ZENO_HOST_PORT=18980 \
-ZENO_IMAGE=ghcr.io/shui1iao/zeno:vX.Y.Z \
-ZENO_DB_CHECK_TIMEOUT=10m \
-bash <(curl -fsSL https://zeno.shuijiao.de)
+(
+  set -Eeuo pipefail
+  installer=$(mktemp)
+  trap 'rm -f "$installer"' EXIT
+  curl -fsSL https://zeno.shuijiao.de/install.sh -o "$installer"
+  env \
+    ZENO_INSTALL_DIR=/opt/zeno \
+    ZENO_HOST_PORT=18980 \
+    ZENO_IMAGE=ghcr.io/shui1iao/zeno:vX.Y.Z \
+    ZENO_DB_CHECK_TIMEOUT=10m \
+    bash "$installer"
+)
 ```
 
 `ZENO_DB_CHECK_TIMEOUT` 控制升级时 SQLite `quick_check` 的最长时间，默认为 `10m`，支持 `s`、`m`、`h`，上限为 `24h`。检查失败或超时时，安装器会尝试自动回滚。

@@ -5,7 +5,7 @@ Zeno itself is MIT licensed. The dependency inventory is reproducible from `go.m
 Review baseline:
 
 - Go runtime dependency families are permissive (BSD/MIT/Apache-style): Gorilla WebSocket, `golang.org/x/*`, and modernc SQLite plus its transitive modules.
-- Browser runtime dependencies (`react`, `react-dom`, `copy-to-clipboard`, `flag-icons`) are MIT licensed. The complete npm lock currently contains MIT, Apache-2.0, MPL-2.0, ISC, BSD-3-Clause, and 0BSD packages; MPL packages are build/development tooling, not a separately distributed server component.
+- Browser runtime dependencies (`react`, `react-dom`, `flag-icons`) are MIT licensed. The complete npm lock currently contains MIT, Apache-2.0, MPL-2.0, ISC, BSD-3-Clause, and 0BSD packages; MPL packages are build/development tooling, not a separately distributed server component.
 - The Debian image retains package copyright/license records under `/usr/share/doc/*/copyright`. The release workflow publishes an SPDX image SBOM and build provenance for every platform.
 - The Agent has its own inventory in the Zeno-Agent repository.
 
