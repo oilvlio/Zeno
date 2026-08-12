@@ -272,12 +272,11 @@ svg { display: block; }
   z-index: 0;
   top: 0;
   bottom: 0;
-  left: 0;
+  left: var(--slider-shift);
   width: var(--slider-width);
   border-radius: var(--selector-inner-radius);
   background: var(--blue);
-  transform: translateX(var(--slider-shift));
-  transition: transform 180ms cubic-bezier(.2, .8, .2, 1);
+  transition: left 180ms cubic-bezier(.2, .8, .2, 1);
 }
 .sliding-selector > button {
   position: relative;

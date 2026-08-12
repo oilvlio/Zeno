@@ -12,6 +12,9 @@ export function slidingSelectorStyle(optionCount: number, activeIndex: number): 
   return {
     '--slider-columns': count,
     '--slider-width': `calc(100% / ${count})`,
-    '--slider-shift': `${index * 100}%`,
+    // Anchor the offset to the selector itself. Percentage translateX values are
+    // relative to the slider pseudo-element, so any width mismatch compounds
+    // as the active option moves to the right.
+    '--slider-shift': `${(index * 100) / count}%`,
   }
 }

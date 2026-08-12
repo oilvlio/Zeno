@@ -559,7 +559,7 @@ describe('state history layout', () => {
     expect(detailStyles).toMatch(/\.detail-fact\s*\{[^}]*border: 0;[^}]*border-radius: 0;[^}]*background: transparent;[^}]*\}/)
     expect(detailStyles).toMatch(/\.detail-fact-strip--server \.detail-fact:nth-child\(n \+ 3\)\s*\{[^}]*border-top: 1px solid/)
     expect(baseStyles).toMatch(/\.sliding-selector\s*\{[^}]*border: var\(--selector-border-width\) solid var\(--border\);[^}]*border-radius: var\(--selector-radius\);[^}]*background: transparent;[^}]*-webkit-tap-highlight-color: transparent;[^}]*\}/)
-    expect(baseStyles).toMatch(/\.sliding-selector::before\s*\{[^}]*top: 0;[^}]*bottom: 0;[^}]*left: 0;[^}]*border-radius: var\(--selector-inner-radius\);[^}]*background: var\(--blue\);[^}]*transform: translateX\(var\(--slider-shift\)\);[^}]*\}/)
+    expect(baseStyles).toMatch(/\.sliding-selector::before\s*\{[^}]*top: 0;[^}]*bottom: 0;[^}]*left: var\(--slider-shift\);[^}]*border-radius: var\(--selector-inner-radius\);[^}]*background: var\(--blue\);[^}]*\}/)
     expect(baseStyles).not.toMatch(/\.nav-icon-button\.is-solid\s*\{[^}]*border-color:/)
     expect(detailStyles).not.toMatch(/\.detail-top-card \.nav-icon-button\.is-solid\s*\{[^}]*border-color:/)
     expect(styles).toContain('.resource-history-header h3 { margin: 0; color: var(--foreground); font-size: 20px; font-weight: 600; }')

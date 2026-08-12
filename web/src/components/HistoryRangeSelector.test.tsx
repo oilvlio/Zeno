@@ -14,7 +14,7 @@ describe('sliding history range selector', () => {
     expect(slidingSelectorStyle(3, 2)).toEqual({
       '--slider-columns': 3,
       '--slider-width': 'calc(100% / 3)',
-      '--slider-shift': '200%',
+      '--slider-shift': `${(2 * 100) / 3}%`,
     })
     expect(slidingSelectorStyle(0, 8)).toEqual({
       '--slider-columns': 1,
