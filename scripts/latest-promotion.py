@@ -19,29 +19,11 @@ def parse(tag: str):
     return tuple(map(int, match.groups()))
 
 
-def is_legacy_pre_renumber_tag(version: tuple[int, int, int]) -> bool:
-    """Ignore the protected v1.0-v1.9 aliases after the v0.10-v0.19 renumber."""
-    major, minor, _ = version
-    return major == 1 and minor <= 9
-
-
 def decision(current: str, tags: list[str]) -> tuple[bool, str]:
     current_version = parse(current)
     stable = [(version, tag.strip()) for tag in tags if (version := parse(tag)) is not None]
     if current_version is None or not stable:
         return False, max(stable, default=((0, 0, 0), ""))[1]
-    if current_version[:2] == (1, 0):
-        # v1.0.x is the canonical release line after the mistaken v2.x
-        # publication. Compare patch releases within this line so an older
-        # workflow cannot roll latest back, while historical aliases do not
-        # block the next canonical patch.
-        stable = [(version, tag) for version, tag in stable if version[:2] == (1, 0)]
-        if not stable:
-            return False, ""
-    elif current_version[0] == 0 and current_version[1] >= 10:
-        stable = [(version, tag) for version, tag in stable if not is_legacy_pre_renumber_tag(version)]
-        if not stable:
-            return False, ""
     highest_version, highest_tag = max(stable)
     return current_version == highest_version, highest_tag
 

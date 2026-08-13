@@ -13,22 +13,16 @@ class LatestPromotionTest(unittest.TestCase):
     def test_highest_stable_promotes(self):
         self.assertEqual(MODULE.decision("v2.0.0", ["v1.9.9", "v2.0.0"]), (True, "v2.0.0"))
 
-    def test_explicit_v1_bootstrap_reset_promotes_over_historical_aliases(self):
-        self.assertEqual(MODULE.decision("v1.0.0", ["v1.0.0", "v1.9.10", "v2.0.0"]), (True, "v1.0.0"))
-
-    def test_explicit_v1_patch_reset_promotes_over_historical_aliases(self):
-        self.assertEqual(MODULE.decision("v1.0.1", ["v1.0.1", "v1.9.10", "v2.0.0"]), (True, "v1.0.1"))
-
-    def test_canonical_v1_patch_line_continues_past_reset(self):
+    def test_next_patch_promotes_under_standard_semver(self):
         self.assertEqual(
-            MODULE.decision("v1.0.2", ["v1.0.1", "v1.0.2", "v1.9.10", "v2.0.0"]),
-            (True, "v1.0.2"),
+            MODULE.decision("v1.0.3", ["v0.22.6", "v1.0.2", "v1.0.3"]),
+            (True, "v1.0.3"),
         )
 
-    def test_older_canonical_v1_patch_cannot_replace_newer_patch(self):
+    def test_no_release_line_exception_can_override_higher_semver(self):
         self.assertEqual(
-            MODULE.decision("v1.0.1", ["v1.0.1", "v1.0.2", "v1.9.10", "v2.0.0"]),
-            (False, "v1.0.2"),
+            MODULE.decision("v1.0.3", ["v1.0.3", "v2.0.0"]),
+            (False, "v2.0.0"),
         )
 
     def test_older_workflow_cannot_roll_back_latest(self):
@@ -40,11 +34,6 @@ class LatestPromotionTest(unittest.TestCase):
     def test_semver_numeric_order_not_lexical(self):
         self.assertEqual(MODULE.decision("v1.10.0", ["v1.9.99", "v1.10.0"]), (True, "v1.10.0"))
 
-    def test_renumbered_zero_major_ignores_protected_legacy_v1_tags(self):
-        self.assertEqual(
-            MODULE.decision("v0.19.10", ["v0.19.9", "v0.19.10", "v1.9.10"]),
-            (True, "v0.19.10"),
-        )
 
     def test_build_metadata_and_malformed_tags_do_not_promote(self):
         self.assertEqual(MODULE.decision("v2.0.0+build", ["v1.0.0", "v2.0.0+build"]), (False, "v1.0.0"))

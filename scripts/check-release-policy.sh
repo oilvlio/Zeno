@@ -68,15 +68,6 @@ current = parse(current_text)
 tags = subprocess.check_output(["git", "tag", "--list", "v*"], text=True).splitlines()
 prior = [(tag, parse(tag)) for tag in tags if tag != current_text]
 prior = [(tag, parsed) for tag, parsed in prior if parsed is not None]
-if current[:2] == (1, 0):
-    # v1.0.x is the canonical release line after the mistaken v2.x
-    # publication. Only newer/equal patches in this line may block it.
-    prior = [(tag, parsed) for tag, parsed in prior if parsed[:2] == (1, 0)]
-elif current[0] == 0 and current[1] >= 10:
-    # v1.0.0-v1.9.x are protected aliases from the pre-renumber release line.
-    # They cannot be deleted under the repository ruleset and must not outrank
-    # their canonical v0.10.0-v0.19.x replacements.
-    prior = [(tag, parsed) for tag, parsed in prior if not (parsed[0] == 1 and parsed[1] <= 9)]
 not_lower = [tag for tag, parsed in prior if compare(parsed, current) >= 0]
 if not_lower:
     print(
