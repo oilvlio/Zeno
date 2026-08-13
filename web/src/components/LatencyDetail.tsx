@@ -25,6 +25,19 @@ interface LatencyDetailProps {
   topHeader?: ReactNode
 }
 
+function latencyTargetCorners(index: number, total: number, columns: number): string {
+  if (total <= 0) return ''
+  const firstRowEnd = Math.min(columns, total) - 1
+  const lastRowStart = Math.floor((total - 1) / columns) * columns
+  const lastRowIsFull = total <= columns || total % columns === 0
+  const corners: string[] = []
+  if (index === 0) corners.push('top-left')
+  if (total >= columns && index === firstRowEnd) corners.push('top-right')
+  if (index === lastRowStart) corners.push('bottom-left')
+  if (lastRowIsFull && index === total - 1) corners.push('bottom-right')
+  return corners.join(' ')
+}
+
 export function LatencyDetail({
   node,
   points,
@@ -69,6 +82,8 @@ export function LatencyDetail({
   )
   const hasLatencyData = points.length > 0 || targetSummaries.length > 0
   const showLatencySkeleton = loading && !hasLatencyData && !error
+  const desktopLatencyLastRowStart = Math.floor((targetSummaries.length - 1) / 7) * 7
+  const mobileLatencyLastRowStart = Math.floor((targetSummaries.length - 1) / 3) * 3
   const toggleTarget = (targetId: string) => {
     setActiveTargetIds((current) => (
       current.includes(targetId) ? current.filter((id) => id !== targetId) : [...current, targetId]
@@ -136,21 +151,30 @@ export function LatencyDetail({
 
         {!showLatencySkeleton && !error && hasLatencyData && (
           <>
-            <div className="latency-target-grid" aria-label="monitor services">
+            <div
+              className="latency-target-grid"
+              aria-label="monitor services"
+            >
               {targetSummaries.map((target, index) => (
                 <button
-                  key={target.targetId}
-                  type="button"
-                  title={`${target.targetName} · ${formatLatency(target.avgMs)} · 丢包 ${formatLossPercent(target.lossPercent)}`}
-                  data-active={activeTargetIds.includes(target.targetId)}
-                  onClick={() => toggleTarget(target.targetId)}
-                >
-                  <span className="latency-target-name">
-                    <i className="latency-target-color" style={{ backgroundColor: latencySeriesColor(index) }} aria-hidden="true" />
-                    <span>{target.targetName}</span>
-                  </span>
-                  <strong>{formatLatency(target.avgMs)}</strong>
-                  <em>丢包 {formatLossPercent(target.lossPercent)}</em>
+                    key={target.targetId}
+                    type="button"
+                    title={`${target.targetName} · ${formatLatency(target.avgMs)} · 丢包 ${formatLossPercent(target.lossPercent)}`}
+                    data-active={activeTargetIds.includes(target.targetId)}
+                    data-desktop-corners={latencyTargetCorners(index, targetSummaries.length, 7)}
+                    data-desktop-full-row-end={(index + 1) % 7 === 0}
+                    data-desktop-last-row={index >= desktopLatencyLastRowStart}
+                    data-mobile-corners={latencyTargetCorners(index, targetSummaries.length, 3)}
+                    data-mobile-full-row-end={(index + 1) % 3 === 0}
+                    data-mobile-last-row={index >= mobileLatencyLastRowStart}
+                    onClick={() => toggleTarget(target.targetId)}
+                  >
+                    <span className="latency-target-name">
+                      <i className="latency-target-color" style={{ backgroundColor: latencySeriesColor(index) }} aria-hidden="true" />
+                      <span>{target.targetName}</span>
+                    </span>
+                    <strong>{formatLatency(target.avgMs)}</strong>
+                    <em>丢包 {formatLossPercent(target.lossPercent)}</em>
                 </button>
               ))}
             </div>

@@ -73,15 +73,17 @@ describe('region selector layout', () => {
   })
 })
 
-describe('mobile latency target layout', () => {
-  it('keeps every latency target fully bordered while overlapping shared dividers', () => {
+describe('responsive latency target layout', () => {
+  it('uses one owner for each internal divider and keeps the outer frame separate', () => {
     expect(styles).toContain('@media (max-width: 767px)')
     expect(baseStyles).toMatch(/\.kulin-shell\s*\{[^}]*overflow-x: clip;[^}]*\}/)
     expect(styles).toContain('.latency-target-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 0 12px; padding: 0; }')
-    expect(styles).toMatch(/\.latency-target-grid\s*\{[^}]*margin: 0 24px;[^}]*border: 0;[^}]*\}/)
-    expect(styles).toMatch(/\.latency-target-grid button\s*\{[^}]*margin: 0;[^}]*border: 0;[^}]*border-top: 1px solid var\(--divider\);[^}]*border-bottom: 1px solid var\(--divider\);[^}]*border-radius: 0;[^}]*\}/)
-    expect(baseStyles).toMatch(/@media \(min-width: 768px\)[\s\S]*?\.latency-target-grid button:not\(:nth-child\(7n \+ 1\)\)\s*\{[^}]*border-left: 1px solid[\s\S]*?\.latency-target-grid button:last-child:not\(:nth-child\(7n\)\):not\(:nth-child\(7n \+ 1\)\)\s*\{[^}]*border-right: 1px solid[\s\S]*?\.latency-target-grid button:nth-child\(n \+ 8\)\s*\{[^}]*border-top: 0/)
-    expect(baseStyles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.latency-target-grid button:not\(:nth-child\(3n \+ 1\)\)[\s\S]*?border-left: 1px solid[\s\S]*?\.latency-target-grid button:last-child:not\(:nth-child\(3n\)\):not\(:nth-child\(3n \+ 1\)\)[\s\S]*?border-right: 1px solid/)
+    expect(styles).toMatch(/\.latency-target-grid\s*\{[^}]*margin: 0 24px;[^}]*border: 1px solid var\(--divider\);[^}]*border-radius: var\(--radius-card\);[^}]*overflow: hidden;[^}]*\}/)
+    expect(styles).toMatch(/\.latency-target-grid button\s*\{[^}]*margin: 0;[^}]*border: 0;[^}]*border-right: 1px solid var\(--divider\);[^}]*border-bottom: 1px solid var\(--divider\);[^}]*border-radius: 0;[^}]*\}/)
+    expect(baseStyles).toMatch(/@media \(min-width: 768px\)[\s\S]*?\.latency-target-grid button\[data-desktop-full-row-end='true'\][\s\S]*?border-right: 0/)
+    expect(baseStyles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.latency-target-grid button\[data-mobile-full-row-end='true'\][\s\S]*?border-right: 0/)
+    expect(baseStyles).toMatch(/@media \(min-width: 768px\)[\s\S]*?data-desktop-corners~='top-left'[\s\S]*?border-top-left-radius: var\(--radius-card\)[\s\S]*?data-desktop-corners~='bottom-right'[\s\S]*?border-bottom-right-radius: var\(--radius-card\)/)
+    expect(baseStyles).toMatch(/@media \(max-width: 767px\)[\s\S]*?data-mobile-corners~='top-left'[\s\S]*?border-top-left-radius: var\(--radius-card\)[\s\S]*?data-mobile-corners~='bottom-right'[\s\S]*?border-bottom-right-radius: var\(--radius-card\)/)
     expect(baseStyles).not.toContain('.latency-target-grid button:not(:nth-child(7n + 1)) { border-left: 0; }')
     expect(baseStyles).not.toContain(".latency-target-grid button[data-active='true'] { border-color:")
     expect(baseStyles).not.toContain(".latency-target-grid button:hover:not([data-active='true']) { border-color:")
