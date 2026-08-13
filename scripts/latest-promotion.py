@@ -30,12 +30,15 @@ def decision(current: str, tags: list[str]) -> tuple[bool, str]:
     stable = [(version, tag.strip()) for tag in tags if (version := parse(tag)) is not None]
     if current_version is None or not stable:
         return False, max(stable, default=((0, 0, 0), ""))[1]
-    if current in {"v1.0.0", "v1.0.1"}:
-        # v1.0.0/v1.0.1 are explicitly requested canonical resets after the
-        # mistaken v2.x publication; historical v1.x aliases are not the
-        # active release line for this promotion.
-        return True, current
-    if current_version[0] == 0 and current_version[1] >= 10:
+    if current_version[:2] == (1, 0):
+        # v1.0.x is the canonical release line after the mistaken v2.x
+        # publication. Compare patch releases within this line so an older
+        # workflow cannot roll latest back, while historical aliases do not
+        # block the next canonical patch.
+        stable = [(version, tag) for version, tag in stable if version[:2] == (1, 0)]
+        if not stable:
+            return False, ""
+    elif current_version[0] == 0 and current_version[1] >= 10:
         stable = [(version, tag) for version, tag in stable if not is_legacy_pre_renumber_tag(version)]
         if not stable:
             return False, ""

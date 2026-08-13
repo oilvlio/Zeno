@@ -65,6 +65,14 @@ describe('notification type modal visual contract', () => {
 })
 
 
+describe('region selector layout', () => {
+  it('stays compact and left aligned until its preferred columns need the full available width', () => {
+    expect(baseStyles).toMatch(/\.region-filter-buttons\s*\{[^}]*--selector-option-width: 42px;[^}]*width: min\(100%, calc\(var\(--slider-grid-columns\) \* var\(--selector-option-width\)\)\);[^}]*max-width: 100%;[^}]*\}/)
+    expect(baseStyles).toMatch(/\.sliding-selector\s*\{[^}]*grid-template-columns: repeat\(var\(--slider-grid-columns\), minmax\(0, 1fr\)\);[^}]*\}/)
+    expect(baseStyles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.region-filter-buttons\s*\{[^}]*--selector-option-width: 46px;[^}]*\}/)
+  })
+})
+
 describe('mobile latency target layout', () => {
   it('keeps every latency target fully bordered while overlapping shared dividers', () => {
     expect(styles).toContain('@media (max-width: 767px)')
@@ -559,7 +567,7 @@ describe('state history layout', () => {
     expect(detailStyles).toMatch(/\.detail-fact\s*\{[^}]*border: 0;[^}]*border-radius: 0;[^}]*background: transparent;[^}]*\}/)
     expect(detailStyles).toMatch(/\.detail-fact-strip--server \.detail-fact:nth-child\(n \+ 3\)\s*\{[^}]*border-top: 1px solid/)
     expect(baseStyles).toMatch(/\.sliding-selector\s*\{[^}]*border: var\(--selector-border-width\) solid var\(--border\);[^}]*border-radius: var\(--selector-radius\);[^}]*background: transparent;[^}]*-webkit-tap-highlight-color: transparent;[^}]*\}/)
-    expect(baseStyles).toMatch(/\.sliding-selector::before\s*\{[^}]*top: 0;[^}]*bottom: 0;[^}]*left: var\(--slider-shift\);[^}]*border-radius: var\(--selector-inner-radius\);[^}]*background: var\(--blue\);[^}]*\}/)
+    expect(baseStyles).toMatch(/\.sliding-selector::before\s*\{[^}]*top: var\(--slider-top\);[^}]*left: var\(--slider-left\);[^}]*width: var\(--slider-width\);[^}]*height: var\(--slider-height\);[^}]*border-radius: var\(--selector-inner-radius\);[^}]*background: var\(--blue\);[^}]*\}/)
     expect(baseStyles).not.toMatch(/\.nav-icon-button\.is-solid\s*\{[^}]*border-color:/)
     expect(detailStyles).not.toMatch(/\.detail-top-card \.nav-icon-button\.is-solid\s*\{[^}]*border-color:/)
     expect(styles).toContain('.resource-history-header h3 { margin: 0; color: var(--foreground); font-size: 20px; font-weight: 600; }')
@@ -681,7 +689,7 @@ describe('Kulin-inspired color polish', () => {
     expect(styles).toContain('.resource-card.tone-green')
     expect(styles).toContain('.resource-chart-tooltip')
     expect(styles).toContain('.server-flag__image')
-    expect(styles).toMatch(/\.region-filter-buttons\s*\{[^}]*--selector-border-width: 0px;[^}]*--selector-option-width: 42px;[^}]*width: fit-content;[^}]*grid-template-columns: repeat\(var\(--slider-columns\), var\(--selector-option-width\)\);[^}]*\}/)
+    expect(styles).toMatch(/\.region-filter-buttons\s*\{[^}]*--selector-border-width: 0px;[^}]*--selector-option-width: 42px;[^}]*width: min\(100%, calc\(var\(--slider-grid-columns\) \* var\(--selector-option-width\)\)\);[^}]*max-width: 100%;[^}]*\}/)
     expect(styles).toMatch(/\.region-filter-buttons \.server-flag \{[^}]*font-size: 16px;[^}]*\}/)
     expect(styles).not.toMatch(/\.region-filter-buttons \.server-flag \{[^}]*(?:border|box-shadow|overflow)[^}]*\}/)
     expect(styles).toContain('.latency-chart-tooltip foreignObject')
