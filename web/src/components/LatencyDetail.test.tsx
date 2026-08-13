@@ -118,8 +118,48 @@ describe('LatencyDetail', () => {
     expect(html).toContain('monitor services')
     expect(html).toContain('latency-target-name')
     expect(html).toContain('latency-target-color')
+    expect(html).toContain('data-desktop-corners="top-left top-right bottom-left bottom-right"')
+    expect(html).toContain('data-mobile-corners="top-left top-right bottom-left bottom-right"')
+    expect(html).not.toContain('data-desktop-first-column')
+    expect(html).not.toContain('data-desktop-first-row')
+    expect(html).not.toContain('data-mobile-first-column')
+    expect(html).not.toContain('data-mobile-first-row')
     expect(html).not.toContain('latency-legend')
     expect(html).not.toContain('latency-target-toolbar')
+  })
+
+  it('assigns complete responsive corner metadata for full and incomplete rows', () => {
+    const cases = [
+      { count: 1, desktopFirst: 'top-left top-right bottom-left bottom-right', desktopLast: 'top-left top-right bottom-left bottom-right', mobileFirst: 'top-left top-right bottom-left bottom-right', mobileLast: 'top-left top-right bottom-left bottom-right' },
+      { count: 2, desktopFirst: 'top-left bottom-left', desktopLast: 'top-right bottom-right', mobileFirst: 'top-left bottom-left', mobileLast: 'top-right bottom-right' },
+      { count: 7, desktopFirst: 'top-left bottom-left', desktopLast: 'top-right bottom-right', mobileFirst: 'top-left', mobileLast: 'bottom-left bottom-right' },
+      { count: 8, desktopFirst: 'top-left', desktopLast: 'bottom-left bottom-right', mobileFirst: 'top-left', mobileLast: 'bottom-right' },
+    ]
+
+    for (const testCase of cases) {
+      const html = renderToStaticMarkup(
+        <LatencyDetail
+          node={node}
+          points={Array.from({ length: testCase.count }, (_, index) => ({
+            ts: `2026-07-02T12:${String(index + 1).padStart(2, '0')}:00Z`,
+            targetId: `target-${index}`,
+            targetName: `Target ${index}`,
+            medianMs: 20 + index,
+            avgMs: 21 + index,
+            lossPercent: 0,
+          }))}
+          range="1d"
+          onBack={vi.fn()}
+          onRangeChange={vi.fn()}
+        />,
+      )
+      const buttons = [...html.matchAll(/<button[^>]+data-desktop-corners="([^"]*)"[^>]+data-mobile-corners="([^"]*)"/g)]
+      expect(buttons).toHaveLength(testCase.count)
+      expect(buttons[0]?.[1]).toBe(testCase.desktopFirst)
+      expect(buttons[testCase.count - 1]?.[1]).toBe(testCase.desktopLast)
+      expect(buttons[0]?.[2]).toBe(testCase.mobileFirst)
+      expect(buttons[testCase.count - 1]?.[2]).toBe(testCase.mobileLast)
+    }
   })
 
   it('labels detail CPU cores as physical when the host does not look virtualized', () => {
