@@ -16,6 +16,9 @@ class LatestPromotionTest(unittest.TestCase):
     def test_explicit_v1_bootstrap_reset_promotes_over_historical_aliases(self):
         self.assertEqual(MODULE.decision("v1.0.0", ["v1.0.0", "v1.9.10", "v2.0.0"]), (True, "v1.0.0"))
 
+    def test_explicit_v1_patch_reset_promotes_over_historical_aliases(self):
+        self.assertEqual(MODULE.decision("v1.0.1", ["v1.0.1", "v1.9.10", "v2.0.0"]), (True, "v1.0.1"))
+
     def test_older_workflow_cannot_roll_back_latest(self):
         self.assertEqual(MODULE.decision("v1.9.9", ["v1.9.9", "v2.0.0"]), (False, "v2.0.0"))
 

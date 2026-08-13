@@ -68,10 +68,10 @@ current = parse(current_text)
 tags = subprocess.check_output(["git", "tag", "--list", "v*"], text=True).splitlines()
 prior = [(tag, parse(tag)) for tag in tags if tag != current_text]
 prior = [(tag, parsed) for tag, parsed in prior if parsed is not None]
-if current_text == "v1.0.0":
-    # The owner may intentionally rebuild the bootstrap release after a
-    # mistaken major-version publication. Historical v1.x aliases must not
-    # block that explicitly requested reset.
+if current_text in {"v1.0.0", "v1.0.1"}:
+    # The owner may intentionally rebuild the canonical v1.x release line
+    # after a mistaken major-version publication. Historical v1.x aliases must
+    # not block that explicitly requested reset.
     prior = []
 elif current[0] == 0 and current[1] >= 10:
     # v1.0.0-v1.9.x are protected aliases from the pre-renumber release line.
