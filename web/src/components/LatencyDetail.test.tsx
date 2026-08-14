@@ -118,8 +118,8 @@ describe('LatencyDetail', () => {
     expect(html).toContain('monitor services')
     expect(html).toContain('latency-target-name')
     expect(html).toContain('latency-target-color')
-    expect(html).toContain('data-desktop-corners="top-left top-right bottom-left bottom-right"')
-    expect(html).toContain('data-mobile-corners="top-left top-right bottom-left bottom-right"')
+    expect(html).toContain('data-desktop-corners="top-left bottom-left"')
+    expect(html).toContain('data-mobile-corners="top-left bottom-left"')
     expect(html).not.toContain('data-desktop-first-column')
     expect(html).not.toContain('data-desktop-first-row')
     expect(html).not.toContain('data-mobile-first-column')
@@ -128,12 +128,13 @@ describe('LatencyDetail', () => {
     expect(html).not.toContain('latency-target-toolbar')
   })
 
-  it('assigns complete responsive corner metadata for full and incomplete rows', () => {
+  it('assigns corners only to cells that reach the responsive grid edges', () => {
     const cases = [
-      { count: 1, desktopFirst: 'top-left top-right bottom-left bottom-right', desktopLast: 'top-left top-right bottom-left bottom-right', mobileFirst: 'top-left top-right bottom-left bottom-right', mobileLast: 'top-left top-right bottom-left bottom-right' },
-      { count: 2, desktopFirst: 'top-left bottom-left', desktopLast: 'top-right bottom-right', mobileFirst: 'top-left bottom-left', mobileLast: 'top-right bottom-right' },
-      { count: 7, desktopFirst: 'top-left bottom-left', desktopLast: 'top-right bottom-right', mobileFirst: 'top-left', mobileLast: 'bottom-left bottom-right' },
-      { count: 8, desktopFirst: 'top-left', desktopLast: 'bottom-left bottom-right', mobileFirst: 'top-left', mobileLast: 'bottom-right' },
+      { count: 1, desktopFirst: 'top-left bottom-left', desktopLast: 'top-left bottom-left', mobileFirst: 'top-left bottom-left', mobileLast: 'top-left bottom-left' },
+      { count: 2, desktopFirst: 'top-left bottom-left', desktopLast: '', mobileFirst: 'top-left bottom-left', mobileLast: '' },
+      { count: 7, desktopFirst: 'top-left bottom-left', desktopLast: 'top-right bottom-right', mobileFirst: 'top-left', mobileLast: 'bottom-left' },
+      { count: 8, desktopFirst: 'top-left', desktopLast: 'bottom-left', mobileFirst: 'top-left', mobileLast: '' },
+      { count: 17, desktopFirst: 'top-left', desktopLast: '', mobileFirst: 'top-left', mobileLast: '' },
     ]
 
     for (const testCase of cases) {
