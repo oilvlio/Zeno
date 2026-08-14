@@ -148,7 +148,6 @@ func (s *sqliteAdminAuth) AdminAccountConfigured(ctx context.Context) (bool, err
 // Controller and protect the supplied password; it resets the username to
 // "admin" and revokes every active session in one transaction.
 func (s *sqliteAdminAuth) ResetAdminAccount(ctx context.Context, password string) error {
-	password = strings.TrimSpace(password)
 	if length := len([]rune(password)); length < 8 || length > 128 {
 		return errInvalidAdminPasswordUpdate
 	}
@@ -185,8 +184,6 @@ func (s *sqliteAdminAuth) ResetAdminAccount(ctx context.Context, password string
 
 func (s *sqliteAdminAuth) UpdateAdminAccount(ctx context.Context, username, currentPassword, newPassword, fallbackHash string) (AdminSession, error) {
 	username = strings.TrimSpace(username)
-	currentPassword = strings.TrimSpace(currentPassword)
-	newPassword = strings.TrimSpace(newPassword)
 	if !validAdminUsername(username) || currentPassword == "" {
 		return AdminSession{}, errInvalidAdminPasswordUpdate
 	}
@@ -261,10 +258,13 @@ func (s *sqliteAdminAuth) adminPasswordMatches(ctx context.Context, password, fa
 	if !adminPasswordMatches(storedHash, fallbackHash, password) {
 		return false, nil
 	}
-	if storedHash == "" || strings.HasPrefix(storedHash, "argon2id:") {
+	if storedHash == "" || adminPasswordHashIsArgon2(storedHash) {
 		return true, nil
 	}
-	upgradedHash, err := hashAdminPassword(password)
+	// Legacy formats were always generated from TrimSpace(password). Preserve
+	// that exact credential while migrating it to Argon2id; raw-byte semantics
+	// apply to newly set passwords.
+	upgradedHash, err := hashAdminPassword(strings.TrimSpace(password))
 	if err != nil {
 		return false, err
 	}

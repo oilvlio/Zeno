@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func allowTestTLSServers(t *testing.T) {
@@ -155,5 +156,35 @@ func TestRunHTTPProbePreservesFailureStatusCode(t *testing.T) {
 	}
 	if len(samples) != 1 || samples[0].Success || samples[0].Error != "http_status_404" {
 		t.Fatalf("HTTP failure samples = %+v, want http_status_404", samples)
+	}
+}
+
+func TestRunHTTPProbeCompletesAfterHeadersWithoutWaitingForBody(t *testing.T) {
+	requestCanceled := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		<-request.Context().Done()
+		close(requestCanceled)
+	}))
+	defer server.Close()
+
+	started := time.Now()
+	samples, err := RunHTTPProbe(context.Background(), ProbeTarget{ID: "headers-only", Type: "http_get", Address: server.URL, Count: 1, TimeoutMS: 1000})
+	if err != nil {
+		t.Fatalf("run HTTP probe: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed >= time.Second {
+		t.Fatalf("HTTP probe waited %s for response body, want header-only completion", elapsed)
+	}
+	if len(samples) != 1 || !samples[0].Success {
+		t.Fatalf("header-only HTTP samples = %+v, want success", samples)
+	}
+	select {
+	case <-requestCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("closing the unconsumed response body did not cancel the server request")
 	}
 }

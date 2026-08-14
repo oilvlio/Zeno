@@ -158,6 +158,14 @@ func TestOpenSQLiteStoreMigratesLegacyNotificationDeliveryLeaseColumnsBeforeInde
 		_ = db.Close()
 		t.Fatalf("create legacy notification deliveries table: %v", err)
 	}
+	if _, err := db.Exec(`
+		INSERT INTO notification_deliveries (
+			event_type, channel_id, state, next_attempt_at, created_at, updated_at
+		) VALUES ('node_offline', 'legacy-channel', 'leased', 1, 100, 200)
+	`); err != nil {
+		_ = db.Close()
+		t.Fatalf("insert legacy leased notification delivery: %v", err)
+	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("close legacy sqlite database: %v", err)
 	}
@@ -169,7 +177,7 @@ func TestOpenSQLiteStoreMigratesLegacyNotificationDeliveryLeaseColumnsBeforeInde
 	defer store.Close()
 
 	ctx := context.Background()
-	for _, column := range []string{"lease_until", "claim_token"} {
+	for _, column := range []string{"lease_until", "claim_token", "request_started_at"} {
 		exists, err := store.columnExists(ctx, "notification_deliveries", column)
 		if err != nil {
 			t.Fatalf("inspect migrated %s column: %v", column, err)
@@ -188,6 +196,13 @@ func TestOpenSQLiteStoreMigratesLegacyNotificationDeliveryLeaseColumnsBeforeInde
 	}
 	if indexCount != 1 {
 		t.Fatalf("expected claim index after migration, got %d", indexCount)
+	}
+	var requestStartedAt int64
+	if err := store.db.QueryRowContext(ctx, `SELECT request_started_at FROM notification_deliveries WHERE id = 1`).Scan(&requestStartedAt); err != nil {
+		t.Fatalf("read migrated notification request phase: %v", err)
+	}
+	if requestStartedAt != 200 {
+		t.Fatalf("migrated request_started_at = %d, want conservative legacy timestamp 200", requestStartedAt)
 	}
 }
 

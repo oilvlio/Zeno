@@ -216,7 +216,7 @@ X-Admin-Token: <session-token>
 
 - `tcping`：TCP 连接探测，必须带 `port`。
 - `ping`：ICMP ping，不带 `port`。
-- `http_get`：HTTP/HTTPS GET 探测，不带 `port` 字段。HTTPS 可使用普通主机名；HTTP 只允许 loopback，或“直接 IP + 显式端口”，并拒绝 URL userinfo。初始 URL、每一跳及最终 URL执行同一规则；最多跟随 10 跳，任一 HTTPS→HTTP 降级都会失败，跨 origin 时只保留 `User-Agent`、不转发 Referer/认证或自定义请求头。2xx/3xx 算成功，4xx/5xx 作为失败样本记录 `http_status_<code>`。
+- `http_get`：HTTP/HTTPS GET 探测，不带 `port` 字段。HTTPS 可使用普通主机名；HTTP 只允许 loopback，或“直接 IP + 显式端口”，并拒绝 URL userinfo。初始 URL、每一跳及最终 URL 执行同一规则；最多跟随 10 跳，任一 HTTPS→HTTP 降级都会失败，跨 origin 时只保留 `User-Agent`、不转发 Referer/认证或自定义请求头。探测延迟统计到响应头返回为止，不下载或校验响应体；2xx/3xx 算成功，4xx/5xx 作为失败样本记录 `http_status_<code>`。
 
 Controller 对下发给单个节点的探针配置做资源上限：最多 32 个启用目标；单目标 `count` 为 1–32，`timeout_ms` 为 100–5000，`interval_sec` 为 5–3600；单目标 `count * timeout_ms` 不超过 60000ms 且不超过 `interval_sec`，单节点一轮总预算不超过 120000ms。迁移前遗留的超大配置会在下发/本地 collector 执行前裁剪到这些范围。
 
@@ -365,17 +365,20 @@ Controller 对下发给单个节点的探针配置做资源上限：最多 32 �
     "updated_at": "2026-07-04T12:00:00Z"
   },
   "range": "1d",
-  "points": [
+  "created_at": [1783166400000],
+  "series": [
     {
-      "ts": "2026-07-04T12:00:00Z",
       "node_id": "example-node-a",
       "node_name": "Example Node A",
-      "median_ms": 1.2,
-      "loss_percent": 0
+      "median_ms": [1.2],
+      "avg_ms": [1.3],
+      "loss_percent": [0]
     }
   ]
 }
 ```
+
+历史响应使用紧凑列式格式：`created_at` 是 Unix 毫秒时间数组，`median_ms`、`avg_ms` 与 `loss_percent` 按索引对齐。所有曲线时间轴一致时 `created_at` 位于响应顶层；时间轴不一致时，每个 `series` 项携带自己的 `created_at`。
 
 ### GET /api/public/v1/nodes/{node_id}/latency
 
@@ -395,17 +398,20 @@ range=1h|1d|7d|30d
 {
   "node_id": "example-node-a",
   "range": "1h",
-  "points": [
+  "created_at": [1783041600000],
+  "series": [
     {
-      "ts": "2026-07-03T01:20:00Z",
       "target_id": "google-dns",
       "target_name": "Google DNS",
-      "median_ms": 0.8,
-      "loss_percent": 0
+      "median_ms": [0.8],
+      "avg_ms": [0.9],
+      "loss_percent": [0]
     }
   ]
 }
 ```
+
+该接口采用与服务历史相同的紧凑列式格式；三个指标数组与共享或曲线内的 `created_at` 按索引对齐。
 
 ### GET /api/public/v1/nodes/{node_id}/state
 

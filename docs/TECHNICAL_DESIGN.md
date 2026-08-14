@@ -135,7 +135,7 @@ delta_out = current_out_total - last_out_total
 
 - `tcping`: TCP connect，必须有 port。
 - `ping`: ICMP，不使用 port。
-- `http_get`: HTTP/HTTPS GET，不使用 port；2xx/3xx 成功，4xx/5xx 作为 unhealthy 状态失败。
+- `http_get`: HTTP/HTTPS GET，不使用 port；延迟统计到响应头返回为止，不下载或校验响应体；2xx/3xx 成功，4xx/5xx 作为 unhealthy 状态失败。
 
 不要只存 avg。
 

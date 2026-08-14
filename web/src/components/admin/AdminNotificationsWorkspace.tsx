@@ -3,7 +3,7 @@ import type { AdminAlertRuleUpdateInput, AdminNotificationChannelCreateInput, Ad
 import { runMaybePromise } from '../../lib/maybePromise'
 import type { AdminAlertRule, AdminNode, AdminNotificationChannel } from '../../types'
 import { AdminExpandedCheckList } from './AdminFields'
-import { AdminCredentialField, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions, AdminWorkspaceHeading } from './AdminPrimitives'
+import { AdminCredentialField, AdminDeleteConfirmModal, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions, AdminWorkspaceHeading } from './AdminPrimitives'
 import { formatAlertRuleNote, formatAlertRuleScope, formatRenewalDayOption, normalizeRenewalDays, parseNonNegativeInt, parsePercentage, renewalDayOptions } from './adminOperationalModel'
 import type { AdminNotificationsWorkspaceProps, MaybePromise } from './adminOperationalTypes'
 
@@ -44,34 +44,43 @@ function AdminAlertRulesSection({ rules, nodes, onUpdate }: { rules: AdminAlertR
 }
 
 function AdminAlertRuleList({ rules, onEdit, onUpdate }: { rules: AdminAlertRule[]; onEdit: (rule: AdminAlertRule) => void; onUpdate: (ruleId: string, input: AdminAlertRuleUpdateInput) => MaybePromise }) {
-  const confirmDelete = (rule: AdminAlertRule) => {
-    const ok = typeof window === 'undefined' ? true : window.confirm(`确认删除通知类型「${rule.name}」？`)
-    if (ok) onUpdate(rule.id, { enabled: false })
-  }
+  const [pendingDelete, setPendingDelete] = useState<AdminAlertRule | null>(null)
 
   return (
-    <div className="admin-list admin-alert-rule-list" role="list" aria-label="通知类型列表">
-      <div className="admin-list-head" aria-hidden="true">
-        <span>通知类型</span>
-        <span>状态</span>
-        <span>操作</span>
+    <>
+      <div className="admin-list admin-alert-rule-list" role="list" aria-label="通知类型列表">
+        <div className="admin-list-head" aria-hidden="true">
+          <span>通知类型</span>
+          <span>状态</span>
+          <span>操作</span>
+        </div>
+        {rules.map((rule) => (
+          <article className="admin-list-row" role="listitem" key={rule.id}>
+            <div className="admin-list-main">
+              <strong>{rule.name}</strong>
+              {formatAlertRuleNote(rule) && <small>{formatAlertRuleNote(rule)}</small>}
+            </div>
+            <AdminStatusBadge label={rule.enabled ? '启用中' : '已停用'} status={rule.enabled ? 'online' : 'disabled'} dataLabel="状态" />
+            <AdminRowActions
+              entityLabel="通知类型"
+              name={rule.name}
+              onEdit={() => onEdit(rule)}
+              onDelete={() => setPendingDelete(rule)}
+            />
+          </article>
+        ))}
       </div>
-      {rules.map((rule) => (
-        <article className="admin-list-row" role="listitem" key={rule.id}>
-          <div className="admin-list-main">
-            <strong>{rule.name}</strong>
-            {formatAlertRuleNote(rule) && <small>{formatAlertRuleNote(rule)}</small>}
-          </div>
-          <AdminStatusBadge label={rule.enabled ? '启用中' : '已停用'} status={rule.enabled ? 'online' : 'disabled'} dataLabel="状态" />
-          <AdminRowActions
-            entityLabel="通知类型"
-            name={rule.name}
-            onEdit={() => onEdit(rule)}
-            onDelete={() => confirmDelete(rule)}
-          />
-        </article>
-      ))}
-    </div>
+      {pendingDelete && (
+        <AdminDeleteConfirmModal
+          title="删除通知类型"
+          subjectName={pendingDelete.name}
+          confirmLabel="删除通知类型"
+          hint="删除后可重新添加。"
+          onClose={() => setPendingDelete(null)}
+          onConfirm={() => onUpdate(pendingDelete.id, { enabled: false })}
+        />
+      )}
+    </>
   )
 }
 
@@ -216,13 +225,15 @@ export function AdminNotificationsWorkspace({ channels, rules, nodes, onChannelC
       </div>
 
       {creatingChannel && (
-        <AdminNotificationChannelCreateModal
+        <AdminNotificationChannelModal
+          mode="create"
           onClose={() => setCreatingChannel(false)}
           onCreate={onChannelCreate}
         />
       )}
       {editingChannel && (
-        <AdminNotificationChannelEditModal
+        <AdminNotificationChannelModal
+          mode="edit"
           channel={editingChannel}
           onClose={() => setEditingChannel(null)}
           onTest={onChannelTest}
@@ -233,35 +244,43 @@ export function AdminNotificationsWorkspace({ channels, rules, nodes, onChannelC
   )
 }
 
-function AdminNotificationChannelList({ channels, onDelete, onEdit }: { channels: AdminNotificationChannel[]; onDelete: (channelId: string) => void; onEdit: (channel: AdminNotificationChannel) => void }) {
-  const confirmDelete = (channel: AdminNotificationChannel) => {
-    const ok = typeof window === 'undefined' ? true : window.confirm(`确认删除通知渠道「${channel.name}」？`)
-    if (ok) onDelete(channel.id)
-  }
+function AdminNotificationChannelList({ channels, onDelete, onEdit }: { channels: AdminNotificationChannel[]; onDelete: (channelId: string) => MaybePromise; onEdit: (channel: AdminNotificationChannel) => void }) {
+  const [pendingDelete, setPendingDelete] = useState<AdminNotificationChannel | null>(null)
 
   return (
-    <div className="admin-list admin-notification-list" role="list" aria-label="通知渠道列表">
-      <div className="admin-list-head" aria-hidden="true">
-        <span>渠道</span>
-        <span>状态</span>
-        <span>操作</span>
+    <>
+      <div className="admin-list admin-notification-list" role="list" aria-label="通知渠道列表">
+        <div className="admin-list-head" aria-hidden="true">
+          <span>渠道</span>
+          <span>状态</span>
+          <span>操作</span>
+        </div>
+        {channels.map((channel) => (
+          <article className="admin-list-row" role="listitem" key={channel.id}>
+            <div className="admin-list-main">
+              <strong>{channel.name}</strong>
+            </div>
+            <AdminStatusBadge label={channel.enabled ? '启用中' : '已停用'} status={channel.enabled ? 'online' : 'disabled'} dataLabel="状态" />
+            <AdminRowActions
+              entityLabel="通知渠道"
+              actionEntityLabel="渠道"
+              name={channel.name}
+              onEdit={() => onEdit(channel)}
+              onDelete={() => setPendingDelete(channel)}
+            />
+          </article>
+        ))}
       </div>
-      {channels.map((channel) => (
-        <article className="admin-list-row" role="listitem" key={channel.id}>
-          <div className="admin-list-main">
-            <strong>{channel.name}</strong>
-          </div>
-          <AdminStatusBadge label={channel.enabled ? '启用中' : '已停用'} status={channel.enabled ? 'online' : 'disabled'} dataLabel="状态" />
-          <AdminRowActions
-            entityLabel="通知渠道"
-            actionEntityLabel="渠道"
-            name={channel.name}
-            onEdit={() => onEdit(channel)}
-            onDelete={() => confirmDelete(channel)}
-          />
-        </article>
-      ))}
-    </div>
+      {pendingDelete && (
+        <AdminDeleteConfirmModal
+          title="删除通知渠道"
+          subjectName={pendingDelete.name}
+          confirmLabel="删除通知渠道"
+          onClose={() => setPendingDelete(null)}
+          onConfirm={() => onDelete(pendingDelete.id)}
+        />
+      )}
+    </>
   )
 }
 
@@ -269,9 +288,15 @@ function AdminStatusBadge({ label, status, dataLabel }: { label: string; status:
   return <span data-label={dataLabel} className={`admin-node-status admin-status-indicator status-${status}`}><i className="admin-status-dot" aria-hidden="true" />{label}</span>
 }
 
-function AdminNotificationChannelEditModal({ channel, onUpdate, onTest, onClose }: { channel: AdminNotificationChannel; onUpdate: (channelId: string, input: AdminNotificationChannelUpdateInput) => MaybePromise; onTest: (channelId: string) => void; onClose: () => void }) {
+type AdminNotificationChannelModalProps =
+  | { mode: 'create'; onCreate: (input: AdminNotificationChannelCreateInput) => MaybePromise; onClose: () => void }
+  | { mode: 'edit'; channel: AdminNotificationChannel; onUpdate: (channelId: string, input: AdminNotificationChannelUpdateInput) => MaybePromise; onTest: (channelId: string) => void; onClose: () => void }
+
+function AdminNotificationChannelModal(props: AdminNotificationChannelModalProps) {
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const editing = props.mode === 'edit'
+  const channel = editing ? props.channel : null
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (submitting) return
@@ -279,104 +304,46 @@ function AdminNotificationChannelEditModal({ channel, onUpdate, onTest, onClose 
     const name = String(formData.get('channel-name') ?? '').trim()
     const destination = String(formData.get('channel-destination') ?? '').trim()
     const credential = String(formData.get('channel-credential') ?? '').trim()
-    if (name === '') return
+    if (name === '' || (!editing && (destination === '' || credential === ''))) return
     setSubmitting(true)
     setFormError(null)
-    runMaybePromise(() => onUpdate(channel.id, {
-      name,
-      ...(destination !== '' ? { destination } : {}),
-      ...(credential !== '' ? { credential } : {}),
-      enabled: formData.get('channel-enabled') === 'on',
-    }))
-      .then(() => onClose())
-      .catch((error: unknown) => setFormError(error instanceof Error ? error.message : '保存失败'))
+    const enabled = formData.get('channel-enabled') === 'on'
+    const submit = props.mode === 'edit'
+      ? () => props.onUpdate(props.channel.id, { name, ...(destination !== '' ? { destination } : {}), ...(credential !== '' ? { credential } : {}), enabled })
+      : () => props.onCreate({ name, destination, credential, enabled })
+    runMaybePromise(submit)
+      .then(props.onClose)
+      .catch((error: unknown) => setFormError(error instanceof Error ? error.message : (editing ? '保存失败' : '添加失败')))
       .finally(() => setSubmitting(false))
   }
 
   return (
-    <AdminModal title="编辑通知渠道" className="admin-notification-channel-modal" closeDisabled={submitting} onClose={onClose}>
-      <form className="admin-notification-edit-form admin-node-edit-form is-sectioned" aria-label="编辑通知渠道" aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
+    <AdminModal title={editing ? '编辑通知渠道' : '添加通知渠道'} className="admin-notification-channel-modal" closeDisabled={submitting} onClose={props.onClose}>
+      <form className={`admin-notification-${editing ? 'edit' : 'create'}-form admin-node-edit-form is-sectioned`} aria-label={editing ? '编辑通知渠道' : '添加通知渠道'} aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
         <AdminFormSection title="渠道配置">
           <div className="admin-form-grid admin-channel-form-grid">
             <label>
               <span>渠道名称</span>
-              <input name="channel-name" autoComplete="off" defaultValue={channel.name} />
+              <input name="channel-name" autoComplete="off" defaultValue={channel?.name} placeholder={editing ? undefined : 'Zeno Telegram'} />
             </label>
             <label>
               <span>Telegram Chat ID</span>
-              <input name="channel-destination" autoComplete="off" defaultValue={channel.destination} />
+              <input name="channel-destination" autoComplete="off" defaultValue={channel?.destination} placeholder={editing ? undefined : '请输入 Telegram Chat ID'} />
             </label>
-            <AdminCredentialField
-              name="channel-credential"
-              placeholder={channel.credentialSet ? '留空则保留已保存 Token' : '请输入 Telegram Bot Token'}
-            />
+            <AdminCredentialField name="channel-credential" placeholder={channel?.credentialSet ? '留空则保留已保存 Token' : '请输入 Telegram Bot Token'} />
             <label className="admin-node-toggle admin-channel-enabled-toggle">
-              <input name="channel-enabled" type="checkbox" defaultChecked={channel.enabled} />
-              <span>启用渠道</span>
+              <input name="channel-enabled" type="checkbox" defaultChecked={channel?.enabled ?? true} />
+              <span>{editing ? '启用渠道' : '创建后启用渠道'}</span>
             </label>
           </div>
         </AdminFormSection>
         <AdminActionFooter error={formError}>
-          <button type="button" onClick={() => onTest(channel.id)}>测试发送</button>
+          {props.mode === 'edit' && <button type="button" onClick={() => props.onTest(props.channel.id)}>测试发送</button>}
           <button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存通知渠道'}</button>
         </AdminActionFooter>
       </form>
     </AdminModal>
   )
 }
-
-function AdminNotificationChannelCreateModal({ onCreate, onClose }: { onCreate: (input: AdminNotificationChannelCreateInput) => MaybePromise; onClose: () => void }) {
-  const [submitting, setSubmitting] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (submitting) return
-    const formData = new FormData(event.currentTarget)
-    const name = String(formData.get('new-channel-name') ?? '').trim()
-    const destination = String(formData.get('new-channel-destination') ?? '').trim()
-    const credential = String(formData.get('new-channel-credential') ?? '').trim()
-    if (name === '' || destination === '' || credential === '') return
-    setSubmitting(true)
-    setFormError(null)
-    runMaybePromise(() => onCreate({
-      name,
-      destination,
-      credential,
-      enabled: formData.get('new-channel-enabled') === 'on',
-    }))
-      .then(() => onClose())
-      .catch((error: unknown) => setFormError(error instanceof Error ? error.message : '添加失败'))
-      .finally(() => setSubmitting(false))
-  }
-
-  return (
-    <AdminModal title="添加通知渠道" className="admin-notification-channel-modal" closeDisabled={submitting} onClose={onClose}>
-      <form className="admin-notification-create-form admin-node-edit-form is-sectioned" aria-label="添加通知渠道" aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
-        <AdminFormSection title="渠道配置">
-          <div className="admin-form-grid admin-channel-form-grid">
-            <label>
-              <span>渠道名称</span>
-              <input name="new-channel-name" autoComplete="off" placeholder="Zeno Telegram" />
-            </label>
-            <label>
-              <span>Telegram Chat ID</span>
-              <input name="new-channel-destination" autoComplete="off" placeholder="请输入 Telegram Chat ID" />
-            </label>
-            <AdminCredentialField name="new-channel-credential" placeholder="请输入 Telegram Bot Token" />
-            <label className="admin-node-toggle admin-channel-enabled-toggle">
-              <input name="new-channel-enabled" type="checkbox" defaultChecked />
-              <span>创建后启用渠道</span>
-            </label>
-          </div>
-        </AdminFormSection>
-        <AdminActionFooter error={formError}>
-          <button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存通知渠道'}</button>
-        </AdminActionFooter>
-      </form>
-    </AdminModal>
-  )
-}
-
-
 
 export default AdminNotificationsWorkspace

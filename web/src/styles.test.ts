@@ -62,6 +62,15 @@ describe('notification type modal visual contract', () => {
     expect(adminNotificationsSource).not.toContain('编辑通知类型 ·')
     expect(adminStyles).toMatch(/\.admin-modal\.admin-notification-channel-modal,\s*\.admin-modal\.admin-alert-rule-modal\s*\{[^}]*height: auto;[^}]*min-height: 0;[^}]*max-height: calc\(100dvh - 16px\);[^}]*\}/)
   })
+
+  it('routes notification deletions through the shared async error-aware modal', () => {
+    expect(adminNotificationsSource).not.toContain('window.confirm')
+    expect(adminNotificationsSource).toContain('title="删除通知类型"')
+    expect(adminNotificationsSource).toContain('hint="删除后可重新添加。"')
+    expect(adminNotificationsSource).toContain('onConfirm={() => onUpdate(pendingDelete.id, { enabled: false })}')
+    expect(adminNotificationsSource).toContain('title="删除通知渠道"')
+    expect(adminNotificationsSource).toContain('onConfirm={() => onDelete(pendingDelete.id)}')
+  })
 })
 
 

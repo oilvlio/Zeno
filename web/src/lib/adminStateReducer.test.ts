@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { adminStateReducer, type AdminStateAction } from './adminStateReducer'
-import { alertRules, backupNode, exampleNodeANode, exampleNodeATarget, pingTarget, telegramChannel } from '../components/admin/adminTestFixtures'
+import { alertRules, backupNode, exampleNodeANode, exampleNodeATarget, pingTarget, telegramChannel } from '../../test/fixtures/adminTestFixtures'
 import type { AdminLoadState } from './adminModel'
 
 function readyState(): Extract<AdminLoadState, { kind: 'ready' }> {

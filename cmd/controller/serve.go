@@ -52,6 +52,9 @@ func startLocalProbeCollector(runtime *controllerRuntime, options *controllerOpt
 	if runtime.Store == nil {
 		return nil, errors.New("-collect-local requires -db")
 	}
+	if err := validateLocalProbeInterval(options.probeInterval); err != nil {
+		return nil, err
+	}
 	collector := api.NewLocalProbeCollector(runtime.Store, api.LocalProbeCollectorOptions{NodeID: options.nodeID})
 
 	var waitGroup sync.WaitGroup
@@ -89,6 +92,13 @@ func startLocalProbeCollector(runtime *controllerRuntime, options *controllerOpt
 			log.Printf("controller-local probe collector cleanup timed out")
 		}
 	}, nil
+}
+
+func validateLocalProbeInterval(interval time.Duration) error {
+	if interval <= 0 {
+		return errors.New("-probe-interval must be greater than zero")
+	}
+	return nil
 }
 
 // logStartupSummary records the optional subsystems that are active, so a

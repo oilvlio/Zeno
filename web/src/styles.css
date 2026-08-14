@@ -21,6 +21,9 @@
   --metric-shadow: light-dark(rgba(37, 99, 235, 0.12), rgba(14, 165, 233, 0.1));
   --green: #10b981;
   --blue: #2563eb;
+  --control-selected-border: var(--blue);
+  --control-selected-background: color-mix(in srgb, var(--blue) 12%, transparent);
+  --control-selected-foreground: var(--blue);
   --red: #f43f5e;
   --purple: #8b5cf6;
   --orange: #f97316;
@@ -646,9 +649,9 @@ svg { display: block; }
   transform: none;
 }
 .home-currency-popover button[data-active="true"] {
-  border-color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 12%, transparent);
-  color: var(--blue);
+  border-color: var(--control-selected-border);
+  background: var(--control-selected-background);
+  color: var(--control-selected-foreground);
   box-shadow: none;
 }
 .home-currency-option__name {

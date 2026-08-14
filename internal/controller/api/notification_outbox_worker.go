@@ -87,18 +87,25 @@ func (h *handler) dispatchPendingNotificationDeliveries(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			var sendErr error
 			if delivery.Channel.Credential == "" || delivery.Channel.Destination == "" {
 				sendErr = context.Canceled
 			} else {
+				// Persist the handoff boundary before invoking the sender. A crash while
+				// the row is merely claimed is safe to retry; after this point the
+				// process may have written the request and must suppress an automatic
+				// duplicate when the outcome cannot be observed.
+				if err := store.MarkNotificationDeliveryRequestStarted(ctx, delivery, time.Now().UTC()); err != nil {
+					log.Printf("notification outbox start marker failed delivery_id=%s event_id=%s event_type=%s node_id=%s channel_id=%s: %v", notificationDeliveryStableID(delivery), notificationEventStableID(delivery.Event), delivery.Event.EventType, delivery.Event.NodeID, delivery.Channel.ID, err)
+					return
+				}
+				sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 				sendErr = h.notificationSender.Send(sendCtx, delivery.Channel, delivery.Event)
+				cancel()
 			}
-			cancel()
-			// Recording the outcome is the acknowledgement boundary. Delivery is
-			// intentionally at-least-once: a process crash after the remote accepted
-			// the stable event_id but before this update can cause a retry. Receivers
-			// should deduplicate on event_id when their protocol supports it.
+			// Recording the outcome is the acknowledgement boundary. A crash after
+			// request start leaves the delivery for manual review because Telegram has
+			// no idempotency key and may already have accepted the stable event_id.
 			if err := store.RecordNotificationDeliveryAttempt(ctx, delivery, sendErr, time.Now().UTC()); err != nil {
 				log.Printf("notification outbox update failed delivery_id=%s event_id=%s event_type=%s node_id=%s channel_id=%s: %v", notificationDeliveryStableID(delivery), notificationEventStableID(delivery.Event), delivery.Event.EventType, delivery.Event.NodeID, delivery.Channel.ID, err)
 				// Do not tight-loop a delivery whose acknowledgement failed. Its lease

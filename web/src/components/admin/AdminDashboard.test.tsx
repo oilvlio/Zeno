@@ -11,7 +11,7 @@ import { AdminNodeWorkspace } from './AdminNodeWorkspace'
 import { AdminNotificationsWorkspace } from './AdminNotificationsWorkspace'
 import { AdminTargetWorkspace } from './AdminTargetWorkspace'
 import { AdminCredentialField, AdminDeleteConfirmModal } from './AdminPrimitives'
-import { alertRules, backupNode, exampleNodeANode, exampleNodeATarget, httpTarget, pingTarget, settings, telegramChannel } from './adminTestFixtures'
+import { alertRules, backupNode, exampleNodeANode, exampleNodeATarget, httpTarget, pingTarget, settings, telegramChannel } from '../../../test/fixtures/adminTestFixtures'
 
 describe('remoteInsecureAgentControllerURL', () => {
   it('only marks non-loopback HTTP origins as plaintext remote transport', () => {

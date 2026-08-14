@@ -67,6 +67,15 @@ func TestReadyEndpointChecksSQLiteStore(t *testing.T) {
 	}
 }
 
+func TestReadyEndpointRejectsMissingStore(t *testing.T) {
+	handler := NewHandler()
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("missing-store readiness status = %d, want 503; body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestSecurityHeadersAndAdminNoStore(t *testing.T) {
 	handler := NewHandler()
 	recorder := httptest.NewRecorder()
@@ -128,7 +137,7 @@ func TestCredentialedPublicResponseIsNotCacheable(t *testing.T) {
 }
 
 func TestSummaryEndpointReturnsMockHomeCardsWithoutSecrets(t *testing.T) {
-	handler := NewHandler()
+	handler := newMockHandler()
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/public/v1/summary", nil)
 
@@ -534,7 +543,7 @@ func TestLatencyWebSocketsPublishAgentProbeResults(t *testing.T) {
 }
 
 func TestServiceLatencyEndpointReturnsNodeSeries(t *testing.T) {
-	handler := NewHandler()
+	handler := newMockHandler()
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/public/v1/services/google/latency?range=1d", nil)
 
@@ -562,7 +571,7 @@ func TestServiceLatencyEndpointReturnsNodeSeries(t *testing.T) {
 }
 
 func TestNodeLatencyEndpointReturnsKulinStyleMonitorTargets(t *testing.T) {
-	handler := NewHandler()
+	handler := newMockHandler()
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/public/v1/nodes/example-harbor/latency?range=1d", nil)
 
@@ -643,7 +652,7 @@ func TestNodeStateEndpointUsesKulinHistoricalWindows(t *testing.T) {
 }
 
 func TestNodeLatencyEndpointPreservesLossOnlyPointsAsNullLatency(t *testing.T) {
-	handler := NewHandler()
+	handler := newMockHandler()
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/public/v1/nodes/example-node-a/latency?range=1h", nil)
 
@@ -681,7 +690,7 @@ func TestNodeLatencyEndpointPreservesLossOnlyPointsAsNullLatency(t *testing.T) {
 func requestLatency(t *testing.T, path string) LatencyResponse {
 	t.Helper()
 	const adminToken = "history-test-admin"
-	handler := NewHandler(HandlerOptions{AdminPasswordHash: testAdminPasswordHash(adminToken)})
+	handler := newMockHandler(HandlerOptions{AdminPasswordHash: testAdminPasswordHash(adminToken)})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, path, nil)
 	if strings.Contains(path, "range=7d") || strings.Contains(path, "range=30d") {
@@ -702,7 +711,7 @@ func requestLatency(t *testing.T, path string) LatencyResponse {
 func requestState(t *testing.T, path string) StateResponse {
 	t.Helper()
 	const adminToken = "history-test-admin"
-	handler := NewHandler(HandlerOptions{AdminPasswordHash: testAdminPasswordHash(adminToken)})
+	handler := newMockHandler(HandlerOptions{AdminPasswordHash: testAdminPasswordHash(adminToken)})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, path, nil)
 	if strings.Contains(path, "range=7d") || strings.Contains(path, "range=30d") {

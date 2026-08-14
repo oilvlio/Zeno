@@ -1,5 +1,6 @@
-import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useDismissibleAnchoredPopover } from '../../hooks/useDismissibleAnchoredPopover'
 import type { AdminNodeInstallCommand } from '../../types'
 import { OverlaySurface } from '../OverlaySurface'
 import { calculateAnchoredPopoverStyle } from './AdminFields'
@@ -112,6 +113,7 @@ export function AdminInstallCommand({ nodeId, initialMessage, blocked = false, o
   const [installPlatformPickerOpen, setInstallPlatformPickerOpen] = useState(false)
   const installCopyButtonRef = useRef<HTMLButtonElement>(null)
   const installPlatformPopoverRef = useRef<HTMLDivElement>(null)
+  const dismissInstallPlatformPicker = useCallback(() => setInstallPlatformPickerOpen(false), [])
   const requestSequenceRef = useRef(0)
   const copySequenceRef = useRef(0)
   const activeNodeIdRef = useRef(nodeId)
@@ -121,6 +123,7 @@ export function AdminInstallCommand({ nodeId, initialMessage, blocked = false, o
 
   const currentInstallCommandState: InstallCommandState = installCommandNodeId === nodeId ? installCommandState : { kind: 'idle' }
   const installPlatformPickerVisible = installPlatformPickerOpen && !blocked && currentInstallCommandState.kind === 'ready'
+  useDismissibleAnchoredPopover(installPlatformPickerVisible, installCopyButtonRef, installPlatformPopoverRef, dismissInstallPlatformPicker)
   const installPlatformMenuStyle = useInstallPlatformMenuPosition(installPlatformPickerVisible, installCopyButtonRef)
 
   useEffect(() => {
@@ -143,24 +146,6 @@ export function AdminInstallCommand({ nodeId, initialMessage, blocked = false, o
       setInstallPlatformPickerOpen(false)
     }
   }, [blocked])
-
-  useEffect(() => {
-    if (!installPlatformPickerVisible) return undefined
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null
-      if (target && (installCopyButtonRef.current?.contains(target) || installPlatformPopoverRef.current?.contains(target))) return
-      setInstallPlatformPickerOpen(false)
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setInstallPlatformPickerOpen(false)
-    }
-    document.addEventListener('pointerdown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [installPlatformPickerVisible])
 
   const requestInstallCommand = (openPickerAfterGenerate = false) => {
     if (blocked) return

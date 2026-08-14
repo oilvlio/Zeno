@@ -1,3 +1,5 @@
+name: zeno
+
 services:
   zeno:
     image: ${ZENO_IMAGE:-ghcr.io/shui1iao/zeno:latest}

@@ -7,7 +7,7 @@ export interface AdminMutationLease<TIdentity> {
 
 export interface AdminMutationCoordinator<TIdentity> {
   begin: (identity: TIdentity) => AdminMutationLease<TIdentity> | null
-  beginSessionTransition: () => void
+  beginSessionTransition: (identity?: TIdentity) => boolean
   endSessionTransition: () => void
 }
 
@@ -35,9 +35,11 @@ export function createAdminMutationCoordinator<TIdentity>(isIdentityCurrent: (id
         },
       }
     },
-    beginSessionTransition: () => {
+    beginSessionTransition: (identity) => {
+      if (identity !== undefined && !isIdentityCurrent(identity)) return false
       sessionTransition = true
       for (const controller of activeControllers) controller.abort()
+      return true
     },
     endSessionTransition: () => {
       sessionTransition = false

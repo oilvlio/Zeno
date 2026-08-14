@@ -760,6 +760,7 @@ class InstallSafetyTest(unittest.TestCase):
         compose = COMPOSE_YML.read_text()
         script = INSTALL_SH.read_text()
         for text in (compose, script):
+            self.assertIn('name: zeno', text)
             self.assertIn('read_only: true', text)
             self.assertIn('cap_drop:', text)
             self.assertIn('ALL', text)

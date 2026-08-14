@@ -108,7 +108,7 @@ func NewHandler(options ...HandlerOptions) http.Handler {
 	}
 	store := opts.Store
 	if store == nil {
-		store = mockStore{}
+		store = unconfiguredStore{}
 	}
 	backgroundParent := opts.BackgroundContext
 	if backgroundParent == nil {

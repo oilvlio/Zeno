@@ -16,7 +16,7 @@ const defaultAppearancePreset: AppearanceValues = {
 
 export const defaultSettings: AdminSettings = {
   siteTitle: 'Zeno',
-  logoUrl: 'https://cdn.jsdelivr.net/gh/shui1iao/Fly@main/ID-128.webp',
+  logoUrl: '/assets/logo/id.png',
   theme: 'system',
   agentControllerUrl: '',
   backgroundUrl: '',
@@ -44,8 +44,6 @@ export const appearancePresetOptions: Array<{ value: AppearancePreset; label: st
   { value: 'default', label: '默认主题' },
   { value: 'gaussian_blur', label: '高斯模糊主题' },
 ]
-
-export const fallbackLogoUrl = 'https://cdn.jsdelivr.net/gh/shui1iao/Fly@main/ID-128.png'
 
 function backgroundImageValue(url: string): string {
   return `url("${url.replaceAll('"', '%22')}")`

@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { DashboardRouteState, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, documentBrandingForSettings, filterHomeNodesByRegion, homeMonthlyCostForNodes, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, preloadAdminRoute, preloadNodeDetailRoute, shellStyleForSettings, shouldPreloadAdminRoute, shouldPreloadNodeDetailRoute, shouldRefreshHomeRealtimeSnapshot } from './App'
 import type { HomeCardNode } from './types'
-import { settings } from './components/admin/adminTestFixtures'
+import { settings } from '../test/fixtures/adminTestFixtures'
 
 const overviewProps = {
   totalCount: 11,

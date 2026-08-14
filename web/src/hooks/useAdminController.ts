@@ -57,7 +57,7 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
   }, [])
 
   const clearAdminSession = (identity?: AdminTokenIdentity): boolean => {
-    adminMutationCoordinatorRef.current.beginSessionTransition()
+    if (!adminMutationCoordinatorRef.current.beginSessionTransition(identity)) return false
     if (identity) {
       if (!clearStoredAdminTokenIfCurrent(identity)) {
         adminMutationCoordinatorRef.current.endSessionTransition()
@@ -148,11 +148,10 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
 
   const submitAdminLogin = (username: string, password: string) => {
     const trimmedUsername = username.trim()
-    const trimmedPassword = password.trim()
-    if (trimmedUsername === '' || trimmedPassword === '') return
+    if (trimmedUsername === '' || password === '') return
     const probe = ++adminSessionProbeRef.current
     setAdminAuthState({ kind: 'loading' })
-    loginAdmin(trimmedUsername, trimmedPassword)
+    loginAdmin(trimmedUsername, password)
       .then((session) => {
         if (probe !== adminSessionProbeRef.current) return
         rememberAdminCookieSessionProbe(true)

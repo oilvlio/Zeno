@@ -13,6 +13,8 @@ describe('appearance presets', () => {
       backgroundOverlay: 0,
     })
     expect(defaultSettings).toMatchObject(appearancePresets.default)
+    expect(defaultSettings.logoUrl).toBe('/assets/logo/id.png')
+    expect(JSON.stringify(defaultSettings)).not.toContain('cdn.jsdelivr.net')
   })
 
   it('keeps the Gaussian theme aligned with the current interface geometry and accent', () => {

@@ -1,4 +1,4 @@
-import type { AdminAlertRule, AdminNode, AdminNotificationChannel, AdminProbeTarget, AdminSettings } from '../../types'
+import type { AdminAlertRule, AdminNode, AdminNotificationChannel, AdminProbeTarget, AdminSettings } from '../../src/types'
 
 export const exampleNodeANode: AdminNode = {
   id: 'example-node-a',

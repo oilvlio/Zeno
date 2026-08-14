@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -38,6 +39,9 @@ type controllerRuntime struct {
 }
 
 func buildController(config handlerConfig) (*controllerRuntime, error) {
+	if strings.TrimSpace(config.DBPath) == "" {
+		return nil, errors.New("-db is required")
+	}
 	trustedProxies, err := api.ParseTrustedProxies(config.TrustedProxies)
 	if err != nil {
 		return nil, fmt.Errorf("parse ZENO_TRUSTED_PROXIES: %w", err)

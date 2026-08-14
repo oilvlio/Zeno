@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { defaultSettings, fallbackLogoUrl, resolvedTheme, themeOptions } from '../lib/appearance'
+import { defaultSettings, resolvedTheme, themeOptions } from '../lib/appearance'
 import type { AdminSettings, AdminTheme } from '../types'
 import { OverlaySurface } from './OverlaySurface'
 
@@ -56,7 +56,6 @@ function BrandLogo({ logoUrl, siteTitle }: { logoUrl?: string; siteTitle?: strin
       alt={`${siteTitle || 'Zeno'} logo`}
       onError={() => {
         if (currentSource !== defaultSettings.logoUrl) setCurrentSource(defaultSettings.logoUrl)
-        else if (currentSource !== fallbackLogoUrl) setCurrentSource(fallbackLogoUrl)
         else setShowLetterFallback(true)
       }}
     />

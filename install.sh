@@ -1132,6 +1132,8 @@ EOF_ENV
 write_compose_file() {
   local dir="$1"
   cat > "$dir/docker-compose.yml" <<'EOF_COMPOSE'
+name: zeno
+
 services:
   zeno:
     image: ${ZENO_IMAGE:?ZENO_IMAGE must be an explicit tag or digest}

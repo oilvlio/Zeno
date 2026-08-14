@@ -11,7 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func TestLiveDetailInitialPayloadMatchesV191Bytes(t *testing.T) {
+func TestLiveDetailInitialPayloadMatchesCompactContractBytes(t *testing.T) {
 	tests := []struct {
 		name       string
 		path       string
@@ -20,8 +20,8 @@ func TestLiveDetailInitialPayloadMatchesV191Bytes(t *testing.T) {
 		handle     func(*handler, http.ResponseWriter, *http.Request)
 	}{
 		{name: "node-state", path: "/api/public/v1/nodes/example-node-a/state/ws?range=1d", wantBytes: 468859, wantSHA256: "e9b01e10276ba317d02db5f4f230fc66fe460dfa3995952c6e73ca695eb9998b", handle: (*handler).handlePublicNodeResource},
-		{name: "node-latency", path: "/api/public/v1/nodes/example-node-a/latency/ws?range=1h", wantBytes: 4012, wantSHA256: "4cc415dd224a5ad71776e1f6a435874067ad19ba05d8a81de24f7a32d11baecb", handle: (*handler).handlePublicNodeResource},
-		{name: "service-latency", path: "/api/public/v1/services/google/latency/ws?range=1h", wantBytes: 3363, wantSHA256: "dcf481720a46f9fe5e6ab61bf90d307b0148c3b85f131f64f4b021ac56413839", handle: (*handler).handlePublicServiceResource},
+		{name: "node-latency", path: "/api/public/v1/nodes/example-node-a/latency/ws?range=1h", wantBytes: 5621, wantSHA256: "6bf6802b92ea41d5e13e28207a5d52efc34461c8ee1f7d65f17629624078c63c", handle: (*handler).handlePublicNodeResource},
+		{name: "service-latency", path: "/api/public/v1/services/google/latency/ws?range=1h", wantBytes: 4549, wantSHA256: "cc109d49dd90367b15d1b46f87ec1acc07892e984ab2670209a43037efdab0d2", handle: (*handler).handlePublicServiceResource},
 	}
 
 	for _, test := range tests {

@@ -46,7 +46,7 @@ func parseControllerOptions() *controllerOptions {
 
 	flag.StringVar(&options.addr, "addr", "127.0.0.1:18980", "controller listen address")
 	flag.StringVar(&options.webDir, "web-dir", "", "optional built web dashboard directory")
-	flag.StringVar(&options.dbPath, "db", "", "optional SQLite database path for real controller data")
+	flag.StringVar(&options.dbPath, "db", "", "required SQLite database path")
 	flag.BoolVar(&options.seedPreview, "seed-preview", false, "seed the Example Node A preview node and TCP probe targets into SQLite; requires -db")
 
 	flag.BoolVar(&options.collectLocal, "collect-local", false, "run a controller-local TCP probe collector for preview real latency data; requires -db")

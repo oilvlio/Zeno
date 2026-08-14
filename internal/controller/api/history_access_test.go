@@ -11,7 +11,7 @@ import (
 
 func TestExtendedHistoryRequiresAdminToken(t *testing.T) {
 	const adminToken = "history-admin-token"
-	handler := NewHandler(HandlerOptions{AdminPasswordHash: testAdminPasswordHash(adminToken)})
+	handler := newMockHandler(HandlerOptions{AdminPasswordHash: testAdminPasswordHash(adminToken)})
 	paths := []string{
 		"/api/public/v1/nodes/example-node-a/latency?range=7d",
 		"/api/public/v1/nodes/example-node-a/state?range=30d",

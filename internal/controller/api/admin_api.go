@@ -239,6 +239,12 @@ func (h *handler) handleAdminAccount(w http.ResponseWriter, r *http.Request) {
 		if !decodeJSONBody(w, r, &request, adminJSONBodyLimit, true) {
 			return
 		}
+		releaseArgon2, admitted := reserveAdminArgon2Request()
+		if !admitted {
+			writeError(w, http.StatusTooManyRequests, "too many attempts")
+			return
+		}
+		defer releaseArgon2()
 		session, err := authStore.UpdateAdminAccount(r.Context(), request.Username, request.CurrentPassword, request.NewPassword, h.adminPasswordHash)
 		if err != nil {
 			writeAdminError(w, err)

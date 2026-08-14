@@ -21,9 +21,9 @@ export default function AdminAccountSection({ account, onUpdate, onLogout }: Adm
     if (submitting) return
     const formData = new FormData(event.currentTarget)
     const username = String(formData.get('account-username') ?? '').trim()
-    const currentPassword = String(formData.get('current-password') ?? '').trim()
-    const newPassword = String(formData.get('new-password') ?? '').trim()
-    const confirmPassword = String(formData.get('confirm-password') ?? '').trim()
+    const currentPassword = String(formData.get('current-password') ?? '')
+    const newPassword = String(formData.get('new-password') ?? '')
+    const confirmPassword = String(formData.get('confirm-password') ?? '')
     if (!validAdminAccountUsername(username)) {
       setMessage({ kind: 'error', text: '账号只能使用 3-64 位字母、数字、点、短横线或下划线。' })
       return

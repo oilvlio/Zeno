@@ -12,6 +12,28 @@ semver_re='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|
 version=$(tr -d '\r\n' < VERSION)
 [[ "$version" == "$tag" ]] || { echo "VERSION ($version) does not match tag ($tag)" >&2; exit 1; }
 
+if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  python3 - "$version" docs/COMPATIBILITY.md <<'PY'
+import pathlib
+import sys
+
+version = sys.argv[1]
+rows = [
+    [cell.strip() for cell in line.split("|")[1:-1]]
+    for line in pathlib.Path(sys.argv[2]).read_text(encoding="utf-8").splitlines()
+    if line.startswith("|")
+]
+chinese = [row for row in rows if len(row) >= 4 and "当前稳定组合" in row[3]]
+english = [row for row in rows if len(row) >= 4 and "Current stable combination" in row[3]]
+if len(chinese) != 1 or len(english) != 1:
+    raise SystemExit("COMPATIBILITY.md must contain exactly one current stable row in each language")
+if chinese[0][0] != version or english[0][0] != version:
+    raise SystemExit(f"COMPATIBILITY.md current stable Controller does not match VERSION ({version})")
+if chinese[0][1] != english[0][1]:
+    raise SystemExit("COMPATIBILITY.md current stable Agent differs between languages")
+PY
+fi
+
 tag_commit=$(git rev-list -n 1 "refs/tags/$tag" 2>/dev/null || true)
 [[ -n "$tag_commit" ]] || { echo "tag does not exist in checkout: $tag" >&2; exit 1; }
 commit=$(git rev-parse "$commit^{commit}")

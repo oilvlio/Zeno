@@ -47,12 +47,26 @@ func (s *sqliteNotificationDomain) claimNextNotificationDelivery(ctx context.Con
 	}
 	defer func() { rollbackUnlessCommitted(tx) }()
 
+	// A lease can expire before the worker starts the sender (for example during
+	// shutdown after claim). No external side effect is possible in that phase,
+	// so return it to the automatic queue without consuming an attempt.
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE notification_deliveries
+		SET state = 'pending', next_attempt_at = ?, last_error = '',
+		    lease_until = 0, claim_token = '', request_started_at = 0, updated_at = ?
+		WHERE state = 'leased' AND lease_until <= ? AND request_started_at = 0
+	`, nowUnix, nowUnix, nowUnix); err != nil {
+		return queuedNotificationDelivery{}, false, false, err
+	}
+	// Once the sender handoff has started, a crash leaves an ambiguous remote
+	// outcome. Telegram has no idempotency key, so require an operator retry
+	// rather than risking an automatic duplicate.
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries
 		SET state = 'failed', attempts = attempts + 1,
 		    next_attempt_at = ?, last_error = ?,
-		    lease_until = 0, claim_token = '', updated_at = ?
-		WHERE state = 'leased' AND lease_until <= ?
+		    lease_until = 0, claim_token = '', request_started_at = 0, updated_at = ?
+		WHERE state = 'leased' AND lease_until <= ? AND request_started_at > 0
 	`, notificationDeliveryManualRetryAtUnix, notificationDeliveryOutcomeUnknownMessage, nowUnix, nowUnix); err != nil {
 		return queuedNotificationDelivery{}, false, false, err
 	}
@@ -61,7 +75,7 @@ func (s *sqliteNotificationDomain) claimNextNotificationDelivery(ctx context.Con
 	// changed routes are canceled below and never silently rebound.
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries
-		SET state = 'paused', lease_until = 0, claim_token = '',
+		SET state = 'paused', lease_until = 0, claim_token = '', request_started_at = 0,
 		    last_error = 'notification channel disabled', updated_at = ?
 		WHERE state = 'pending'
 		  AND EXISTS (
@@ -77,7 +91,7 @@ func (s *sqliteNotificationDomain) claimNextNotificationDelivery(ctx context.Con
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries
 		SET state = 'pending', next_attempt_at = MAX(next_attempt_at, ?),
-		    last_error = '', updated_at = ?
+		    last_error = '', request_started_at = 0, updated_at = ?
 		WHERE state = 'paused'
 		  AND EXISTS (
 		    SELECT 1 FROM notification_channels c
@@ -92,7 +106,7 @@ func (s *sqliteNotificationDomain) claimNextNotificationDelivery(ctx context.Con
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries
-		SET state = 'canceled', lease_until = 0, claim_token = '',
+		SET state = 'canceled', lease_until = 0, claim_token = '', request_started_at = 0,
 		    last_error = 'notification channel changed or unavailable', updated_at = ?
 		WHERE state IN ('pending', 'paused', 'failed')
 		  AND NOT EXISTS (
@@ -113,7 +127,7 @@ func (s *sqliteNotificationDomain) claimNextNotificationDelivery(ctx context.Con
 	// retried and unblock the current state.
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries AS stale
-		SET state = 'canceled', lease_until = 0, claim_token = '',
+		SET state = 'canceled', lease_until = 0, claim_token = '', request_started_at = 0,
 		    last_error = CASE
 		      WHEN last_error = ? THEN 'delivery outcome unknown; superseded by newer status'
 		      ELSE 'superseded by newer status'
@@ -153,7 +167,7 @@ func (s *sqliteNotificationDomain) claimNextNotificationDelivery(ctx context.Con
 	// request was in flight but that request then failed before being written.
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries AS current
-		SET state = 'canceled', lease_until = 0, claim_token = '',
+		SET state = 'canceled', lease_until = 0, claim_token = '', request_started_at = 0,
 		    last_error = 'status suppressed because user-visible state did not change', updated_at = ?
 		WHERE current.state IN ('pending', 'paused', 'failed')
 		  AND TRIM(current.node_id) <> ''
@@ -245,7 +259,7 @@ func (s *sqliteNotificationDomain) claimNextNotificationDelivery(ctx context.Con
 	}
 	result, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries
-		SET state = 'leased', lease_until = ?, claim_token = ?, updated_at = ?
+		SET state = 'leased', lease_until = ?, claim_token = ?, request_started_at = 0, updated_at = ?
 		WHERE id = ? AND state IN ('pending', 'failed')
 	`, leaseUntil, claimToken, nowUnix, deliveryID)
 	if err != nil {
@@ -294,7 +308,7 @@ func (s *sqliteNotificationDomain) claimNextNotificationDelivery(ctx context.Con
 		result, updateErr := tx.ExecContext(ctx, `
 			UPDATE notification_deliveries
 			SET state = 'failed', attempts = ?, last_error = 'notification credential unavailable',
-			    next_attempt_at = ?, lease_until = 0, claim_token = '', updated_at = ?
+			    next_attempt_at = ?, lease_until = 0, claim_token = '', request_started_at = 0, updated_at = ?
 			WHERE id = ? AND state = 'leased' AND claim_token = ?
 		`, attempts, now.Add(notificationDeliveryLongRetryDelay).Unix(), nowUnix, delivery.ID, claimToken)
 		if updateErr != nil {

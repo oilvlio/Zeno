@@ -55,6 +55,18 @@ describe('admin mutation coordinator', () => {
     expect(apply).not.toHaveBeenCalled()
   })
 
+  it('does not abort current work for a transition requested by an old session', () => {
+    const currentGeneration = 2
+    const coordinator = createAdminMutationCoordinator<SessionIdentity>((identity) => identity.generation === currentGeneration)
+    const currentLease = coordinator.begin({ generation: 2 })
+    expect(currentLease).not.toBeNull()
+    if (!currentLease) return
+
+    expect(coordinator.beginSessionTransition({ generation: 1 })).toBe(false)
+    expect(currentLease.signal.aborted).toBe(false)
+    expect(coordinator.begin({ generation: 2 })).not.toBeNull()
+  })
+
   it('keeps mutation state untouched when the request fails and releases the lease', async () => {
     const coordinator = createAdminMutationCoordinator<SessionIdentity>(() => true)
     const lease = coordinator.begin({ generation: 1 })

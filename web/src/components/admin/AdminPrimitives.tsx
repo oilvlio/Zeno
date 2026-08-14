@@ -90,7 +90,7 @@ export function AdminActionFooter({ children, error, className = '' }: { childre
   )
 }
 
-export function AdminDeleteConfirmModal({ title, subjectName, confirmLabel, onConfirm, onClose }: { title: string; subjectName: string; confirmLabel: string; onConfirm: () => MaybePromise; onClose: () => void }) {
+export function AdminDeleteConfirmModal({ title, subjectName, confirmLabel, hint = '删除后无法恢复。', onConfirm, onClose }: { title: string; subjectName: string; confirmLabel: string; hint?: string; onConfirm: () => MaybePromise; onClose: () => void }) {
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const descriptionId = useId()
@@ -111,7 +111,7 @@ export function AdminDeleteConfirmModal({ title, subjectName, confirmLabel, onCo
       <form className="admin-delete-confirm" aria-busy={submitting} inert={submitting ? true : undefined} onSubmit={handleSubmit}>
         <div id={descriptionId} className="admin-delete-confirm__content">
           <p className="admin-delete-confirm__lead">确认删除「<strong>{subjectName}</strong>」？</p>
-          <p className="admin-delete-confirm__hint">删除后无法恢复。</p>
+          <p className="admin-delete-confirm__hint">{hint}</p>
         </div>
         {(formError || submitting) && (
           <div className={`admin-delete-feedback${formError ? ' is-error' : ' is-pending'}`} aria-live="polite" aria-atomic="true">

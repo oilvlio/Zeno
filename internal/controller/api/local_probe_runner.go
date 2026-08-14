@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"net"
 	"net/http"
@@ -194,18 +193,22 @@ func RunHTTPProbe(ctx context.Context, target ProbeTarget) ([]probe.Sample, erro
 		start := time.Now()
 		response, err := client.Do(request)
 		elapsedMS := float64(time.Since(start).Microseconds()) / 1000
-		cancel()
 		if err != nil {
+			cancel()
 			samples = append(samples, failedMeasuredLocalProbeSample(seq, elapsedMS, classifyProbeError(err)))
 			continue
 		}
 		if response.Request == nil || !validHTTPProbeURL(response.Request.URL) {
 			_ = response.Body.Close()
+			cancel()
 			samples = append(samples, failedMeasuredLocalProbeSample(seq, elapsedMS, "url_policy"))
 			continue
 		}
-		_, _ = io.Copy(io.Discard, response.Body)
+		// HTTP probes measure reachability and time to response headers. The body
+		// is intentionally not validated or downloaded; closing it also prevents a
+		// slow or unbounded response stream from extending the probe round.
 		_ = response.Body.Close()
+		cancel()
 		if response.StatusCode < 200 || response.StatusCode >= 400 {
 			samples = append(samples, failedMeasuredLocalProbeSample(seq, elapsedMS, fmt.Sprintf("http_status_%d", response.StatusCode)))
 			continue

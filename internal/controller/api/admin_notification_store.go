@@ -197,7 +197,7 @@ func cancelSupersededNotificationDeliveriesTx(ctx context.Context, tx *sql.Tx, c
 	_, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries
 		SET state = 'canceled', last_error = ?, lease_until = 0,
-		    claim_token = '', updated_at = ?
+		    claim_token = '', request_started_at = 0, updated_at = ?
 		WHERE channel_id = ?
 		  AND state IN ('pending', 'paused', 'failed', 'leased')
 	`, reason, nowUnix, channelID)
@@ -218,7 +218,7 @@ func (s *sqliteNotificationDomain) DeleteAdminNotificationChannel(ctx context.Co
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries
 		SET state = 'canceled', last_error = 'notification channel deleted',
-		    lease_until = 0, claim_token = '', updated_at = ?
+		    lease_until = 0, claim_token = '', request_started_at = 0, updated_at = ?
 		WHERE channel_id = ?
 		  AND state IN ('pending', 'paused', 'failed', 'leased')
 	`, nowUnix, channelID); err != nil {

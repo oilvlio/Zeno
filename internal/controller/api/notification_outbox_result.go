@@ -7,6 +7,22 @@ import (
 	"time"
 )
 
+func (s *sqliteNotificationDomain) MarkNotificationDeliveryRequestStarted(ctx context.Context, delivery queuedNotificationDelivery, now time.Time) error {
+	return s.writes.withAgentWrite(ctx, notificationOutboxWriteKey, func(writeCtx context.Context) error {
+		nowUnix := now.UTC().Unix()
+		result, err := s.db.ExecContext(writeCtx, `
+			UPDATE notification_deliveries
+			SET request_started_at = ?, updated_at = ?
+			WHERE id = ? AND state = 'leased' AND claim_token = ?
+			  AND request_started_at = 0 AND lease_until > ?
+		`, nowUnix, nowUnix, delivery.ID, delivery.ClaimToken, nowUnix)
+		if err != nil {
+			return err
+		}
+		return requireOneNotificationDeliveryRow(result)
+	})
+}
+
 func (s *sqliteNotificationDomain) RecordNotificationDeliveryAttempt(ctx context.Context, delivery queuedNotificationDelivery, sendErr error, now time.Time) error {
 	return s.writes.withAgentWrite(ctx, notificationOutboxWriteKey, func(writeCtx context.Context) error {
 		return s.recordNotificationDeliveryAttemptOnce(writeCtx, delivery, sendErr, now)
@@ -19,7 +35,7 @@ func (s *sqliteNotificationDomain) recordNotificationDeliveryAttemptOnce(ctx con
 		result, err := s.db.ExecContext(ctx, `
 			UPDATE notification_deliveries
 			SET state = 'delivered', attempts = attempts + 1, last_error = '',
-			    lease_until = 0, claim_token = '', updated_at = ?, delivered_at = ?
+			    lease_until = 0, claim_token = '', request_started_at = 0, updated_at = ?, delivered_at = ?
 			WHERE id = ? AND state = 'leased' AND claim_token = ?
 		`, nowUnix, nowUnix, delivery.ID, delivery.ClaimToken)
 		if err != nil {
@@ -44,7 +60,7 @@ func (s *sqliteNotificationDomain) recordNotificationDeliveryAttemptOnce(ctx con
 	defer func() { rollbackUnlessCommitted(tx) }()
 	result, err := tx.ExecContext(ctx, `
 		UPDATE notification_deliveries
-		SET state = ?, attempts = ?, next_attempt_at = ?, last_error = ?, lease_until = 0, claim_token = '', updated_at = ?
+		SET state = ?, attempts = ?, next_attempt_at = ?, last_error = ?, lease_until = 0, claim_token = '', request_started_at = 0, updated_at = ?
 		WHERE id = ? AND state = 'leased' AND claim_token = ?
 	`, state, attempts, nextAttemptAt, sanitizeNotificationDeliveryError(sendErr), nowUnix, delivery.ID, delivery.ClaimToken)
 	if err != nil {
@@ -89,7 +105,7 @@ func (s *sqliteNotificationDomain) RetryFailedNotificationDelivery(ctx context.C
 	}
 	result, err := s.db.ExecContext(ctx, `
 		UPDATE notification_deliveries
-		SET state = 'pending', next_attempt_at = ?, lease_until = 0, claim_token = '', last_error = '', updated_at = ?
+		SET state = 'pending', next_attempt_at = ?, lease_until = 0, claim_token = '', request_started_at = 0, last_error = '', updated_at = ?
 		WHERE id = ? AND state = 'failed'
 	`, now.UTC().Unix(), now.UTC().Unix(), deliveryID)
 	if err != nil {

@@ -55,7 +55,7 @@ describe('API module boundaries', () => {
       ['components/admin/AdminNodeWorkspace.tsx', 2],
       ['components/admin/AdminNodeSortModal.tsx', 1],
       ['components/admin/AdminTargetWorkspace.tsx', 2],
-      ['components/admin/AdminNotificationsWorkspace.tsx', 3],
+      ['components/admin/AdminNotificationsWorkspace.tsx', 2],
       ['components/admin/AdminAccountSection.tsx', 1],
       ['components/admin/AdminSettingsSection.tsx', 1],
     ])

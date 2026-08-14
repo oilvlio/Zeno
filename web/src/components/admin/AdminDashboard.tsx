@@ -158,7 +158,7 @@ export function AdminDashboard({
     const form = event.currentTarget
     const formData = new FormData(form)
     const username = String(formData.get('admin-username') ?? '').trim()
-    const password = String(formData.get('admin-password') ?? '').trim()
+    const password = String(formData.get('admin-password') ?? '')
     if (username === '' || password === '') return
     onAdminLogin(username, password)
   }

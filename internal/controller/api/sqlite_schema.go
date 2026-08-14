@@ -332,6 +332,7 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			last_error TEXT NOT NULL DEFAULT '',
 			lease_until INTEGER NOT NULL DEFAULT 0,
 			claim_token TEXT NOT NULL DEFAULT '',
+			request_started_at INTEGER NOT NULL DEFAULT 0,
 			causal_predecessor_event_id TEXT NOT NULL DEFAULT '',
 			superseded_by_event_id TEXT NOT NULL DEFAULT '',
 			created_at INTEGER NOT NULL,
@@ -449,10 +450,25 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 		"destination_fingerprint":     "TEXT NOT NULL DEFAULT ''",
 		"lease_until":                 "INTEGER NOT NULL DEFAULT 0",
 		"claim_token":                 "TEXT NOT NULL DEFAULT ''",
+		"request_started_at":          "INTEGER NOT NULL DEFAULT 0",
 		"causal_predecessor_event_id": "TEXT NOT NULL DEFAULT ''",
 		"superseded_by_event_id":      "TEXT NOT NULL DEFAULT ''",
 	}
 	stage.columns("notification-delivery-columns", "notification_deliveries", notificationDeliveryColumns)
+	stage.run("notification-delivery-request-phase", func() error {
+		return s.runValidatedSchemaMigration(ctx, "20260814_notification_delivery_request_phase_v1", nil, func(migrationCtx context.Context) error {
+			// Rows leased by an older binary have no persisted pre-send boundary.
+			// Preserve the old conservative behavior for those ambiguous rows once;
+			// leases created after this migration can safely use zero for "claimed
+			// but not started".
+			_, err := s.db.ExecContext(migrationCtx, `
+				UPDATE notification_deliveries
+				SET request_started_at = CASE WHEN updated_at > 0 THEN updated_at ELSE 1 END
+				WHERE state = 'leased' AND request_started_at = 0
+			`)
+			return err
+		})
+	})
 	stage.run("notification-routing-bindings", func() error { return s.migrateNotificationRoutingBindings(ctx) })
 	// Existing databases predate the lease columns. Build the claim index only
 	// after both columns have been added; otherwise CREATE INDEX aborts startup

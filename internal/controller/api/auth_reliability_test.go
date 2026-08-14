@@ -167,3 +167,34 @@ func TestAdminLoginRejectsWhenArgon2QueueIsFull(t *testing.T) {
 		t.Fatalf("valid login after admission recovery status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 	}
 }
+
+func TestAdminAccountUpdateRejectsWhenArgon2QueueIsFull(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+	const token = "active-admin-session"
+	if err := store.createAdminSession(context.Background(), token); err != nil {
+		t.Fatalf("create admin session: %v", err)
+	}
+
+	for index := 0; index < cap(adminArgon2Admissions); index++ {
+		adminArgon2Admissions <- struct{}{}
+	}
+	defer func() {
+		for index := 0; index < cap(adminArgon2Admissions); index++ {
+			<-adminArgon2Admissions
+		}
+	}()
+
+	handler := NewHandler(HandlerOptions{Store: store, AdminPasswordHash: testAdminPasswordHash("admin-pass")})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/account", strings.NewReader(`{"username":"admin","current_password":"admin-pass","new_password":"new-admin-pass"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Admin-Token", token)
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("account update with full Argon2 admission status = %d, want 429; body=%s", recorder.Code, recorder.Body.String())
+	}
+}

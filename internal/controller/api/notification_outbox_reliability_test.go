@@ -113,7 +113,7 @@ func TestNotificationDeliveryAckFailureKeepsPendingAndMaySendAgain(t *testing.T)
 	}
 }
 
-func TestNotificationOutboxExpiredLeaseRequiresManualRetry(t *testing.T) {
+func TestNotificationOutboxExpiredLeaseDistinguishesClaimFromRequestStart(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {
 		t.Fatalf("open sqlite store: %v", err)
@@ -149,17 +149,32 @@ func TestNotificationOutboxExpiredLeaseRequiresManualRetry(t *testing.T) {
 	if len(second) != 0 {
 		t.Fatalf("second claim before lease expiry = %+v, want none", second)
 	}
-	third, err := store.PendingNotificationDeliveries(ctx, now.Add(notificationDeliveryLease+time.Second), 10)
+	expiredAt := now.Add(notificationDeliveryLease + time.Second)
+	if err := store.MarkNotificationDeliveryRequestStarted(ctx, first[0], expiredAt); !errors.Is(err, errNotificationDeliveryLeaseLost) {
+		t.Fatalf("mark expired lease error = %v, want lease lost", err)
+	}
+	third, err := store.PendingNotificationDeliveries(ctx, expiredAt, 10)
 	if err != nil {
 		t.Fatalf("scan after lease expiry: %v", err)
 	}
-	if len(third) != 0 {
-		t.Fatalf("expired lease claim = %+v, want no automatic retry", third)
+	if len(third) != 1 || third[0].Attempts != 0 || third[0].ClaimToken == first[0].ClaimToken {
+		t.Fatalf("expired unstarted lease claim = %+v, want a fresh automatic claim without consuming an attempt", third)
+	}
+	requestStartedAt := now.Add(notificationDeliveryLease + 2*time.Second)
+	if err := store.MarkNotificationDeliveryRequestStarted(ctx, third[0], requestStartedAt); err != nil {
+		t.Fatalf("mark request started: %v", err)
+	}
+	fourth, err := store.PendingNotificationDeliveries(ctx, now.Add(2*notificationDeliveryLease+2*time.Second), 10)
+	if err != nil {
+		t.Fatalf("scan after started lease expiry: %v", err)
+	}
+	if len(fourth) != 0 {
+		t.Fatalf("expired started lease claim = %+v, want no automatic retry", fourth)
 	}
 	var state, lastError string
 	var attempts int
 	var nextAttemptAt int64
-	if err := store.db.QueryRowContext(ctx, `SELECT state, attempts, next_attempt_at, last_error FROM notification_deliveries WHERE id = ?`, first[0].ID).Scan(&state, &attempts, &nextAttemptAt, &lastError); err != nil {
+	if err := store.db.QueryRowContext(ctx, `SELECT state, attempts, next_attempt_at, last_error FROM notification_deliveries WHERE id = ?`, third[0].ID).Scan(&state, &attempts, &nextAttemptAt, &lastError); err != nil {
 		t.Fatalf("read expired lease: %v", err)
 	}
 	if state != "failed" || attempts != 1 || nextAttemptAt != notificationDeliveryManualRetryAtUnix || lastError != notificationDeliveryOutcomeUnknownMessage {
@@ -382,6 +397,10 @@ func (store *ackFailureOutboxStore) PendingNotificationDeliveries(context.Contex
 	return []queuedNotificationDelivery{store.delivery}, nil
 }
 
+func (store *ackFailureOutboxStore) MarkNotificationDeliveryRequestStarted(context.Context, queuedNotificationDelivery, time.Time) error {
+	return nil
+}
+
 func (store *ackFailureOutboxStore) RecordNotificationDeliveryAttempt(context.Context, queuedNotificationDelivery, error, time.Time) error {
 	store.calls++
 	if store.calls == 1 {
@@ -451,6 +470,10 @@ func (store *concurrentOutboxStore) PendingNotificationDeliveries(context.Contex
 	store.activePending--
 	store.mu.Unlock()
 	return deliveries, nil
+}
+
+func (store *concurrentOutboxStore) MarkNotificationDeliveryRequestStarted(context.Context, queuedNotificationDelivery, time.Time) error {
+	return nil
 }
 
 func (store *concurrentOutboxStore) RecordNotificationDeliveryAttempt(context.Context, queuedNotificationDelivery, error, time.Time) error {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -87,13 +88,48 @@ func TestAdminLoginMigratesLegacyPasswordHashesToArgon2ID(t *testing.T) {
 			if err := store.db.QueryRowContext(context.Background(), `SELECT value FROM settings WHERE key = ?`, settingKeyAdminPasswordHash).Scan(&upgradedHash); err != nil {
 				t.Fatalf("read upgraded password hash: %v", err)
 			}
-			if !strings.HasPrefix(upgradedHash, "argon2id:") || upgradedHash == legacyHash {
+			if !strings.HasPrefix(upgradedHash, adminRawPasswordHashPrefix) || upgradedHash == legacyHash {
 				t.Fatalf("upgraded password hash = %q, want a new Argon2id hash", upgradedHash)
 			}
 			if !adminArgon2PasswordMatches(upgradedHash, "legacy-admin-pass") {
 				t.Fatal("upgraded Argon2id hash does not match the legacy password")
 			}
 		})
+	}
+}
+
+func TestAdminPasswordPreservesSurroundingWhitespaceWithLegacyFallback(t *testing.T) {
+	rawPassword := " new-admin-pass "
+	rawHash := testAdminPasswordHash(rawPassword)
+	if !adminPasswordMatches(rawHash, "", rawPassword) {
+		t.Fatal("raw Argon2id password did not match its exact bytes")
+	}
+	if adminPasswordMatches(rawHash, "", strings.TrimSpace(rawPassword)) {
+		t.Fatal("raw Argon2id password unexpectedly matched after trimming")
+	}
+	if adminPasswordMatches(testAdminPasswordHash(strings.TrimSpace(rawPassword)), "", rawPassword) {
+		t.Fatal("raw Argon2id password unexpectedly accepted surrounding whitespace")
+	}
+
+	legacyHash := strings.Replace(testAdminPasswordHash(strings.TrimSpace(rawPassword)), adminRawPasswordHashPrefix, "argon2id:", 1)
+	if !adminPasswordMatches(legacyHash, "", rawPassword) {
+		t.Fatal("pre-upgrade trimmed Argon2id password lost compatibility")
+	}
+
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+	fallbackHash := testAdminPasswordHash("admin-pass")
+	if _, err := store.UpdateAdminAccount(context.Background(), "admin", "admin-pass", rawPassword, fallbackHash); err != nil {
+		t.Fatalf("set raw password: %v", err)
+	}
+	if _, err := store.AdminLogin(context.Background(), "admin", rawPassword, ""); err != nil {
+		t.Fatalf("login with exact raw password: %v", err)
+	}
+	if _, err := store.AdminLogin(context.Background(), "admin", strings.TrimSpace(rawPassword), ""); !errors.Is(err, errInvalidAdminLogin) {
+		t.Fatalf("trimmed login error = %v, want invalid login", err)
 	}
 }
 

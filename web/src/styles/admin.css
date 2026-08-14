@@ -102,9 +102,9 @@
   background: transparent;
   box-shadow: none;
 }
-.admin-workspace-card .admin-form-section-title { margin-bottom: 14px; }
 .admin-workspace-card .admin-form-section-title,
-.admin-workspace-card .admin-block-heading h4 {
+.admin-workspace-card .admin-block-heading h4,
+.admin-section-heading h3 {
   margin: 0 0 14px;
   padding: 0;
   display: inline-flex;
@@ -123,7 +123,8 @@
 }
 .admin-workspace-card .admin-block-heading h4 { position: static; margin-bottom: 0; }
 .admin-workspace-card .admin-form-section-title::before,
-.admin-workspace-card .admin-block-heading h4::before {
+.admin-workspace-card .admin-block-heading h4::before,
+.admin-section-heading h3::before {
   content: '';
   position: static;
   width: 6px;
@@ -161,14 +162,6 @@
   margin-bottom: 14px;
 }
 .admin-section-heading .eyebrow { display: none; }
-.admin-section-heading h3 { margin: 0; display: inline-flex; align-items: center; gap: 9px; color: var(--foreground); font-size: 23px; font-weight: 500; line-height: 1.2; letter-spacing: -0.025em; }
-.admin-section-heading h3::before {
-  content: '';
-  width: 6px;
-  height: 18px;
-  border-radius: var(--radius-pill);
-  background: var(--blue);
-}
 .admin-section-actions { display: inline-flex; align-items: center; gap: 8px; }
 .admin-node-status {
   flex: none;
@@ -759,10 +752,12 @@
   transform: none;
 }
 .admin-select-popover button[data-active='true'],
-.admin-install-platforms button[data-active='true'] {
-  border-color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 12%, transparent);
-  color: var(--blue);
+.admin-install-platforms button[data-active='true'],
+.admin-date-option-panel button.is-selected,
+.admin-date-grid button.is-selected {
+  border-color: var(--control-selected-border);
+  background: var(--control-selected-background);
+  color: var(--control-selected-foreground);
   box-shadow: none;
 }
 .admin-select-popover span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
@@ -852,7 +847,6 @@
   transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 .admin-date-option-panel button:hover { border-color: color-mix(in srgb, var(--blue) 30%, var(--border)); background: color-mix(in srgb, var(--blue) 7%, transparent); color: var(--blue); }
-.admin-date-option-panel button.is-selected { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); box-shadow: none; }
 .admin-date-calendar-header > button { width: 30px; flex: none; border-radius: var(--radius-pill); color: var(--blue); background: transparent; }
 .admin-date-weekdays,
 .admin-date-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
@@ -863,7 +857,6 @@
 .admin-date-calendar-header > button:hover,
 .admin-date-actions button:hover { background: color-mix(in srgb, var(--blue) 7%, transparent); color: var(--blue); }
 .admin-date-grid button.is-today { color: var(--blue); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blue) 36%, transparent); }
-.admin-date-grid button.is-selected { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); box-shadow: none; }
 .admin-date-actions { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .admin-date-actions button { padding: 0 11px; color: var(--muted); background: transparent; border-color: var(--border); }
 .admin-node-toggle {

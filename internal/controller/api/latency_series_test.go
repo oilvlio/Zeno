@@ -26,21 +26,21 @@ func TestLatencySeriesBuilders(t *testing.T) {
 		{TS: t1.Format(time.RFC3339), TargetID: "b", TargetName: "renamed", AvgMS: nil, LossPercent: 3.999},
 	}
 	wantNode := []LatencySeries{
-		{TargetID: "b", TargetName: "B", CreatedAt: []int64{t0.UnixMilli(), t1.UnixMilli()}, AvgMS: []*float64{latencySeriesFloat(12.35), nil}, LossPercent: []float64{1.23, 4}},
-		{TargetID: "a", TargetName: "A", CreatedAt: []int64{t1.UnixMilli()}, AvgMS: []*float64{latencySeriesFloat(20.01)}, LossPercent: []float64{2.01}},
+		{TargetID: "b", TargetName: "B", CreatedAt: []int64{t0.UnixMilli(), t1.UnixMilli()}, MedianMS: []*float64{latencySeriesFloat(12), nil}, AvgMS: []*float64{latencySeriesFloat(12.35), nil}, LossPercent: []float64{1.23, 4}},
+		{TargetID: "a", TargetName: "A", CreatedAt: []int64{t1.UnixMilli()}, MedianMS: []*float64{nil}, AvgMS: []*float64{latencySeriesFloat(20.01)}, LossPercent: []float64{2.01}},
 	}
 	if got := latencySeriesFromPoints(nodePoints); !reflect.DeepEqual(got, wantNode) {
 		t.Fatalf("node series = %#v, want %#v", got, wantNode)
 	}
 
 	servicePoints := []ServiceLatencyPoint{
-		{TS: t0.Format(time.RFC3339), NodeID: "node-b", NodeName: "B", AvgMS: latencySeriesFloat(32.345), LossPercent: 4.444},
+		{TS: t0.Format(time.RFC3339), NodeID: "node-b", NodeName: "B", MedianMS: latencySeriesFloat(31.111), AvgMS: latencySeriesFloat(32.345), LossPercent: 4.444},
 		{TS: t1.Format(time.RFC3339), NodeID: "node-a", NodeName: "A", AvgMS: latencySeriesFloat(40.005), LossPercent: 5.005},
-		{TS: t1.Format(time.RFC3339), NodeID: "node-b", NodeName: "renamed", AvgMS: latencySeriesFloat(33.999), LossPercent: 6.999},
+		{TS: t1.Format(time.RFC3339), NodeID: "node-b", NodeName: "renamed", MedianMS: latencySeriesFloat(33.333), AvgMS: latencySeriesFloat(33.999), LossPercent: 6.999},
 	}
 	wantService := []ServiceLatencySeries{
-		{NodeID: "node-b", NodeName: "B", CreatedAt: []int64{t0.UnixMilli(), t1.UnixMilli()}, AvgMS: []*float64{latencySeriesFloat(32.35), latencySeriesFloat(34)}, LossPercent: []float64{4.44, 7}},
-		{NodeID: "node-a", NodeName: "A", CreatedAt: []int64{t1.UnixMilli()}, AvgMS: []*float64{latencySeriesFloat(40.01)}, LossPercent: []float64{5.01}},
+		{NodeID: "node-b", NodeName: "B", CreatedAt: []int64{t0.UnixMilli(), t1.UnixMilli()}, MedianMS: []*float64{latencySeriesFloat(31.11), latencySeriesFloat(33.33)}, AvgMS: []*float64{latencySeriesFloat(32.35), latencySeriesFloat(34)}, LossPercent: []float64{4.44, 7}},
+		{NodeID: "node-a", NodeName: "A", CreatedAt: []int64{t1.UnixMilli()}, MedianMS: []*float64{nil}, AvgMS: []*float64{latencySeriesFloat(40.01)}, LossPercent: []float64{5.01}},
 	}
 	if got := serviceLatencySeriesFromPoints(servicePoints); !reflect.DeepEqual(got, wantService) {
 		t.Fatalf("service series = %#v, want %#v", got, wantService)
@@ -58,29 +58,29 @@ func TestLatencySeriesJSONGolden(t *testing.T) {
 	t1 := t0.Add(time.Second)
 
 	node := LatencyResponse{NodeID: "node", Range: "1h", Points: []LatencyPoint{
-		{TS: t0.Format(time.RFC3339), TargetID: "a", TargetName: "A", AvgMS: latencySeriesFloat(1.234), LossPercent: 2.345},
+		{TS: t0.Format(time.RFC3339), TargetID: "a", TargetName: "A", MedianMS: latencySeriesFloat(1.111), AvgMS: latencySeriesFloat(1.234), LossPercent: 2.345},
 		{TS: t0.Format(time.RFC3339), TargetID: "b", TargetName: "B", AvgMS: nil, LossPercent: 3.456},
-		{TS: t1.Format(time.RFC3339), TargetID: "a", TargetName: "A", AvgMS: latencySeriesFloat(4.567), LossPercent: 5.678},
-		{TS: t1.Format(time.RFC3339), TargetID: "b", TargetName: "B", AvgMS: latencySeriesFloat(6.789), LossPercent: 7.891},
+		{TS: t1.Format(time.RFC3339), TargetID: "a", TargetName: "A", MedianMS: latencySeriesFloat(4.444), AvgMS: latencySeriesFloat(4.567), LossPercent: 5.678},
+		{TS: t1.Format(time.RFC3339), TargetID: "b", TargetName: "B", MedianMS: latencySeriesFloat(6.666), AvgMS: latencySeriesFloat(6.789), LossPercent: 7.891},
 	}}
 	got, err := json.Marshal(node)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"node_id":"node","range":"1h","created_at":[1785542400000,1785542401000],"series":[{"target_id":"a","target_name":"A","avg_ms":[1.23,4.57],"loss_percent":[2.35,5.68]},{"target_id":"b","target_name":"B","avg_ms":[null,6.79],"loss_percent":[3.46,7.89]}]}`
+	want := `{"node_id":"node","range":"1h","created_at":[1785542400000,1785542401000],"series":[{"target_id":"a","target_name":"A","median_ms":[1.11,4.44],"avg_ms":[1.23,4.57],"loss_percent":[2.35,5.68]},{"target_id":"b","target_name":"B","median_ms":[null,6.67],"avg_ms":[null,6.79],"loss_percent":[3.46,7.89]}]}`
 	if string(got) != want {
 		t.Fatalf("node JSON = %s, want %s", got, want)
 	}
 
 	service := ServiceTargetLatencyResponse{Target: ServiceTarget{ID: "target", Name: "Target"}, Range: "1h", Points: []ServiceLatencyPoint{
-		{TS: t0.Format(time.RFC3339), NodeID: "a", NodeName: "A", AvgMS: latencySeriesFloat(8.765), LossPercent: 1.234},
+		{TS: t0.Format(time.RFC3339), NodeID: "a", NodeName: "A", MedianMS: latencySeriesFloat(8.555), AvgMS: latencySeriesFloat(8.765), LossPercent: 1.234},
 		{TS: t1.Format(time.RFC3339), NodeID: "a", NodeName: "A", AvgMS: nil, LossPercent: 2.345},
 	}}
 	got, err = json.Marshal(service)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = `{"target":{"id":"target","name":"Target","type":"","assigned_node_count":0,"reporting_node_count":0,"median_ms":null,"avg_ms":null,"loss_percent":null},"range":"1h","created_at":[1785542400000,1785542401000],"series":[{"node_id":"a","node_name":"A","avg_ms":[8.77,null],"loss_percent":[1.23,2.35]}]}`
+	want = `{"target":{"id":"target","name":"Target","type":"","assigned_node_count":0,"reporting_node_count":0,"median_ms":null,"avg_ms":null,"loss_percent":null},"range":"1h","created_at":[1785542400000,1785542401000],"series":[{"node_id":"a","node_name":"A","median_ms":[8.56,null],"avg_ms":[8.77,null],"loss_percent":[1.23,2.35]}]}`
 	if string(got) != want {
 		t.Fatalf("service JSON = %s, want %s", got, want)
 	}

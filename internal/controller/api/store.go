@@ -5,7 +5,10 @@ import (
 	"errors"
 )
 
-var errNodeNotFound = errors.New("node not found")
+var (
+	errNodeNotFound       = errors.New("node not found")
+	errStoreNotConfigured = errors.New("controller store not configured")
+)
 
 type Store interface {
 	Summary(ctx context.Context) (SummaryResponse, error)
@@ -15,44 +18,25 @@ type Store interface {
 	NodeState(ctx context.Context, nodeID string, window latencyWindow) (StateResponse, error)
 }
 
-type mockStore struct{}
+// unconfiguredStore keeps direct Handler construction fail-closed. The shipped
+// Controller requires -db before it builds a Handler, while package callers
+// that omit Store receive explicit readiness and API failures instead of
+// plausible preview data.
+type unconfiguredStore struct{}
 
-func (mockStore) Summary(ctx context.Context) (SummaryResponse, error) {
-	return SummaryResponse{Nodes: mockNodes(), Services: mockServiceTargets(), LatencyPoints: []LatencyPoint{}, ExchangeRates: map[string]float64{"CNY": 1}}, nil
+func (unconfiguredStore) Ready(context.Context) error { return errStoreNotConfigured }
+func (unconfiguredStore) Summary(context.Context) (SummaryResponse, error) {
+	return SummaryResponse{}, errStoreNotConfigured
 }
-
-func (mockStore) PublicSettings(ctx context.Context) (SiteSettings, error) {
-	return defaultSiteSettings(), nil
+func (unconfiguredStore) PublicSettings(context.Context) (SiteSettings, error) {
+	return SiteSettings{}, errStoreNotConfigured
 }
-
-func (mockStore) NodeLatency(ctx context.Context, nodeID string, window latencyWindow) (LatencyResponse, error) {
-	if !mockNodeExists(nodeID) {
-		return LatencyResponse{}, errNodeNotFound
-	}
-	return LatencyResponse{NodeID: nodeID, Range: window.Name, Points: mockLatencyPoints(nodeID, window.Name)}, nil
+func (unconfiguredStore) NodeLatency(context.Context, string, latencyWindow) (LatencyResponse, error) {
+	return LatencyResponse{}, errStoreNotConfigured
 }
-
-func (mockStore) ServiceTargetLatency(ctx context.Context, targetID string, window latencyWindow) (ServiceTargetLatencyResponse, error) {
-	for _, target := range mockServiceTargets() {
-		if target.ID == targetID {
-			return ServiceTargetLatencyResponse{Target: target, Range: window.Name, Points: mockServiceLatencyPoints(targetID, window.Name)}, nil
-		}
-	}
-	return ServiceTargetLatencyResponse{}, errProbeTargetNotFound
+func (unconfiguredStore) ServiceTargetLatency(context.Context, string, latencyWindow) (ServiceTargetLatencyResponse, error) {
+	return ServiceTargetLatencyResponse{}, errStoreNotConfigured
 }
-
-func (mockStore) NodeState(ctx context.Context, nodeID string, window latencyWindow) (StateResponse, error) {
-	if !mockNodeExists(nodeID) {
-		return StateResponse{}, errNodeNotFound
-	}
-	return StateResponse{NodeID: nodeID, Range: window.Name, Points: mockStatePoints(window)}, nil
-}
-
-func mockNodeExists(nodeID string) bool {
-	for _, node := range mockNodes() {
-		if node.ID == nodeID {
-			return true
-		}
-	}
-	return false
+func (unconfiguredStore) NodeState(context.Context, string, latencyWindow) (StateResponse, error) {
+	return StateResponse{}, errStoreNotConfigured
 }

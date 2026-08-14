@@ -1,5 +1,6 @@
-import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useDismissibleAnchoredPopover } from '../../hooks/useDismissibleAnchoredPopover'
 import { OverlaySurface } from '../OverlaySurface'
 
 type RectLike = Pick<DOMRect, 'top' | 'right' | 'bottom' | 'left' | 'width' | 'height'>
@@ -86,6 +87,11 @@ export function AdminDateField({ name, label, defaultValue = '', defaultPermanen
   const [openPanel, setOpenPanel] = useState<'year' | 'month' | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
+  const dismissPopover = useCallback(() => {
+    setOpen(false)
+    setOpenPanel(null)
+  }, [])
+  useDismissibleAnchoredPopover(open && !disabled, triggerRef, popoverRef, dismissPopover)
   const selectedDate = parseAdminDateValue(value)
   const today = new Date()
   const visibleYear = month.getFullYear()
@@ -228,6 +234,8 @@ export function AdminSegmentedField({ name, label, options, value, defaultValue,
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
+  const dismissPopover = useCallback(() => setOpen(false), [])
+  useDismissibleAnchoredPopover(open && !disabled, triggerRef, popoverRef, dismissPopover)
   const selectedValue = value ?? internalValue
   const selectedOption = options.find((option) => option.value === selectedValue) ?? options[0]
   const popoverStyle = useAnchoredPopoverPosition({ open, disabled, triggerRef, popoverRef, variant: 'select', optionCount: options.length })
@@ -241,24 +249,6 @@ export function AdminSegmentedField({ name, label, options, value, defaultValue,
   useEffect(() => {
     if (disabled) setOpen(false)
   }, [disabled])
-
-  useEffect(() => {
-    if (!open) return undefined
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null
-      if (target && (triggerRef.current?.contains(target) || popoverRef.current?.contains(target))) return
-      setOpen(false)
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [open])
 
   const classes = ['admin-form-control', 'admin-segmented-field admin-select-menu-field', className, disabled ? 'is-disabled' : ''].filter(Boolean).join(' ')
   const popover = open && !disabled ? (

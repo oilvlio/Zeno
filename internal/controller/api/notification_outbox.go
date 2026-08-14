@@ -39,6 +39,7 @@ type queuedNotificationDelivery struct {
 type notificationOutboxStore interface {
 	QueueNotificationEvent(ctx context.Context, event notificationEvent, channels []notificationDispatchChannel) (bool, error)
 	PendingNotificationDeliveries(ctx context.Context, now time.Time, limit int) ([]queuedNotificationDelivery, error)
+	MarkNotificationDeliveryRequestStarted(ctx context.Context, delivery queuedNotificationDelivery, now time.Time) error
 	RecordNotificationDeliveryAttempt(ctx context.Context, delivery queuedNotificationDelivery, sendErr error, now time.Time) error
 }
 

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +30,17 @@ func TestDBCheckTimeoutDefaultsAndValidation(t *testing.T) {
 		if err := validateDBCheckTimeout(timeout); err != nil {
 			t.Fatalf("validateDBCheckTimeout(%s): %v", timeout, err)
 		}
+	}
+}
+
+func TestLocalProbeIntervalValidation(t *testing.T) {
+	for _, interval := range []time.Duration{0, -time.Nanosecond} {
+		if err := validateLocalProbeInterval(interval); err == nil {
+			t.Fatalf("validateLocalProbeInterval(%s) succeeded, want error", interval)
+		}
+	}
+	if err := validateLocalProbeInterval(time.Nanosecond); err != nil {
+		t.Fatalf("validateLocalProbeInterval(minimum positive duration): %v", err)
 	}
 }
 
@@ -67,6 +79,12 @@ func TestBuildHandlerUsesSQLiteStoreWhenDBPathProvided(t *testing.T) {
 	}
 	if len(body.Nodes) != 0 {
 		t.Fatalf("nodes len = %d, want empty sqlite-backed summary instead of mock data", len(body.Nodes))
+	}
+}
+
+func TestBuildControllerRequiresDBPath(t *testing.T) {
+	if _, err := buildController(handlerConfig{}); err == nil || !strings.Contains(err.Error(), "-db is required") {
+		t.Fatalf("build controller without database error = %v, want explicit -db requirement", err)
 	}
 }
 

@@ -172,15 +172,16 @@ func serviceLatencySeriesIdentity(point ServiceLatencyPoint) (string, ServiceLat
 }
 
 func appendLatencySeriesPoint(series *LatencySeries, point LatencyPoint) {
-	appendLatencySeriesValues(&series.CreatedAt, &series.AvgMS, &series.LossPercent, point.TS, point.AvgMS, point.LossPercent)
+	appendLatencySeriesValues(&series.CreatedAt, &series.MedianMS, &series.AvgMS, &series.LossPercent, point.TS, point.MedianMS, point.AvgMS, point.LossPercent)
 }
 
 func appendServiceLatencySeriesPoint(series *ServiceLatencySeries, point ServiceLatencyPoint) {
-	appendLatencySeriesValues(&series.CreatedAt, &series.AvgMS, &series.LossPercent, point.TS, point.AvgMS, point.LossPercent)
+	appendLatencySeriesValues(&series.CreatedAt, &series.MedianMS, &series.AvgMS, &series.LossPercent, point.TS, point.MedianMS, point.AvgMS, point.LossPercent)
 }
 
-func appendLatencySeriesValues(createdAt *[]int64, average *[]*float64, lossPercent *[]float64, timestamp string, averageMS *float64, loss float64) {
+func appendLatencySeriesValues(createdAt *[]int64, median, average *[]*float64, lossPercent *[]float64, timestamp string, medianMS, averageMS *float64, loss float64) {
 	*createdAt = append(*createdAt, latencyTimestampMillis(timestamp))
+	*median = append(*median, compactLatencyValue(medianMS))
 	*average = append(*average, compactLatencyValue(averageMS))
 	*lossPercent = append(*lossPercent, compactLatencyNumber(loss))
 }
