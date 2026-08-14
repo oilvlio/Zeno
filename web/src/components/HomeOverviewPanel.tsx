@@ -85,7 +85,6 @@ export function HomeRegionFilter({ regions, activeRegion, onChange }: { regions:
         }))}
         value={activeRegion}
         onChange={onChange}
-        maxColumns={8}
       />
     </nav>
   )
