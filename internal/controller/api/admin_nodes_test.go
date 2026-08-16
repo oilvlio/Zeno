@@ -541,6 +541,107 @@ func TestAdminNodeDeleteRemovesNodeAndDependentData(t *testing.T) {
 		t.Fatalf("cpu_high enabled = %d, want disabled after deleting its last scoped node", cpuRuleEnabled)
 	}
 }
+func TestCreateAdminNodeAddsNodeToEveryRestrictedNotificationType(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	if err := store.SeedPreviewData(ctx, PreviewSeedOptions{NodeID: "example-node-a", DisplayName: "Example Node A", CountryCode: "HK", AgentToken: "test-agent-token"}); err != nil {
+		t.Fatalf("seed preview data: %v", err)
+	}
+	now := time.Now().UTC().Unix()
+	if _, err := store.db.ExecContext(ctx, `
+		INSERT INTO alert_rule_node_scopes (rule_id, node_id, created_at)
+		VALUES ('cpu_high', 'example-node-a', ?),
+		       ('renewal_due', 'example-node-a', ?)
+	`, now, now); err != nil {
+		t.Fatalf("seed restricted notification types: %v", err)
+	}
+
+	if _, err := store.CreateAdminNode(ctx, AdminNodeCreateRequest{ID: "new-node", DisplayName: "New Node", CountryCode: "US"}); err != nil {
+		t.Fatalf("create admin node: %v", err)
+	}
+
+	rows, err := store.db.QueryContext(ctx, `
+		SELECT rule_id
+		FROM alert_rule_node_scopes
+		WHERE node_id = 'new-node'
+		ORDER BY rule_id
+	`)
+	if err != nil {
+		t.Fatalf("query new node notification scopes: %v", err)
+	}
+	defer rows.Close()
+	var ruleIDs []string
+	for rows.Next() {
+		var ruleID string
+		if err := rows.Scan(&ruleID); err != nil {
+			t.Fatalf("scan new node notification scope: %v", err)
+		}
+		ruleIDs = append(ruleIDs, ruleID)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate new node notification scopes: %v", err)
+	}
+	if got := strings.Join(ruleIDs, ","); got != "cpu_high,renewal_due" {
+		t.Fatalf("new node restricted notification types = %q, want %q", got, "cpu_high,renewal_due")
+	}
+
+	var globalRuleCount int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM alert_rules WHERE id = 'memory_high'`).Scan(&globalRuleCount); err != nil {
+		t.Fatalf("count global notification type: %v", err)
+	}
+	if globalRuleCount != 1 {
+		t.Fatalf("global notification type count = %d, want 1", globalRuleCount)
+	}
+	var globalRuleScopes int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM alert_rule_node_scopes WHERE rule_id = 'memory_high'`).Scan(&globalRuleScopes); err != nil {
+		t.Fatalf("count global notification type scopes: %v", err)
+	}
+	if globalRuleScopes != 0 {
+		t.Fatalf("global notification type scope rows = %d, want 0 so it remains global", globalRuleScopes)
+	}
+}
+
+func TestCreateAdminNodeRollsBackWhenNotificationScopeAssignmentFails(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	if err := store.SeedPreviewData(ctx, PreviewSeedOptions{NodeID: "example-node-a", DisplayName: "Example Node A", CountryCode: "HK", AgentToken: "test-agent-token"}); err != nil {
+		t.Fatalf("seed preview data: %v", err)
+	}
+	now := time.Now().UTC().Unix()
+	if _, err := store.db.ExecContext(ctx, `
+		INSERT INTO alert_rule_node_scopes (rule_id, node_id, created_at)
+		VALUES ('cpu_high', 'example-node-a', ?);
+		CREATE TRIGGER fail_new_node_notification_scope
+		BEFORE INSERT ON alert_rule_node_scopes
+		WHEN NEW.node_id = 'rollback-node'
+		BEGIN
+			SELECT RAISE(ABORT, 'forced notification scope failure');
+		END;
+	`, now); err != nil {
+		t.Fatalf("seed restricted notification type and failure trigger: %v", err)
+	}
+
+	if _, err := store.CreateAdminNode(ctx, AdminNodeCreateRequest{ID: "rollback-node", DisplayName: "Rollback Node", CountryCode: "US"}); err == nil {
+		t.Fatal("create admin node error = nil, want forced notification scope failure")
+	}
+
+	var nodeCount int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM nodes WHERE id = 'rollback-node'`).Scan(&nodeCount); err != nil {
+		t.Fatalf("count rolled back node: %v", err)
+	}
+	if nodeCount != 0 {
+		t.Fatalf("rolled back node count = %d, want 0", nodeCount)
+	}
+}
+
 func TestAdminNodeCreateAddsEditableNodeWithoutReturningSecrets(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {

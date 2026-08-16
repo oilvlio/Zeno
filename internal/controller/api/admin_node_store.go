@@ -66,6 +66,16 @@ func (s *sqliteAdminDomain) CreateAdminNode(ctx context.Context, create AdminNod
 	if affected == 0 {
 		return AdminNode{}, errNodeAlreadyExists
 	}
+	// An empty scope means "all servers", so those rules already cover the new
+	// node. Copy only rules with explicit scopes to preserve their restricted
+	// mode while making every existing notification type include the new node.
+	if _, err := tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO alert_rule_node_scopes (rule_id, node_id, created_at)
+		SELECT DISTINCT existing.rule_id, ?, ?
+		FROM alert_rule_node_scopes existing
+	`, nodeID, now); err != nil {
+		return AdminNode{}, err
+	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT OR IGNORE INTO node_probe_targets (node_id, target_id, enabled)
 		SELECT ?, pt.id, 0
