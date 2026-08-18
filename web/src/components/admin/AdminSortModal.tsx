@@ -1,12 +1,12 @@
-import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react'
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { runMaybePromise } from '../../lib/maybePromise'
-import type { AdminNode } from '../../types'
-import { ServerFlag } from '../ServerFlag'
 import { AdminActionFooter, AdminModal } from './AdminPrimitives'
 import type { MaybePromise } from './adminOperationalTypes'
 
-type AdminNodeSortDragState = {
+type SortableItem = { id: string }
+
+type AdminSortDragState = {
   sourceId: string
   pointerId: number
   startY: number
@@ -15,25 +15,25 @@ type AdminNodeSortDragState = {
   originIds: string[]
 }
 
-export function moveAdminNodeInOrder(nodeIds: string[], sourceId: string, targetId: string): string[] {
-  const sourceIndex = nodeIds.indexOf(sourceId)
-  const targetIndex = nodeIds.indexOf(targetId)
-  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return nodeIds
-  const nextIds = [...nodeIds]
+export function moveAdminItemInOrder(itemIds: string[], sourceId: string, targetId: string): string[] {
+  const sourceIndex = itemIds.indexOf(sourceId)
+  const targetIndex = itemIds.indexOf(targetId)
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return itemIds
+  const nextIds = [...itemIds]
   const [source] = nextIds.splice(sourceIndex, 1)
   nextIds.splice(targetIndex, 0, source)
   return nextIds
 }
 
-export function placeAdminNodeBesideTarget(nodeIds: string[], sourceId: string, targetId: string, afterTarget: boolean): string[] {
-  if (sourceId === targetId || !nodeIds.includes(sourceId) || !nodeIds.includes(targetId)) return nodeIds
-  const nextIds = nodeIds.filter((nodeId) => nodeId !== sourceId)
+export function placeAdminItemBesideTarget(itemIds: string[], sourceId: string, targetId: string, afterTarget: boolean): string[] {
+  if (sourceId === targetId || !itemIds.includes(sourceId) || !itemIds.includes(targetId)) return itemIds
+  const nextIds = itemIds.filter((itemId) => itemId !== sourceId)
   const targetIndex = nextIds.indexOf(targetId)
   nextIds.splice(targetIndex + (afterTarget ? 1 : 0), 0, sourceId)
-  return nextIds.every((nodeId, index) => nodeId === nodeIds[index]) ? nodeIds : nextIds
+  return nextIds.every((itemId, index) => itemId === itemIds[index]) ? itemIds : nextIds
 }
 
-export function adminNodeSortAutoScrollVelocity(pointerY: number, top: number, bottom: number): number {
+export function adminSortAutoScrollVelocity(pointerY: number, top: number, bottom: number): number {
   if (!Number.isFinite(pointerY) || !Number.isFinite(top) || !Number.isFinite(bottom) || bottom <= top) return 0
   const edgeSize = Math.min(48, (bottom - top) / 2)
   const maxVelocity = 14
@@ -46,64 +46,81 @@ export function adminNodeSortAutoScrollVelocity(pointerY: number, top: number, b
   return 0
 }
 
-export function AdminNodeSortModal({ nodes, onSave, onClose }: { nodes: AdminNode[]; onSave: (nodes: AdminNode[]) => MaybePromise; onClose: () => void }) {
-  const [orderedIds, setOrderedIds] = useState(() => nodes.map((node) => node.id))
-  const [dragState, setDragState] = useState<AdminNodeSortDragState | null>(null)
+export interface AdminSortModalProps<T extends SortableItem> {
+  items: T[]
+  title: string
+  intro: string
+  countLabel: string
+  listLabel: string
+  itemLabel: string
+  getDisplayName: (item: T) => string
+  renderItem: (item: T) => ReactNode
+  onSave: (items: T[]) => MaybePromise
+  onClose: () => void
+}
+
+export function AdminSortModal<T extends SortableItem>({ items, title, intro, countLabel, listLabel, itemLabel, getDisplayName, renderItem, onSave, onClose }: AdminSortModalProps<T>) {
+  const [orderedIds, setOrderedIds] = useState(() => items.map((item) => item.id))
+  const [dragState, setDragState] = useState<AdminSortDragState | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [sortAnnouncement, setSortAnnouncement] = useState('')
-  const dragStateRef = useRef<AdminNodeSortDragState | null>(null)
+  const dragStateRef = useRef<AdminSortDragState | null>(null)
   const dragFrameRef = useRef<number | null>(null)
   const autoScrollFrameRef = useRef<number | null>(null)
   const autoScrollVelocityRef = useRef(0)
   const pointerPositionRef = useRef<{ x: number; y: number } | null>(null)
   const sortListRef = useRef<HTMLDivElement | null>(null)
   const orderedIdsRef = useRef(orderedIds)
+  const itemByIdRef = useRef(new Map(items.map((item) => [item.id, item])))
+  const getDisplayNameRef = useRef(getDisplayName)
   orderedIdsRef.current = orderedIds
-  const nodeById = new Map(nodes.map((node) => [node.id, node]))
+  itemByIdRef.current = new Map(items.map((item) => [item.id, item]))
+  getDisplayNameRef.current = getDisplayName
+  const itemById = itemByIdRef.current
 
   useEffect(() => {
     setOrderedIds((currentIds) => {
-      const availableIds = new Set(nodes.map((node) => node.id))
-      const retainedIds = currentIds.filter((nodeId) => availableIds.has(nodeId))
+      const availableIds = new Set(items.map((item) => item.id))
+      const retainedIds = currentIds.filter((itemId) => availableIds.has(itemId))
       const retainedSet = new Set(retainedIds)
-      const appendedIds = nodes.map((node) => node.id).filter((nodeId) => !retainedSet.has(nodeId))
+      const appendedIds = items.map((item) => item.id).filter((itemId) => !retainedSet.has(itemId))
       const nextIds = appendedIds.length === 0 && retainedIds.length === currentIds.length ? currentIds : [...retainedIds, ...appendedIds]
       orderedIdsRef.current = nextIds
       return nextIds
     })
-  }, [nodes])
+  }, [items])
 
-  const orderedNodes = orderedIds.map((nodeId) => nodeById.get(nodeId)).filter((node): node is AdminNode => Boolean(node))
-  const hasChanges = orderedNodes.some((node, index) => node.id !== nodes[index]?.id)
-  const activeDragNode = dragState ? nodeById.get(dragState.sourceId) : undefined
+  const orderedItems = orderedIds.map((itemId) => itemById.get(itemId)).filter((item): item is T => Boolean(item))
+  const hasChanges = orderedItems.some((item, index) => item.id !== items[index]?.id)
+  const activeDragItem = dragState ? itemById.get(dragState.sourceId) : undefined
   const activeDragIndex = dragState ? orderedIds.indexOf(dragState.sourceId) : -1
-  const setNodeOrder = (updater: (currentIds: string[]) => string[]) => {
+  const setItemOrder = (updater: (currentIds: string[]) => string[]) => {
     setOrderedIds((currentIds) => {
       const nextIds = updater(currentIds)
       orderedIdsRef.current = nextIds
       return nextIds
     })
   }
-  const moveNode = (sourceId: string, targetId: string) => setNodeOrder((currentIds) => moveAdminNodeInOrder(currentIds, sourceId, targetId))
-  const moveNodeByStep = (nodeId: string, step: -1 | 1) => {
+  const moveItem = (sourceId: string, targetId: string) => setItemOrder((currentIds) => moveAdminItemInOrder(currentIds, sourceId, targetId))
+  const moveItemByStep = (itemId: string, step: -1 | 1) => {
     if (submitting) return
-    const sourceIndex = orderedIdsRef.current.indexOf(nodeId)
+    const sourceIndex = orderedIdsRef.current.indexOf(itemId)
     const targetIndex = sourceIndex + step
     const targetId = orderedIdsRef.current[targetIndex]
-    const node = nodeById.get(nodeId)
-    if (!targetId || !node) return
-    moveNode(nodeId, targetId)
-    setSortAnnouncement(`${node.displayName} 已调整为第 ${targetIndex + 1} 位`)
+    const item = itemById.get(itemId)
+    if (!targetId || !item) return
+    moveItem(itemId, targetId)
+    setSortAnnouncement(`${getDisplayName(item)} 已调整为第 ${targetIndex + 1} 位`)
   }
-  const beginPointerDrag = (event: ReactPointerEvent<HTMLButtonElement>, nodeId: string) => {
+  const beginPointerDrag = (event: ReactPointerEvent<HTMLButtonElement>, itemId: string) => {
     if (submitting || !event.isPrimary || event.button !== 0) return
-    const row = event.currentTarget.closest<HTMLElement>('.admin-server-sort-row')
+    const row = event.currentTarget.closest<HTMLElement>('.admin-sort-row')
     if (!row) return
     event.preventDefault()
     const bounds = row.getBoundingClientRect()
-    const nextDrag: AdminNodeSortDragState = {
-      sourceId: nodeId,
+    const nextDrag: AdminSortDragState = {
+      sourceId: itemId,
       pointerId: event.pointerId,
       startY: event.clientY,
       currentY: event.clientY,
@@ -131,13 +148,13 @@ export function AdminNodeSortModal({ nodes, onSave, onClose }: { nodes: AdminNod
         autoScrollFrameRef.current = null
       }
     }
-    const updateDropTarget = (clientX: number, clientY: number, currentDrag: AdminNodeSortDragState) => {
-      const targetRow = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('.admin-server-sort-row:not(.is-placeholder)')
-      const targetId = targetRow?.dataset.nodeId
+    const updateDropTarget = (clientX: number, clientY: number, currentDrag: AdminSortDragState) => {
+      const targetRow = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('.admin-sort-row:not(.is-placeholder)')
+      const targetId = targetRow?.dataset.sortItemId
       if (!targetId || targetId === currentDrag.sourceId) return
       const targetBounds = targetRow.getBoundingClientRect()
       const afterTarget = clientY >= targetBounds.top + targetBounds.height / 2
-      setNodeOrder((currentIds) => placeAdminNodeBesideTarget(currentIds, currentDrag.sourceId, targetId, afterTarget))
+      setItemOrder((currentIds) => placeAdminItemBesideTarget(currentIds, currentDrag.sourceId, targetId, afterTarget))
     }
     const startAutoScroll = () => {
       if (autoScrollFrameRef.current !== null || autoScrollVelocityRef.current === 0) return
@@ -171,9 +188,9 @@ export function AdminNodeSortModal({ nodes, onSave, onClose }: { nodes: AdminNod
         orderedIdsRef.current = currentDrag.originIds
         setOrderedIds(currentDrag.originIds)
       } else {
-        const node = nodeById.get(currentDrag.sourceId)
+        const item = itemByIdRef.current.get(currentDrag.sourceId)
         const finalIndex = orderedIdsRef.current.indexOf(currentDrag.sourceId)
-        if (node && finalIndex >= 0) setSortAnnouncement(`${node.displayName} 已调整为第 ${finalIndex + 1} 位`)
+        if (item && finalIndex >= 0) setSortAnnouncement(`${getDisplayNameRef.current(item)} 已调整为第 ${finalIndex + 1} 位`)
       }
       dragStateRef.current = null
       setDragState(null)
@@ -187,7 +204,7 @@ export function AdminNodeSortModal({ nodes, onSave, onClose }: { nodes: AdminNod
       publishDragPosition()
       updateDropTarget(event.clientX, event.clientY, currentDrag)
       const listBounds = sortListRef.current?.getBoundingClientRect()
-      autoScrollVelocityRef.current = listBounds ? adminNodeSortAutoScrollVelocity(event.clientY, listBounds.top, listBounds.bottom) : 0
+      autoScrollVelocityRef.current = listBounds ? adminSortAutoScrollVelocity(event.clientY, listBounds.top, listBounds.bottom) : 0
       if (autoScrollVelocityRef.current === 0) stopAutoScroll()
       else startAutoScroll()
     }
@@ -220,7 +237,7 @@ export function AdminNodeSortModal({ nodes, onSave, onClose }: { nodes: AdminNod
       }
       stopAutoScroll()
     }
-  }, [dragState !== null, nodes])
+  }, [dragState !== null])
 
   const closeModal = () => {
     if (!submitting) onClose()
@@ -229,49 +246,43 @@ export function AdminNodeSortModal({ nodes, onSave, onClose }: { nodes: AdminNod
     if (submitting) return
     setSubmitting(true)
     setFormError(null)
-    runMaybePromise(() => onSave(orderedNodes))
+    runMaybePromise(() => onSave(orderedItems))
       .catch((error: unknown) => setFormError(error instanceof Error ? error.message : '保存失败'))
       .finally(() => setSubmitting(false))
   }
 
   return (
-    <AdminModal title="服务器排序" className="admin-server-sort-modal" closeDisabled={submitting || dragState !== null} onClose={closeModal}>
-      <section className="admin-server-sort-workspace" aria-label="调整服务器顺序" aria-busy={submitting} inert={submitting ? true : undefined}>
-        <header className="admin-server-sort-intro">
-          <p>按住手柄拖动整行，或使用箭头微调。</p>
-          <span>{orderedNodes.length} 台</span>
+    <AdminModal title={title} className="admin-sort-modal" closeDisabled={submitting || dragState !== null} onClose={closeModal}>
+      <section className="admin-sort-workspace" aria-label={`调整${itemLabel}顺序`} aria-busy={submitting} inert={submitting ? true : undefined}>
+        <header className="admin-sort-intro">
+          <p>{intro}</p>
+          <span>{items.length} {countLabel}</span>
         </header>
-        <div ref={sortListRef} className="admin-server-sort-list" role="list" aria-label="服务器排序列表">
-          {orderedNodes.map((node, index) => {
+        <div ref={sortListRef} className="admin-sort-list" role="list" aria-label={listLabel}>
+          {orderedItems.map((item, index) => {
             const isFirst = index === 0
-            const isLast = index === orderedNodes.length - 1
-            const isPlaceholder = dragState?.sourceId === node.id
+            const isLast = index === orderedItems.length - 1
+            const isPlaceholder = dragState?.sourceId === item.id
             return (
               <article
-                className={`admin-server-sort-row${isPlaceholder ? ' is-placeholder' : ''}`}
+                className={`admin-sort-row${isPlaceholder ? ' is-placeholder' : ''}`}
                 role="listitem"
-                key={node.id}
-                data-node-id={node.id}
+                key={item.id}
+                data-sort-item-id={item.id}
               >
-                <span className="admin-server-sort-index" aria-label={`第 ${index + 1} 位`}>{String(index + 1).padStart(2, '0')}</span>
-                <span className="admin-server-sort-server">
-                  <ServerFlag countryCode={node.countryCode} className="admin-server-sort-flag" />
-                  <span>
-                    <strong>{node.displayName}</strong>
-                    <small>{node.publicIPv4 || node.publicIPv6 || '未上报公网 IP'}</small>
-                  </span>
-                </span>
-                <div className="admin-server-sort-controls" aria-label={`${node.displayName} 的排序操作`}>
-                  <button type="button" aria-label={`将 ${node.displayName} 上移`} title="上移" disabled={submitting || isFirst} onClick={() => moveNodeByStep(node.id, -1)}><AdminSortArrow direction="up" /></button>
-                  <button type="button" aria-label={`将 ${node.displayName} 下移`} title="下移" disabled={submitting || isLast} onClick={() => moveNodeByStep(node.id, 1)}><AdminSortArrow direction="down" /></button>
+                <span className="admin-sort-index" aria-label={`第 ${index + 1} 位`}>{String(index + 1).padStart(2, '0')}</span>
+                {renderItem(item)}
+                <div className="admin-sort-controls" aria-label={`${getDisplayName(item)} 的排序操作`}>
+                  <button type="button" aria-label={`将 ${getDisplayName(item)} 上移`} title="上移" disabled={submitting || isFirst} onClick={() => moveItemByStep(item.id, -1)}><AdminSortArrow direction="up" /></button>
+                  <button type="button" aria-label={`将 ${getDisplayName(item)} 下移`} title="下移" disabled={submitting || isLast} onClick={() => moveItemByStep(item.id, 1)}><AdminSortArrow direction="down" /></button>
                 </div>
                 <button
                   className="admin-drag-handle"
                   type="button"
                   disabled={submitting}
-                  aria-label={`拖动 ${node.displayName} 调整顺序`}
+                  aria-label={`拖动 ${getDisplayName(item)} 调整顺序`}
                   title="拖动整行"
-                  onPointerDown={(event) => beginPointerDrag(event, node.id)}
+                  onPointerDown={(event) => beginPointerDrag(event, item.id)}
                 ><AdminSortGrip /></button>
               </article>
             )
@@ -279,13 +290,13 @@ export function AdminNodeSortModal({ nodes, onSave, onClose }: { nodes: AdminNod
         </div>
         <p className="sr-only" aria-live="polite" aria-atomic="true">{sortAnnouncement}</p>
       </section>
-      <AdminActionFooter className="admin-server-sort-actions" error={formError}>
+      <AdminActionFooter className="admin-sort-actions" error={formError}>
         <button type="button" onClick={closeModal} disabled={submitting}>取消</button>
         <button className="admin-primary-action" type="button" onClick={saveOrder} disabled={submitting || !hasChanges}>{submitting ? '保存中…' : '保存排序'}</button>
       </AdminActionFooter>
-      {dragState && activeDragNode && typeof document !== 'undefined' && createPortal(
+      {dragState && activeDragItem && typeof document !== 'undefined' && createPortal(
         <article
-          className="zeno-overlay-surface admin-server-sort-row is-drag-preview"
+          className="zeno-overlay-surface admin-sort-row is-drag-preview"
           aria-hidden="true"
           style={{
             '--admin-sort-drag-y': `${dragState.currentY - dragState.startY}px`,
@@ -295,15 +306,9 @@ export function AdminNodeSortModal({ nodes, onSave, onClose }: { nodes: AdminNod
             height: dragState.rect.height,
           } as CSSProperties}
         >
-          <span className="admin-server-sort-index">{String(activeDragIndex + 1).padStart(2, '0')}</span>
-          <span className="admin-server-sort-server">
-            <ServerFlag countryCode={activeDragNode.countryCode} className="admin-server-sort-flag" />
-            <span>
-              <strong>{activeDragNode.displayName}</strong>
-              <small>{activeDragNode.publicIPv4 || activeDragNode.publicIPv6 || '未上报公网 IP'}</small>
-            </span>
-          </span>
-          <span className="admin-server-sort-dragging-label">移动中</span>
+          <span className="admin-sort-index">{String(activeDragIndex + 1).padStart(2, '0')}</span>
+          {renderItem(activeDragItem)}
+          <span className="admin-sort-dragging-label">移动中</span>
           <span className="admin-drag-handle"><AdminSortGrip /></span>
         </article>,
         document.body,

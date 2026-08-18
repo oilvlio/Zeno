@@ -709,7 +709,7 @@ X-Admin-Token: <admin-token>
 
 ### GET /api/admin/v1/probe-targets
 
-探针目标管理列表，返回所有有效目标、显示顺序及分配到哪些节点。目标创建后默认有效，不提供全局启用/停用开关；是否由某台服务器执行探测，只由 `assignments[].enabled` 控制。列表按 `display_order ASC, id ASC` 排序；后台列表操作只保留编辑目标，显示顺序可通过整理顺序或编辑表单写回 `display_order`。不会返回 Agent token、token hash 或 secret 字段。
+探针目标管理列表，返回所有有效目标、显示顺序及分配到哪些节点。目标创建后默认有效，不提供全局启用/停用开关；是否由某台服务器执行探测，只由 `assignments[].enabled` 控制。列表按 `display_order ASC, id ASC` 排序；后台“延迟监控排序”与服务器排序使用相同的拖拽/箭头交互，完整顺序通过批量接口一次性写入。不会返回 Agent token、token hash 或 secret 字段。
 
 响应：
 
@@ -754,7 +754,7 @@ X-Admin-Token: <admin-token>
 
 ### POST /api/admin/v1/probe-targets
 
-新增探针目标。新目标创建后立即作为有效目标存在；未提交 `assignments` 时默认不关联任何服务器。响应仍不包含 Agent 凭据。
+新增探针目标。新目标创建后立即作为有效目标存在；未提交 `assignments` 时默认不关联任何服务器。未提交 `display_order`（或提交 0）时，Controller 在同一事务中把目标追加到当前最大顺序之后，避免随机生成的目标 ID 影响默认顺序；响应仍不包含 Agent 凭据。
 
 HTTP GET 示例：
 
@@ -768,6 +768,16 @@ HTTP GET 示例：
   "timeout_ms": 600,
   "interval_sec": 30,
   "display_order": 20
+}
+```
+
+### PATCH /api/admin/v1/probe-targets/reorder
+
+一次提交完整延迟监控顺序。`target_ids` 必须无重复地覆盖当前全部可见目标；后端先校验整组 ID，再在单个 SQLite 事务中按 10、20、30… 写入 `display_order`，同时递增探针配置版本，使 Agent 重新读取顺序。任一校验或写入失败都会整体回滚，不会留下部分排序；成功返回 `204 No Content`。
+
+```json
+{
+  "target_ids": ["target-c", "target-a", "target-b"]
 }
 ```
 

@@ -8,10 +8,63 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func (s *sqliteSchemaStore) runSchemaMigration(ctx context.Context, name string, migrate func(context.Context) error) error {
 	return s.runValidatedSchemaMigration(ctx, name, nil, migrate)
+}
+
+func TestNormalizeProbeTargetDisplayOrderPreservesExplicitOrderAndAppendsLegacyZerosByCreation(t *testing.T) {
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	created := time.Now().UTC().Unix()
+	if _, err := store.db.ExecContext(ctx, `
+		INSERT INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, created_at, updated_at)
+		VALUES ('explicit-first', 'explicit-first', 'ping', '192.0.2.1', NULL, 3, 1000, 30, 50, ?, ?)
+	`, created+4, created+4); err != nil {
+		t.Fatalf("insert explicitly ordered target: %v", err)
+	}
+	for index, target := range []struct {
+		id string
+		at int64
+	}{
+		{id: "created-second", at: created + 2},
+		{id: "created-first", at: created + 1},
+		{id: "created-third", at: created + 3},
+	} {
+		if _, err := store.db.ExecContext(ctx, `
+			INSERT INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, created_at, updated_at)
+			VALUES (?, ?, 'ping', '192.0.2.1', NULL, 3, 1000, 30, 0, ?, ?)
+		`, target.id, target.id, target.at, target.at); err != nil {
+			t.Fatalf("insert legacy target %d: %v", index, err)
+		}
+	}
+	if err := store.normalizeProbeTargetDisplayOrder(ctx); err != nil {
+		t.Fatalf("normalize target order: %v", err)
+	}
+	rows, err := store.db.QueryContext(ctx, `SELECT id, display_order FROM probe_targets ORDER BY display_order`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for index, wantID := range []string{"explicit-first", "created-first", "created-second", "created-third"} {
+		if !rows.Next() {
+			t.Fatalf("missing target %d", index)
+		}
+		var id string
+		var displayOrder int
+		if err := rows.Scan(&id, &displayOrder); err != nil {
+			t.Fatal(err)
+		}
+		if id != wantID || displayOrder != (index+1)*10 {
+			t.Fatalf("target %d = %s/%d, want %s/%d", index, id, displayOrder, wantID, (index+1)*10)
+		}
+	}
 }
 
 func TestRunSchemaMigrationRecordsAndSkipsCompletedWork(t *testing.T) {
@@ -192,6 +245,7 @@ func TestOpenSQLiteStoreLogsEverySchemaStageMetric(t *testing.T) {
 		"traffic-monthly-columns",
 		"traffic-aggregate-normalize",
 		"probe-target-columns",
+		"probe-target-display-order",
 		"probe-target-global-enabled",
 		"traffic-last-sample-backfill",
 		"traffic-lifetime-backfill",

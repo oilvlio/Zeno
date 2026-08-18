@@ -58,6 +58,18 @@ describe('adminStateReducer', () => {
     expect(previous.nodes.map((node) => node.id)).toEqual([exampleNodeANode.id, backupNode.id])
   })
 
+  it('applies a committed batch order to every latency target in one reducer action', () => {
+    const previous = readyState()
+    const next = adminStateReducer(previous, { type: 'targets.reordered', targetIds: [pingTarget.id, exampleNodeATarget.id] })
+    expect(next.kind).toBe('ready')
+    if (next.kind !== 'ready') return
+    expect(next.targets.map((target) => [target.id, target.displayOrder])).toEqual([
+      [pingTarget.id, 10],
+      [exampleNodeATarget.id, 20],
+    ])
+    expect(previous.targets.map((target) => target.id)).toEqual([exampleNodeATarget.id, pingTarget.id])
+  })
+
   it('keeps non-ready state unchanged when any stale mutation result arrives', () => {
     const loading: AdminLoadState = { kind: 'loading' }
     const staleActions: AdminStateAction[] = [
@@ -68,6 +80,7 @@ describe('adminStateReducer', () => {
       { type: 'node.deleted', nodeId: exampleNodeANode.id },
       { type: 'target.created', target: pingTarget },
       { type: 'target.updated', target: pingTarget },
+      { type: 'targets.reordered', targetIds: [pingTarget.id] },
       { type: 'target.deleted', targetId: pingTarget.id },
       { type: 'channel.created', channel: telegramChannel },
       { type: 'channel.updated', channel: telegramChannel },

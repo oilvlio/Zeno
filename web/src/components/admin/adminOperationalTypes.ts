@@ -28,6 +28,7 @@ export interface AdminTargetWorkspaceProps {
   nodes: AdminNode[]
   onCreate: (input: AdminProbeTargetInput) => MaybePromise
   onUpdate: (targetId: string, input: AdminProbeTargetUpdateInput) => MaybePromise
+  onReorder: (targetIds: string[]) => MaybePromise
   onDelete: (targetId: string) => MaybePromise
 }
 
@@ -55,6 +56,7 @@ export interface AdminOperationalWorkspaceProps {
   onInstallCommand: AdminNodeWorkspaceProps['onInstallCommand']
   onProbeTargetCreate: AdminTargetWorkspaceProps['onCreate']
   onProbeTargetUpdate: AdminTargetWorkspaceProps['onUpdate']
+  onProbeTargetReorder: AdminTargetWorkspaceProps['onReorder']
   onProbeTargetDelete: AdminTargetWorkspaceProps['onDelete']
   onNotificationChannelCreate: AdminNotificationsWorkspaceProps['onChannelCreate']
   onNotificationChannelUpdate: AdminNotificationsWorkspaceProps['onChannelUpdate']

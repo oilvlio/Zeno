@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
-import { AdminSettingsConflictError, createAdminNode, createAdminNotificationChannel, createAdminProbeTarget, deleteAdminNode, deleteAdminNotificationChannel, deleteAdminProbeTarget, fetchAdminAlertRules, fetchAdminNodes, fetchAdminNotificationChannels, fetchAdminProbeTargets, fetchAdminSettings, reorderAdminNodes, requestAdminNodeInstallCommand, testAdminNotificationChannel, updateAdminAlertRule, updateAdminNode, updateAdminNotificationChannel, updateAdminProbeTarget, updateAdminSettings, type AdminAlertRuleUpdateInput, type AdminNodeCreateInput, type AdminNodeUpdateInput, type AdminNotificationChannelCreateInput, type AdminNotificationChannelUpdateInput, type AdminProbeTargetInput, type AdminProbeTargetUpdateInput, type AdminSettingsUpdateInput } from '../api/adminClient'
+import { AdminSettingsConflictError, createAdminNode, createAdminNotificationChannel, createAdminProbeTarget, deleteAdminNode, deleteAdminNotificationChannel, deleteAdminProbeTarget, fetchAdminAlertRules, fetchAdminNodes, fetchAdminNotificationChannels, fetchAdminProbeTargets, fetchAdminSettings, reorderAdminNodes, reorderAdminProbeTargets, requestAdminNodeInstallCommand, testAdminNotificationChannel, updateAdminAlertRule, updateAdminNode, updateAdminNotificationChannel, updateAdminProbeTarget, updateAdminSettings, type AdminAlertRuleUpdateInput, type AdminNodeCreateInput, type AdminNodeUpdateInput, type AdminNotificationChannelCreateInput, type AdminNotificationChannelUpdateInput, type AdminProbeTargetInput, type AdminProbeTargetUpdateInput, type AdminSettingsUpdateInput } from '../api/adminClient'
 import { fetchAdminAccount, loginAdmin, logoutAdmin, probeAdminCookieSession, rememberAdminCookieSessionProbe, updateAdminAccount } from '../api/adminSession'
 import { defaultSettings } from '../lib/appearance'
 import { createAdminMutationCoordinator, runAdminMutationLease } from '../lib/adminMutationCoordinator'
@@ -284,6 +284,11 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
     },
   ).then(() => {})
 
+  const reorderAdminProbeTargetDetails = (targetIds: string[]): Promise<void> => runAdminMutation(
+    (requestToken, signal) => reorderAdminProbeTargets(requestToken, targetIds, signal),
+    () => dispatchAdminState({ type: 'targets.reordered', targetIds }),
+  ).then(() => {})
+
   const deleteAdminProbeTargetDetails = (targetId: string): Promise<void> => runAdminMutation(
     (requestToken, signal) => deleteAdminProbeTarget(requestToken, targetId, signal),
     () => {
@@ -361,6 +366,7 @@ export function useAdminController(isAdminRoute: boolean, { initialSettings = de
     requestAdminInstallCommand,
     createAdminProbeTargetDetails,
     updateAdminProbeTargetDetails,
+    reorderAdminProbeTargetDetails,
     deleteAdminProbeTargetDetails,
     createAdminNotificationChannelDetails,
     updateAdminNotificationChannelDetails,

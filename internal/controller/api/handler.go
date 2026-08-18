@@ -180,6 +180,7 @@ func NewHandler(options ...HandlerOptions) http.Handler {
 	mux.HandleFunc("/api/admin/v1/alert-rules/", h.handleAdminAlertRuleResource)
 	mux.HandleFunc("/api/admin/v1/notification-types/", h.handleAdminNotificationTypeResource)
 	mux.HandleFunc("/api/admin/v1/probe-targets", h.handleAdminProbeTargets)
+	mux.HandleFunc("/api/admin/v1/probe-targets/reorder", h.handleAdminProbeTargetReorder)
 	mux.HandleFunc("/api/admin/v1/probe-targets/", h.handleAdminProbeTargetResource)
 	mux.HandleFunc("/api/admin/v1/nodes", h.handleAdminNodes)
 	mux.HandleFunc("/api/admin/v1/nodes/reorder", h.handleAdminNodeReorder)

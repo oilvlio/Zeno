@@ -195,10 +195,32 @@ func (s *sqliteAdminDomain) CreateAdminProbeTarget(ctx context.Context, create A
 	if err != nil {
 		return AdminProbeTarget{}, err
 	}
+	displayOrder := create.DisplayOrder
+	if displayOrder == 0 {
+		var maxDisplayOrder int64
+		if err := tx.QueryRowContext(ctx, `
+			SELECT COALESCE(MAX(pt.display_order), 0)
+			FROM probe_targets pt
+			WHERE NOT EXISTS (
+				SELECT 1 FROM admin_deletion_jobs deletion
+				WHERE deletion.entity_kind = 'probe_target'
+				  AND deletion.entity_id = pt.id
+				  AND deletion.state IN ('pending', 'running')
+			)
+		`).Scan(&maxDisplayOrder); err != nil {
+			return AdminProbeTarget{}, err
+		}
+		maxInt := int64(^uint(0) >> 1)
+		if maxDisplayOrder >= maxInt-10 {
+			displayOrder = int(maxInt)
+		} else {
+			displayOrder = int(maxDisplayOrder) + 10
+		}
+	}
 	result, err := tx.ExecContext(ctx, `
 		INSERT OR IGNORE INTO probe_targets (id, name, type, address, port, count, timeout_ms, interval_sec, display_order, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, targetID, create.Name, create.Type, create.Address, adminOptionalInt64SQLValue(create.Port), create.Count, create.TimeoutMS, create.IntervalSec, create.DisplayOrder, now, now)
+	`, targetID, create.Name, create.Type, create.Address, adminOptionalInt64SQLValue(create.Port), create.Count, create.TimeoutMS, create.IntervalSec, displayOrder, now, now)
 	if err != nil {
 		return AdminProbeTarget{}, err
 	}
@@ -465,6 +487,44 @@ func (s *sqliteAdminDomain) UpdateAdminNode(ctx context.Context, nodeID string, 
 	return s.adminNodeByID(ctx, nodeID)
 }
 
+func reorderAdminDisplayOrderTx(ctx context.Context, tx *sql.Tx, ids []string, invalid error, activeIDsQuery, updateQuery string) error {
+	rows, err := tx.QueryContext(ctx, activeIDsQuery)
+	if err != nil {
+		return err
+	}
+	activeIDs := make(map[string]struct{}, len(ids))
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		activeIDs[id] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if len(activeIDs) != len(ids) {
+		return invalid
+	}
+	for _, id := range ids {
+		if _, exists := activeIDs[id]; !exists {
+			return invalid
+		}
+	}
+	now := time.Now().UTC().Unix()
+	for index, id := range ids {
+		if _, err := tx.ExecContext(ctx, updateQuery, (index+1)*10, now, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *sqliteAdminDomain) ReorderAdminNodes(ctx context.Context, request AdminNodeReorderRequest) error {
 	if err := request.normalize(); err != nil {
 		return err
@@ -477,7 +537,7 @@ func (s *sqliteAdminDomain) ReorderAdminNodes(ctx context.Context, request Admin
 	if _, err := tx.ExecContext(ctx, `UPDATE probe_config_meta SET version = version WHERE id = 1`); err != nil {
 		return err
 	}
-	rows, err := tx.QueryContext(ctx, `
+	if err := reorderAdminDisplayOrderTx(ctx, tx, request.NodeIDs, errInvalidAdminNodeUpdate, `
 		SELECT n.id
 		FROM nodes n
 		WHERE NOT EXISTS (
@@ -486,41 +546,42 @@ func (s *sqliteAdminDomain) ReorderAdminNodes(ctx context.Context, request Admin
 			  AND deletion.entity_id = n.id
 			  AND deletion.state IN ('pending', 'running')
 		)
-	`)
+	`, `UPDATE nodes SET display_order = ?, updated_at = ? WHERE id = ?`); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	tx = nil
+	return nil
+}
+
+func (s *sqliteAdminDomain) ReorderAdminProbeTargets(ctx context.Context, request AdminProbeTargetReorderRequest) error {
+	if err := request.normalize(); err != nil {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	activeNodeIDs := make(map[string]struct{}, len(request.NodeIDs))
-	for rows.Next() {
-		var nodeID string
-		if err := rows.Scan(&nodeID); err != nil {
-			_ = rows.Close()
-			return err
-		}
-		activeNodeIDs[nodeID] = struct{}{}
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
+	defer func() { rollbackUnlessCommitted(tx) }()
+	if _, err := tx.ExecContext(ctx, `UPDATE probe_config_meta SET version = version WHERE id = 1`); err != nil {
 		return err
 	}
-	if err := rows.Close(); err != nil {
+	if err := reorderAdminDisplayOrderTx(ctx, tx, request.TargetIDs, errInvalidAdminTargetWrite, `
+		SELECT pt.id
+		FROM probe_targets pt
+		WHERE NOT EXISTS (
+			SELECT 1 FROM admin_deletion_jobs deletion
+			WHERE deletion.entity_kind = 'probe_target'
+			  AND deletion.entity_id = pt.id
+			  AND deletion.state IN ('pending', 'running')
+		)
+	`, `UPDATE probe_targets SET display_order = ?, updated_at = ? WHERE id = ?`); err != nil {
 		return err
 	}
-	if len(activeNodeIDs) != len(request.NodeIDs) {
-		return errInvalidAdminNodeUpdate
-	}
-	for _, nodeID := range request.NodeIDs {
-		if _, exists := activeNodeIDs[nodeID]; !exists {
-			return errInvalidAdminNodeUpdate
-		}
-	}
-	now := time.Now().UTC().Unix()
-	for index, nodeID := range request.NodeIDs {
-		if _, err := tx.ExecContext(ctx, `
-			UPDATE nodes SET display_order = ?, updated_at = ? WHERE id = ?
-		`, (index+1)*10, now, nodeID); err != nil {
-			return err
-		}
+	if err := bumpProbeConfigVersionTx(ctx, tx); err != nil {
+		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return err

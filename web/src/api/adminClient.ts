@@ -68,6 +68,18 @@ export async function reorderAdminNodes(adminToken: string, nodeIds: string[], s
   }
 }
 
+export async function reorderAdminProbeTargets(adminToken: string, targetIds: string[], signal?: AbortSignal): Promise<void> {
+  const response = await fetch('/api/admin/v1/probe-targets/reorder', {
+    method: 'PATCH',
+    signal,
+    headers: adminHeaders(adminToken, { Accept: 'application/json', 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ target_ids: targetIds }),
+  })
+  if (!response.ok) {
+    throw new Error(`admin probe target reorder failed: ${response.status}`)
+  }
+}
+
 export async function fetchAdminProbeTargets(adminToken: string, signal?: AbortSignal): Promise<AdminProbeTargetsData> {
   const response = await fetch('/api/admin/v1/probe-targets', {
     signal,

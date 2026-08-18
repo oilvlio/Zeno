@@ -494,6 +494,7 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 		"display_order": "INTEGER NOT NULL DEFAULT 0",
 	}
 	stage.columns("probe-target-columns", "probe_targets", probeTargetColumns)
+	stage.run("probe-target-display-order", func() error { return s.normalizeProbeTargetDisplayOrder(ctx) })
 	stage.run("probe-target-global-enabled", func() error { return s.migrateProbeTargetGlobalEnabled(ctx) })
 	stage.run("traffic-last-sample-backfill", func() error {
 		_, err := s.db.ExecContext(ctx, `

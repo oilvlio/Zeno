@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAdminProbeTarget, deleteAdminProbeTarget, fetchAdminProbeTargets, updateAdminProbeTarget } from './client'
+import { createAdminProbeTarget, deleteAdminProbeTarget, fetchAdminProbeTargets, reorderAdminProbeTargets, updateAdminProbeTarget } from './client'
 
 describe('fetchAdminProbeTargets', () => {
   const originalFetch = globalThis.fetch
@@ -20,6 +20,32 @@ describe('fetchAdminProbeTargets', () => {
         Accept: 'application/json',
         'X-Admin-Token': 'admin-pass',
       },
+    })
+  })
+})
+describe('reorderAdminProbeTargets', () => {
+  const originalFetch = globalThis.fetch
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    vi.restoreAllMocks()
+  })
+
+  it('sends the complete target order in one PATCH request', async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await reorderAdminProbeTargets('admin-pass', ['target-c', 'target-a', 'target-b'])
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/v1/probe-targets/reorder', {
+      method: 'PATCH',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Admin-Token': 'admin-pass',
+      },
+      body: JSON.stringify({ target_ids: ['target-c', 'target-a', 'target-b'] }),
     })
   })
 })

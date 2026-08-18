@@ -48,6 +48,10 @@ type adminNodeOrderStore interface {
 	ReorderAdminNodes(ctx context.Context, request AdminNodeReorderRequest) error
 }
 
+type adminProbeTargetOrderStore interface {
+	ReorderAdminProbeTargets(ctx context.Context, request AdminProbeTargetReorderRequest) error
+}
+
 const (
 	adminSessionCookieName = "__Host-zeno_admin_session"
 	adminCSRFHeaderName    = "X-Zeno-CSRF"
@@ -410,6 +414,32 @@ func (h *handler) handleAdminProbeTargetResource(w http.ResponseWriter, r *http.
 	h.notifyProbeConfigChanged(r.Context())
 	h.publishSummaryNowFresh(r.Context())
 	writeJSON(w, http.StatusOK, AdminProbeTargetResponse{Target: target})
+}
+
+func (h *handler) handleAdminProbeTargetReorder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if _, ok := h.authorizeAdminRequest(w, r); !ok {
+		return
+	}
+	store, ok := h.store.(adminProbeTargetOrderStore)
+	if !ok {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	var request AdminProbeTargetReorderRequest
+	if !decodeJSONBody(w, r, &request, adminJSONBodyLimit, true) {
+		return
+	}
+	if err := store.ReorderAdminProbeTargets(r.Context(), request); err != nil {
+		writeAdminError(w, err)
+		return
+	}
+	h.notifyProbeConfigChanged(r.Context())
+	h.publishSummaryNowFresh(r.Context())
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *handler) handleAdminNodes(w http.ResponseWriter, r *http.Request) {

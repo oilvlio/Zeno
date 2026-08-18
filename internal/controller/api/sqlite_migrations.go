@@ -22,6 +22,72 @@ type schemaStageSnapshot struct {
 	databaseBytes int64
 }
 
+// normalizeProbeTargetDisplayOrder gives legacy zero-valued targets an
+// explicit order. Existing positive orders stay first; unordered targets are
+// appended in creation order instead of being shuffled by generated ids.
+func (s *sqliteSchemaStore) normalizeProbeTargetDisplayOrder(ctx context.Context) error {
+	var hasUnordered int
+	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM probe_targets WHERE display_order <= 0)`).Scan(&hasUnordered); err != nil {
+		return err
+	}
+	if hasUnordered == 0 {
+		return nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { rollbackUnlessCommitted(tx) }()
+	if _, err := tx.ExecContext(ctx, `UPDATE probe_config_meta SET version = version WHERE id = 1`); err != nil {
+		return err
+	}
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id
+		FROM probe_targets
+		ORDER BY
+			CASE WHEN display_order > 0 THEN 0 ELSE 1 END ASC,
+			CASE WHEN display_order > 0 THEN display_order END ASC,
+			CASE WHEN display_order <= 0 THEN created_at END ASC,
+			id ASC
+	`)
+	if err != nil {
+		return err
+	}
+	ids := make([]string, 0)
+	for rows.Next() {
+		var targetID string
+		if err := rows.Scan(&targetID); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		ids = append(ids, targetID)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for index, targetID := range ids {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE probe_targets SET display_order = ?, updated_at = updated_at WHERE id = ?
+		`, (index+1)*10, targetID); err != nil {
+			return err
+		}
+	}
+	if len(ids) > 0 {
+		if err := bumpProbeConfigVersionTx(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	tx = nil
+	return nil
+}
+
 func (s *sqliteSchemaStore) runValidatedSchemaMigration(ctx context.Context, name string, current func(context.Context) (bool, error), migrate func(context.Context) error) error {
 	name = strings.TrimSpace(name)
 	if s == nil || s.db == nil {

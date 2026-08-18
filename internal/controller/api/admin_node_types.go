@@ -98,20 +98,26 @@ type AdminNodeReorderRequest struct {
 }
 
 func (request *AdminNodeReorderRequest) normalize() error {
-	if len(request.NodeIDs) == 0 {
-		return errInvalidAdminNodeUpdate
+	return normalizeAdminOrderIDs(request.NodeIDs, errInvalidAdminNodeUpdate)
+}
+
+// normalizeAdminOrderIDs validates a complete ordered resource list once, so
+// all admin reorder endpoints share the same duplicate/missing-id contract.
+func normalizeAdminOrderIDs(ids []string, invalid error) error {
+	if len(ids) == 0 {
+		return invalid
 	}
-	seen := make(map[string]struct{}, len(request.NodeIDs))
-	for index, nodeID := range request.NodeIDs {
-		nodeID = strings.TrimSpace(nodeID)
-		if nodeID == "" {
-			return errInvalidAdminNodeUpdate
+	seen := make(map[string]struct{}, len(ids))
+	for index, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return invalid
 		}
-		if _, exists := seen[nodeID]; exists {
-			return errInvalidAdminNodeUpdate
+		if _, exists := seen[id]; exists {
+			return invalid
 		}
-		seen[nodeID] = struct{}{}
-		request.NodeIDs[index] = nodeID
+		seen[id] = struct{}{}
+		ids[index] = id
 	}
 	return nil
 }

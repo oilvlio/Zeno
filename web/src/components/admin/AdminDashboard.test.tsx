@@ -121,6 +121,7 @@ describe('AdminDashboard', () => {
     const onInstallCommand: AdminOperationalWorkspaceProps['onInstallCommand'] = async (nodeId) => ({ nodeId, command: 'install', commands: { linux: 'install' } })
     const onProbeTargetCreate: AdminOperationalWorkspaceProps['onProbeTargetCreate'] = () => {}
     const onProbeTargetUpdate: AdminOperationalWorkspaceProps['onProbeTargetUpdate'] = () => {}
+    const onProbeTargetReorder: AdminOperationalWorkspaceProps['onProbeTargetReorder'] = () => {}
     const onProbeTargetDelete: AdminOperationalWorkspaceProps['onProbeTargetDelete'] = () => {}
     const onNotificationChannelCreate: AdminOperationalWorkspaceProps['onNotificationChannelCreate'] = () => {}
     const onNotificationChannelUpdate: AdminOperationalWorkspaceProps['onNotificationChannelUpdate'] = () => {}
@@ -145,6 +146,7 @@ describe('AdminDashboard', () => {
         onAdminInstallCommand={onInstallCommand}
         onAdminProbeTargetCreate={onProbeTargetCreate}
         onAdminProbeTargetUpdate={onProbeTargetUpdate}
+        onAdminProbeTargetReorder={onProbeTargetReorder}
         onAdminProbeTargetDelete={onProbeTargetDelete}
         onAdminNotificationChannelCreate={onNotificationChannelCreate}
         onAdminNotificationChannelUpdate={onNotificationChannelUpdate}
@@ -166,6 +168,7 @@ describe('AdminDashboard', () => {
       onInstallCommand,
       onProbeTargetCreate,
       onProbeTargetUpdate,
+      onProbeTargetReorder,
       onProbeTargetDelete,
       onNotificationChannelCreate,
       onNotificationChannelUpdate,

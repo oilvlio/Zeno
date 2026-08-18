@@ -27,6 +27,7 @@ export function AdminOperationalWorkspace({
   onInstallCommand,
   onProbeTargetCreate,
   onProbeTargetUpdate,
+  onProbeTargetReorder,
   onProbeTargetDelete,
   onNotificationChannelCreate,
   onNotificationChannelUpdate,
@@ -41,7 +42,7 @@ export function AdminOperationalWorkspace({
   }
   if (activeSection === 'targets') {
     const TargetWorkspace = sectionComponents?.targets ?? AdminTargetWorkspace
-    return <TargetWorkspace targets={targets} nodes={nodes} onCreate={onProbeTargetCreate} onUpdate={onProbeTargetUpdate} onDelete={onProbeTargetDelete} />
+    return <TargetWorkspace targets={targets} nodes={nodes} onCreate={onProbeTargetCreate} onUpdate={onProbeTargetUpdate} onReorder={onProbeTargetReorder} onDelete={onProbeTargetDelete} />
   }
   const NotificationsWorkspace = sectionComponents?.notifications ?? AdminNotificationsWorkspace
   return <NotificationsWorkspace channels={notificationChannels} rules={alertRules} nodes={nodes} onChannelCreate={onNotificationChannelCreate} onChannelUpdate={onNotificationChannelUpdate} onChannelDelete={onNotificationChannelDelete} onChannelTest={onNotificationChannelTest} onRuleUpdate={onAlertRuleUpdate} />

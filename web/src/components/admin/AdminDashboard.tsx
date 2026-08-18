@@ -41,6 +41,7 @@ export interface AdminDashboardProps {
   onAdminInstallCommand?: (nodeId: string) => Promise<AdminNodeInstallCommand>
   onAdminProbeTargetCreate?: (input: AdminProbeTargetInput) => MaybePromise
   onAdminProbeTargetUpdate?: (targetId: string, input: AdminProbeTargetUpdateInput) => MaybePromise
+  onAdminProbeTargetReorder?: (targetIds: string[]) => MaybePromise
   onAdminProbeTargetDelete?: (targetId: string) => MaybePromise
   onAdminNotificationChannelCreate?: (input: AdminNotificationChannelCreateInput) => MaybePromise
   onAdminNotificationChannelUpdate?: (channelId: string, input: AdminNotificationChannelUpdateInput) => MaybePromise
@@ -103,6 +104,7 @@ export function AdminDashboardContainer({
       onAdminInstallCommand={controller.requestAdminInstallCommand}
       onAdminProbeTargetCreate={controller.createAdminProbeTargetDetails}
       onAdminProbeTargetUpdate={controller.updateAdminProbeTargetDetails}
+      onAdminProbeTargetReorder={controller.reorderAdminProbeTargetDetails}
       onAdminProbeTargetDelete={controller.deleteAdminProbeTargetDetails}
       onAdminNotificationChannelCreate={controller.createAdminNotificationChannelDetails}
       onAdminNotificationChannelUpdate={controller.updateAdminNotificationChannelDetails}
@@ -136,6 +138,7 @@ export function AdminDashboard({
   onAdminInstallCommand = () => Promise.reject(new Error('install command unavailable')),
   onAdminProbeTargetCreate = () => {},
   onAdminProbeTargetUpdate = () => {},
+  onAdminProbeTargetReorder = () => {},
   onAdminProbeTargetDelete = () => {},
   onAdminNotificationChannelCreate = () => {},
   onAdminNotificationChannelUpdate = () => {},
@@ -206,6 +209,7 @@ export function AdminDashboard({
                     onInstallCommand={onAdminInstallCommand}
                     onProbeTargetCreate={onAdminProbeTargetCreate}
                     onProbeTargetUpdate={onAdminProbeTargetUpdate}
+                    onProbeTargetReorder={onAdminProbeTargetReorder}
                     onProbeTargetDelete={onAdminProbeTargetDelete}
                     onNotificationChannelCreate={onAdminNotificationChannelCreate}
                     onNotificationChannelUpdate={onAdminNotificationChannelUpdate}

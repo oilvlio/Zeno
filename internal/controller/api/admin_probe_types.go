@@ -10,6 +10,16 @@ type AdminProbeTargetsResponse struct {
 	Targets []AdminProbeTarget `json:"targets"`
 }
 
+// AdminProbeTargetReorderRequest carries the complete visible target order so
+// the backend can commit it in one transaction.
+type AdminProbeTargetReorderRequest struct {
+	TargetIDs []string `json:"target_ids"`
+}
+
+func (request *AdminProbeTargetReorderRequest) normalize() error {
+	return normalizeAdminOrderIDs(request.TargetIDs, errInvalidAdminTargetWrite)
+}
+
 type AdminProbeTargetResponse struct {
 	Target AdminProbeTarget `json:"target"`
 }

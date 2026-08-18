@@ -15,6 +15,7 @@ export type AdminStateAction =
   | { type: 'node.deleted'; nodeId: string }
   | { type: 'target.created'; target: AdminProbeTarget }
   | { type: 'target.updated'; target: AdminProbeTarget }
+  | { type: 'targets.reordered'; targetIds: string[] }
   | { type: 'target.deleted'; targetId: string }
   | { type: 'channel.created'; channel: AdminNotificationChannel }
   | { type: 'channel.updated'; channel: AdminNotificationChannel }
@@ -106,6 +107,15 @@ export function adminStateReducer(state: AdminLoadState, action: AdminStateActio
       ? [...ready.targets, target]
       : ready.targets.map((item) => item.id === target.id ? target : item)
     return { ...ready, targets: sortAdminProbeTargets(targets) }
+  }
+  if (action.type === 'targets.reordered') {
+    if (state.kind !== 'ready') return state
+    const targetsByID = new Map(state.targets.map((target) => [target.id, target]))
+    if (targetsByID.size !== action.targetIds.length || action.targetIds.some((targetId) => !targetsByID.has(targetId))) return state
+    return {
+      ...state,
+      targets: action.targetIds.map((targetId, index) => ({ ...targetsByID.get(targetId)!, displayOrder: (index + 1) * 10 })),
+    }
   }
   if (action.type === 'target.deleted') {
     return state.kind === 'ready' ? { ...state, targets: state.targets.filter((target) => target.id !== action.targetId) } : state

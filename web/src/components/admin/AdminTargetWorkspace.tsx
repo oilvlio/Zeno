@@ -4,13 +4,15 @@ import { sortAdminProbeTargets } from '../../lib/adminCollections'
 import { runMaybePromise } from '../../lib/maybePromise'
 import type { AdminNode, AdminProbeTarget, ProbeType } from '../../types'
 import { AdminExpandedCheckList, AdminSegmentedField } from './AdminFields'
+import { AdminSortModal } from './AdminSortModal'
 import { AdminDeleteConfirmModal, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions, AdminWorkspaceHeading } from './AdminPrimitives'
 import { formatTargetAssignmentSummary, formatTargetEndpoint, normalizeTargetFormType, parsePositiveInt, targetAssignmentRows, targetTypeOptions } from './adminOperationalModel'
 import type { AdminTargetWorkspaceProps, MaybePromise } from './adminOperationalTypes'
 
-export function AdminTargetWorkspace({ targets, nodes, onCreate, onUpdate, onDelete }: AdminTargetWorkspaceProps) {
+export function AdminTargetWorkspace({ targets, nodes, onCreate, onUpdate, onReorder, onDelete }: AdminTargetWorkspaceProps) {
   const [creatingTarget, setCreatingTarget] = useState(false)
   const [editingTargetId, setEditingTargetId] = useState<string | null>(null)
+  const [sortingTargets, setSortingTargets] = useState(false)
   const editingTarget = editingTargetId ? targets.find((target) => target.id === editingTargetId) : undefined
   const sortedTargets = sortAdminProbeTargets(targets)
 
@@ -18,7 +20,12 @@ export function AdminTargetWorkspace({ targets, nodes, onCreate, onUpdate, onDel
     <section className="admin-target-section admin-workspace-panel" aria-label="admin probe target list">
       <AdminWorkspaceHeading
         title="延迟监控"
-        actions={<button className="admin-primary-action" type="button" onClick={() => setCreatingTarget(true)}>添加目标</button>}
+        actions={
+          <>
+            <button className="admin-primary-action" type="button" onClick={() => setSortingTargets(true)}>延迟监控排序</button>
+            <button className="admin-primary-action" type="button" onClick={() => setCreatingTarget(true)}>添加目标</button>
+          </>
+        }
       />
 
       {targets.length === 0 && <div className="admin-state-card">还没有探针目标。</div>}
@@ -29,6 +36,31 @@ export function AdminTargetWorkspace({ targets, nodes, onCreate, onUpdate, onDel
           nodes={nodes}
           onClose={() => setCreatingTarget(false)}
           onCreate={onCreate}
+        />
+      )}
+
+      {sortingTargets && (
+        <AdminSortModal
+          items={sortedTargets}
+          title="延迟监控排序"
+          intro="按住手柄拖动整行，或使用箭头微调。"
+          countLabel="个目标"
+          listLabel="延迟监控排序列表"
+          itemLabel="延迟监控"
+          getDisplayName={(target) => target.name}
+          renderItem={(target) => (
+            <span className="admin-sort-server">
+              <span>
+                <strong>{target.name}</strong>
+                <small>{formatTargetEndpoint(target)}</small>
+              </span>
+            </span>
+          )}
+          onClose={() => setSortingTargets(false)}
+          onSave={async (nextTargets) => {
+            await onReorder(nextTargets.map((target) => target.id))
+            setSortingTargets(false)
+          }}
         />
       )}
 

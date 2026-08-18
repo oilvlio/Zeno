@@ -6,7 +6,7 @@ import type { AdminNode, AdminNodeInstallCommand, AdminProbeTarget } from '../..
 import { ServerFlag } from '../ServerFlag'
 import { AdminDateField, AdminExpandedCheckList, AdminSegmentedField } from './AdminFields'
 import { AdminInstallCommand } from './AdminInstallCommand'
-import { AdminNodeSortModal } from './AdminNodeSortModal'
+import { AdminSortModal } from './AdminSortModal'
 import { AdminDeleteConfirmModal, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions, AdminWorkspaceHeading } from './AdminPrimitives'
 import { billingCycleOptions, billingModeOptions, formatQuotaValue, formatRenewalAmountInput, normalizeBillingCycle, parseMonthlyResetDay, parseQuota, parseRenewalAmount, quotaUnitForBytes, quotaUnitOptions, renewalCurrencyOptions } from './adminOperationalModel'
 import type { AdminNodeWorkspaceProps, MaybePromise } from './adminOperationalTypes'
@@ -53,8 +53,23 @@ export function AdminNodeWorkspace({ nodes, targets, onCreate, onUpdate, onReord
       )}
 
       {sortingNodes && (
-        <AdminNodeSortModal
-          nodes={orderedNodes}
+        <AdminSortModal
+          items={orderedNodes}
+          title="服务器排序"
+          intro="按住手柄拖动整行，或使用箭头微调。"
+          countLabel="台"
+          listLabel="服务器排序列表"
+          itemLabel="服务器"
+          getDisplayName={(node) => node.displayName}
+          renderItem={(node) => (
+            <span className="admin-sort-server">
+              <ServerFlag countryCode={node.countryCode} className="admin-sort-flag" />
+              <span>
+                <strong>{node.displayName}</strong>
+                <small>{node.publicIPv4 || node.publicIPv6 || '未上报公网 IP'}</small>
+              </span>
+            </span>
+          )}
           onClose={() => setSortingNodes(false)}
           onSave={async (nextNodes) => {
             await onReorder(nextNodes.map((node) => node.id))
