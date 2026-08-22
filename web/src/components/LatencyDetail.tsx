@@ -63,7 +63,7 @@ export function LatencyDetail({
   const rangeOptions = availableHistoryRanges(canUseExtendedRanges)
   const rangeLabel = rangeOptions.find((option) => option.value === range)?.label ?? range
   const latestState = latestStatePoint(statePoints)
-  const visualStatus = node.status === 'online' ? 'online' : 'offline'
+  const visualStatus = node.status === 'warning' ? 'warning' : node.status === 'online' ? 'online' : 'offline'
   const summaryUptimeSeconds = node.uptimeSeconds ?? null
   const uptimeValue = latestState?.uptimeSeconds !== null && latestState?.uptimeSeconds !== undefined
     ? formatUptime(latestState.uptimeSeconds)
@@ -288,7 +288,9 @@ function formatUptimeFromBootTime(value: string | undefined): string | null {
 }
 
 function formatStatusLabel(status: HomeCardNode['status']): string {
-  return status === 'online' ? '在线' : '离线'
+  if (status === 'online') return '在线'
+  if (status === 'warning') return '异常'
+  return '离线'
 }
 
 function formatOSLabel(node: HomeCardNode): string {

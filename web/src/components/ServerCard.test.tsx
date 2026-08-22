@@ -48,20 +48,16 @@ const baseNode: HomeCardNode = {
 }
 
 describe('ServerCard', () => {
-  it('renders non-online nodes as frozen cards with a diagonal offline watermark', () => {
+  it('keeps warning cards active without the offline watermark', () => {
     const html = renderToStaticMarkup(
       <ServerCard node={{ ...baseNode, status: 'warning' }} onOpen={vi.fn()} />,
     )
 
-    expect(html).toContain('class="kulin-node-card is-offline"')
-    expect(html).toContain('node-offline-watermark')
-    expect(html).toContain('>离线</span>')
-    expect(html).toContain('node-head')
-    expect(html).toContain('node-usage-grid')
-    expect(html).toContain('node-specs')
-    expect(html).toContain('<p>Example Node A</p>')
-    expect(html).toContain('class="node-uptime">在线 3 天</span>')
-    expect(html).not.toContain('node-status-dot')
+    expect(html).toContain('class="kulin-node-card"')
+    expect(html).not.toContain('class="kulin-node-card is-offline"')
+    expect(html).not.toContain('node-offline-watermark')
+    expect(html).not.toContain('>离线</span>')
+    expect(html).toContain('在线 3 天')
   })
 
   it('renders offline nodes with the watermark as well', () => {

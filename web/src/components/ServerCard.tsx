@@ -87,7 +87,7 @@ function formatOnlineDays(uptimeSeconds: number | null | undefined): string {
 }
 
 function isOfflineStatus(status: NodeStatus | null | undefined): boolean {
-  return status !== 'online'
+  return status === 'offline' || status === 'no_data'
 }
 
 function normalizeLoss(value: number | null | undefined): string {

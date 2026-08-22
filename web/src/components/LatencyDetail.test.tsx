@@ -221,7 +221,7 @@ describe('LatencyDetail', () => {
     expect(html).not.toContain('正在读取网络延迟')
   })
 
-  it('maps non-online detail status to offline', () => {
+  it('keeps warning detail status distinct from offline', () => {
     const html = renderToStaticMarkup(
       <LatencyDetail
         node={{ ...node, status: 'warning' }}
@@ -229,12 +229,13 @@ describe('LatencyDetail', () => {
         range="1d"
         onBack={vi.fn()}
         onRangeChange={vi.fn()}
-      />,
+      />
     )
 
-    expect(html).toContain('detail-status-pill status-offline')
-    expect(html).toContain('离线')
-    expect(html).not.toContain('异常')
+    expect(html).toContain('detail-status-pill status-warning')
+    expect(html).toContain('异常')
+    expect(html).not.toContain('detail-status-pill status-offline')
+    expect(html).not.toContain('>离线</span>')
   })
 
   it('includes range controls with the latency chart actions', () => {
