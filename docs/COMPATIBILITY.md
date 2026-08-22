@@ -8,9 +8,10 @@
 
 | Controller | Agent | 状态 | 说明 |
 | --- | --- | --- | --- |
-| v1.0.9 | v0.6.6 | 支持 | 当前稳定组合 |
+| v1.0.10 | v0.6.6 | 支持 | 当前稳定组合 |
+| v1.0.9 | v0.6.6 | 支持 | 上一稳定组合 |
 | v1.0.9 | v0.6.5 | 支持 | 现有 v0.6.5 Agent 可继续上报并独立升级 |
-| v1.0.8 | v0.6.6 | 支持 | 上一稳定组合 |
+| v1.0.8 | v0.6.6 | 支持 | 更早稳定组合 |
 
 只有表中明确列出的组合属于已验证支持范围。较旧 Agent 可能仍可上报，但未列出的组合仅为 best effort；排障前请先升级 Agent。Controller 与 Agent 独立发布，版本号不要求相同。
 
@@ -37,9 +38,10 @@
 
 | Controller | Agent | Status | Notes |
 | --- | --- | --- | --- |
-| v1.0.9 | v0.6.6 | Supported | Current stable combination |
+| v1.0.10 | v0.6.6 | Supported | Current stable combination |
+| v1.0.9 | v0.6.6 | Supported | Previous stable combination |
 | v1.0.9 | v0.6.5 | Supported | Existing v0.6.5 Agents remain supported and can upgrade independently |
-| v1.0.8 | v0.6.6 | Supported | Previous stable combination |
+| v1.0.8 | v0.6.6 | Supported | Earlier stable combination |
 
 Only combinations explicitly listed above are verified and supported. Older Agents may continue to report, but unlisted combinations are best effort; upgrade the Agent before troubleshooting. Controller and Agent are released independently and their version numbers do not need to match.
 
