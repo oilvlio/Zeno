@@ -79,7 +79,7 @@ func (s *sqliteAdminDomain) AdminNodes(ctx context.Context) ([]AdminNode, error)
 		node.ExpiryDate = nullStringOr(expiryDate, "")
 		node.ExpiryPermanent = expiryPermanent != 0
 		node.BillingCycle = nullStringOr(billingCycle, "")
-		node.RenewalAmount = nullFloat64Ptr(renewalAmount)
+		node.RenewalAmount = floatPtr(renewalAmount)
 		node.RenewalCurrency = nullStringOr(renewalCurrency, "CNY")
 		node.DisplayOrder = displayOrder
 		node.PublicIPv4 = nullStringOr(publicIPv4, "")

@@ -206,23 +206,6 @@ func renewalNotificationDueDate(rawDate string, billingCycle sql.NullString, now
 	return dateOnlyUTC(expiresAt), true
 }
 
-func (s *sqliteRenewalNotifications) MarkRenewalNotification(ctx context.Context, event notificationEvent, now time.Time) error {
-	nodeID := strings.TrimSpace(event.NodeID)
-	if nodeID == "" {
-		return nil
-	}
-	markDay := dateOnlyUTC(now).Format("2006-01-02")
-	expiryDate := extractRenewalExpiryDate(event.Detail)
-	if expiryDate == "" {
-		expiryDate = markDay
-	}
-	_, err := s.db.ExecContext(ctx, `
-		INSERT OR IGNORE INTO notification_event_marks (event_type, node_id, mark, created_at)
-		VALUES ('renewal_due', ?, ?, ?)
-	`, nodeID, renewalNotificationMark(markDay, expiryDate), now.UTC().Unix())
-	return err
-}
-
 func renewalRulesMatch(rules []AdminAlertRule, dueDate, today time.Time) bool {
 	today = dateOnlyUTC(today)
 	dueDate = dateOnlyUTC(dueDate)
@@ -262,16 +245,4 @@ func formatRenewalNotificationDetail(daysRemaining int, expiryDate string) strin
 	default:
 		return fmt.Sprintf("已过期 %d 天，%s", -daysRemaining, expiryDate)
 	}
-}
-
-func extractRenewalExpiryDate(detail string) string {
-	parts := strings.Split(strings.TrimSpace(detail), "，")
-	if len(parts) == 0 {
-		return ""
-	}
-	candidate := strings.TrimSpace(parts[len(parts)-1])
-	if _, err := time.ParseInLocation("2006-01-02", candidate, time.UTC); err != nil {
-		return ""
-	}
-	return candidate
 }

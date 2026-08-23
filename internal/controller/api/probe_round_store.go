@@ -272,7 +272,7 @@ func insertProbeRoundTx(ctx context.Context, tx *sql.Tx, nodeID string, round pr
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO probe_samples (round_id, seq, success, latency_ms, error)
 			VALUES (?, ?, ?, ?, ?)
-		`, roundID, seq, boolInt(sample.Success), nullableFloat(sample.LatencyMS), nullableString(sample.Error)); err != nil {
+		`, roundID, seq, sqliteBoolInt(sample.Success), nullableFloat(sample.LatencyMS), nullIfEmpty(sample.Error)); err != nil {
 			return err
 		}
 	}
@@ -318,23 +318,9 @@ func roundError(samples []probe.Sample) any {
 	return nil
 }
 
-func boolInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
-}
-
 func nullableFloat(value *float64) any {
 	if value == nil {
 		return nil
 	}
 	return *value
-}
-
-func nullableString(value string) any {
-	if value == "" {
-		return nil
-	}
-	return value
 }

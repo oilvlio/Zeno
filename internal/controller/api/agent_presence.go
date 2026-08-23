@@ -275,7 +275,7 @@ func (h *handler) handleAgentPresenceWebSocket(w http.ResponseWriter, r *http.Re
 		return
 	}
 	defer releaseNodePresence()
-	release, ok := h.agentWSGate.acquire()
+	release, ok := h.agentWSGate.acquireFor("")
 	if !ok {
 		w.Header().Set("Retry-After", "1")
 		writeError(w, http.StatusTooManyRequests, "too many websocket connections")

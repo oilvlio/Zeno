@@ -12,16 +12,8 @@ type websocketGate struct {
 	byKey     map[string]int
 }
 
-func newWebSocketGate(max int) *websocketGate {
-	return newWebSocketGateWithPerKey(max, 0)
-}
-
 func newWebSocketGateWithPerKey(max, maxPerKey int) *websocketGate {
 	return &websocketGate{max: max, maxPerKey: maxPerKey, byKey: make(map[string]int)}
-}
-
-func (gate *websocketGate) acquire() (func(), bool) {
-	return gate.acquireFor("")
 }
 
 func (gate *websocketGate) acquireFor(key string) (func(), bool) {

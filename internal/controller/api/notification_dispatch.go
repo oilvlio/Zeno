@@ -492,33 +492,6 @@ func (s *sqliteNotificationDomain) EnabledNotificationChannelsForEvent(ctx conte
 	return label, channels, nil
 }
 
-func (s *sqliteNotificationDomain) NotificationEventDelay(ctx context.Context, eventType, nodeID string) (time.Duration, bool, error) {
-	eventType = strings.TrimSpace(eventType)
-	nodeID = strings.TrimSpace(nodeID)
-	var durationSec sql.NullInt64
-	var matched int
-	if err := s.db.QueryRowContext(ctx, `
-		SELECT COALESCE(MAX(duration_sec), 0), COUNT(*)
-		FROM alert_rules ar
-		WHERE ar.notification_event_type = ?
-		  AND (
-		    ? = ''
-		    OR NOT EXISTS (SELECT 1 FROM alert_rule_node_scopes scope_all WHERE scope_all.rule_id = ar.id)
-		    OR EXISTS (SELECT 1 FROM alert_rule_node_scopes scope_node WHERE scope_node.rule_id = ar.id AND scope_node.node_id = ?)
-		  )
-	`, eventType, nodeID, nodeID).Scan(&durationSec, &matched); err != nil {
-		return 0, false, err
-	}
-	if matched == 0 {
-		return 0, false, nil
-	}
-	seconds := int64(0)
-	if durationSec.Valid && durationSec.Int64 > 0 {
-		seconds = durationSec.Int64
-	}
-	return time.Duration(seconds) * time.Second, true, nil
-}
-
 func (s *sqliteNotificationDomain) ClaimStatusNotification(ctx context.Context, event notificationEvent) (bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

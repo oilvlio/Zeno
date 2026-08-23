@@ -103,7 +103,7 @@ func resolveAgentProbeRound(
 		len(round.samples) > maxAgentProbeSamplesPerRound {
 		return preparedAgentProbeRound{}, errInvalidAgentProbeResults
 	}
-	if !agentProbeTimestampWithinSkew(round.ts, receivedAt) {
+	if !agentTimestampWithinSkew(round.ts, receivedAt, maxAgentProbeTimestampPastSkew) {
 		return preparedAgentProbeRound{}, errInvalidAgentProbeResults
 	}
 

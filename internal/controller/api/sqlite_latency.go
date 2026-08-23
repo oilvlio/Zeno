@@ -185,10 +185,6 @@ var latencyGridByTarget = latencyGridDimension{
 	sampleRollupFilter: "rollup_rows.node_id = grid.series_id AND rollup_rows.target_id = ?",
 }
 
-func useHistoricalLatencySampling(window latencyWindow) bool {
-	return window.Name == "7d" || window.Name == "30d"
-}
-
 func latencyGridSampleQuery(dimension latencyGridDimension) string {
 	return `
 		WITH RECURSIVE buckets(bucket_ts, sample_index) AS (
@@ -305,7 +301,7 @@ func latencyGridValuesFor(
 	if !ok {
 		return nil, nil
 	}
-	if useHistoricalLatencySampling(gridWindow) {
+	if extendedHistoryWindow(gridWindow) {
 		return latencyGridSampleValuesFor(ctx, s, id, gridWindow, dimension)
 	}
 	series, err := s.latencyGridSeries(ctx, dimension.seriesQuery, id)

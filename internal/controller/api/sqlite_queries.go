@@ -87,7 +87,7 @@ func (s *sqliteReadQueries) nodes(ctx context.Context) ([]Node, error) {
 			CPUModel:             nullStringOr(cpuModel, ""),
 			CountryCode:          nullStringOr(countryCode, ""),
 			ExpiryLabel:          expiryLabelValue(expiryDate, billingCycle, expiryPermanent != 0, now),
-			RenewalAmount:        nullFloat64Ptr(renewalAmount),
+			RenewalAmount:        floatPtr(renewalAmount),
 			RenewalCurrency:      nullStringOr(renewalCurrency, "CNY"),
 			BillingCycle:         nullStringOr(billingCycle, ""),
 			MonthlyCostCNY:       monthlyRenewalCostCNY(renewalAmount, renewalCNYRate, billingCycle, expiryPermanent != 0),

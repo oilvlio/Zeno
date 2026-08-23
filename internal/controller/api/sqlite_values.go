@@ -51,14 +51,6 @@ func nullStringOr(value sql.NullString, fallback string) string {
 	return fallback
 }
 
-func nullFloat64Ptr(value sql.NullFloat64) *float64 {
-	if !value.Valid {
-		return nil
-	}
-	parsed := value.Float64
-	return &parsed
-}
-
 func monthlyRenewalCostCNY(amount, cnyRate sql.NullFloat64, billingCycle sql.NullString, permanent bool) *float64 {
 	months := billingCycleMonths(billingCycle)
 	if permanent || months <= 0 || !amount.Valid || amount.Float64 <= 0 || !cnyRate.Valid || cnyRate.Float64 <= 0 {

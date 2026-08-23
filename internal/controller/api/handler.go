@@ -129,7 +129,7 @@ func NewHandler(options ...HandlerOptions) http.Handler {
 		liveHub:              newLiveUpdateHub(),
 		presence:             newAgentPresenceManager(),
 		publicWSGate:         newWebSocketGateWithPerKey(publicWebSocketMaxConnections, publicWebSocketMaxConnectionsPerIP),
-		agentWSGate:          newWebSocketGate(agentWebSocketMaxConnections),
+		agentWSGate:          newWebSocketGateWithPerKey(agentWebSocketMaxConnections, 0),
 		detailCache:          newDetailJSONCache(),
 		detailPublishPending: make(map[string]bool),
 		detailPublishGate:    make(chan struct{}, detailPublishMaxConcurrent),

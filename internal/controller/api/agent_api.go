@@ -220,7 +220,7 @@ func (h *handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 	receivedAt := time.Now().UTC()
 	agentTS := time.Unix(request.TS, 0).UTC()
-	if !agentTimestampWithinSkew(agentTS, receivedAt) {
+	if !agentTimestampWithinSkew(agentTS, receivedAt, maxAgentTimestampPastSkew) {
 		writeError(w, http.StatusBadRequest, "timestamp skew too large")
 		return
 	}
@@ -334,7 +334,7 @@ func (h *handler) handleAgentState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stateTS := time.Unix(request.TS, 0).UTC()
-	if !agentTimestampWithinSkew(stateTS, time.Now().UTC()) {
+	if !agentTimestampWithinSkew(stateTS, time.Now().UTC(), maxAgentTimestampPastSkew) {
 		writeError(w, http.StatusBadRequest, "timestamp skew too large")
 		return
 	}
@@ -402,21 +402,11 @@ func writeTelemetryStoragePressure(w http.ResponseWriter) {
 	writeError(w, http.StatusInsufficientStorage, "telemetry storage pressure")
 }
 
-func agentProbeTimestampWithinSkew(ts, now time.Time) bool {
+func agentTimestampWithinSkew(ts, now time.Time, pastSkew time.Duration) bool {
 	if ts.After(now.Add(maxAgentTimestampFutureSkew)) {
 		return false
 	}
-	if ts.Before(now.Add(-maxAgentProbeTimestampPastSkew)) {
-		return false
-	}
-	return true
-}
-
-func agentTimestampWithinSkew(ts, now time.Time) bool {
-	if ts.After(now.Add(maxAgentTimestampFutureSkew)) {
-		return false
-	}
-	if ts.Before(now.Add(-maxAgentTimestampPastSkew)) {
+	if ts.Before(now.Add(-pastSkew)) {
 		return false
 	}
 	return true
