@@ -86,7 +86,7 @@ describe('realtime reliability helpers', () => {
 
   it('limits unauthenticated history ranges to realtime and one day', () => {
     expect(availableHistoryRanges(false).map((option) => option.value)).toEqual(['1h', '1d'])
-    expect(availableHistoryRanges(true).map((option) => option.value)).toEqual(['1h', '1d', '7d', '30d'])
+    expect(availableHistoryRanges(true).map((option) => option.value)).toEqual(['1h', '1d', '3d', '7d', '30d'])
     expect(coerceHistoryRange('30d', false, '1d')).toBe('1d')
     expect(coerceHistoryRange('30d', true, '1d')).toBe('30d')
   })
