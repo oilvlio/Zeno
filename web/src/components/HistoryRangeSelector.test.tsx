@@ -6,6 +6,7 @@ import { HistoryRangeSelector } from './HistoryRangeSelector'
 const options = [
   { value: '1h', label: '实时' },
   { value: '1d', label: '1 天' },
+  { value: '3d', label: '3 天' },
   { value: '7d', label: '7 天' },
 ]
 
@@ -62,7 +63,7 @@ describe('sliding history range selector', () => {
     expect(html).toContain('aria-label="history range"')
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(1)
     expect(html).toMatch(/data-active="true"[^>]*aria-pressed="true"[^>]*>实时<\/button>/)
-    expect(html).toContain('--slider-columns:3')
+    expect(html).toContain('--slider-columns:4')
     expect(html).toContain('--slider-shift:0%')
   })
 })

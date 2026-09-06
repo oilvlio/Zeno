@@ -1,12 +1,13 @@
 export const historyRangeOptions = [
   { value: '1h', label: '实时' },
   { value: '1d', label: '1 天' },
+  { value: '3d', label: '3 天' },
   { value: '7d', label: '7 天' },
   { value: '30d', label: '30 天' },
 ]
 
 export function rangeRequiresAdmin(range: string): boolean {
-  return range === '7d' || range === '30d'
+  return range === '3d' || range === '7d' || range === '30d'
 }
 
 export function availableHistoryRanges(hasAdminToken: boolean) {
