@@ -8,7 +8,7 @@ import { AdminDateField, AdminExpandedCheckList, AdminSegmentedField } from './A
 import { AdminInstallCommand } from './AdminInstallCommand'
 import { AdminInlineSortList } from './AdminInlineSortList'
 import { AdminDeleteConfirmModal, AdminFormSection, AdminModal, AdminActionFooter, AdminRowActions, AdminWorkspaceHeading } from './AdminPrimitives'
-import { billingCycleOptions, billingModeOptions, formatQuotaValue, formatRenewalAmountInput, normalizeBillingCycle, parseMonthlyResetDay, parseQuota, parseRenewalAmount, quotaUnitForBytes, quotaUnitOptions, renewalCurrencyOptions } from './adminOperationalModel'
+import { billingCycleOptions, billingModeOptions, formatCorrectionGB, formatQuotaValue, formatRenewalAmountInput, isValidCorrectionGB, normalizeBillingCycle, parseCorrectionBytes, parseMonthlyResetDay, parseQuota, parseRenewalAmount, quotaUnitForBytes, quotaUnitOptions, renewalCurrencyOptions } from './adminOperationalModel'
 import type { AdminNodeWorkspaceProps, MaybePromise } from './adminOperationalTypes'
 
 export function AdminNodeWorkspace({ nodes, targets, onCreate, onUpdate, onReorder, onDelete, onInstallCommand }: AdminNodeWorkspaceProps) {
@@ -225,6 +225,12 @@ function AdminNodeEditModal({ node, targets, onUpdate, onInstallCommand, onClose
     const formData = new FormData(event.currentTarget)
     const displayName = String(formData.get('display-name') ?? '').trim()
     const selectedTargets = new Set(selectedTargetIds)
+    const inCorrectionRaw = String(formData.get('monthly-in-correction') ?? '')
+    const outCorrectionRaw = String(formData.get('monthly-out-correction') ?? '')
+    if (!isValidCorrectionGB(inCorrectionRaw) || !isValidCorrectionGB(outCorrectionRaw)) {
+      setFormError('流量校正必须是 0 到 1000000 GB 之间的数字，留空表示保持不变。')
+      return
+    }
     setSubmitting(true)
     setFormError(null)
     runMaybePromise(() => onUpdate(node.id, {
@@ -238,6 +244,8 @@ function AdminNodeEditModal({ node, targets, onUpdate, onInstallCommand, onClose
       billingMode: String(formData.get('billing-mode') ?? node.billingMode),
       monthlyResetDay: parseMonthlyResetDay(String(formData.get('monthly-reset-day') ?? '')) ?? node.monthlyResetDay,
       monthlyQuotaBytes: parseQuota(String(formData.get('monthly-quota') ?? ''), String(formData.get('monthly-quota-unit') ?? quotaUnitForBytes(node.monthlyQuotaBytes))),
+      monthlyInCorrectionBytes: parseCorrectionBytes(inCorrectionRaw),
+      monthlyOutCorrectionBytes: parseCorrectionBytes(outCorrectionRaw),
       probeTargetIds: [...selectedTargets],
     }))
       .then(() => onClose())
@@ -304,6 +312,17 @@ function AdminNodeEditModal({ node, targets, onUpdate, onInstallCommand, onClose
               </label>
               <AdminSegmentedField className="admin-billing-control admin-billing-control--unit" name="monthly-quota-unit" label="配额单位" defaultValue={quotaUnitForBytes(node.monthlyQuotaBytes)} options={quotaUnitOptions} />
             </div>
+            <div className="admin-billing-row admin-billing-row--correction">
+              <label className="admin-billing-control admin-billing-control--correction">
+                <span>本月下行校正 (GB)</span>
+                <input name="monthly-in-correction" type="number" min="0" max="1000000" step="0.1" inputMode="decimal" placeholder="0" defaultValue={formatCorrectionGB(node.monthlyInCorrectionBytes)} />
+              </label>
+              <label className="admin-billing-control admin-billing-control--correction">
+                <span>本月上行校正 (GB)</span>
+                <input name="monthly-out-correction" type="number" min="0" max="1000000" step="0.1" inputMode="decimal" placeholder="0" defaultValue={formatCorrectionGB(node.monthlyOutCorrectionBytes)} />
+              </label>
+            </div>
+            <p className="admin-inline-note">流量校正只叠加到本账期的计费与配额进度，不影响累计流量；下个账期自动归零。留空保持不变，填 0 清零。</p>
           </div>
         </AdminFormSection>
         <AdminInstallCommand nodeId={node.id} onInstallCommand={onInstallCommand} />

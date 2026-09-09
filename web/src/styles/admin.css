@@ -578,6 +578,7 @@
 }
 .admin-billing-row--cycle { grid-template-columns: minmax(170px, 1.35fr) minmax(100px, .72fr) minmax(124px, .8fr) minmax(112px, .75fr); }
 .admin-billing-row--traffic { grid-template-columns: minmax(112px, .7fr) minmax(150px, 1.05fr) minmax(110px, .72fr) minmax(90px, .55fr); }
+.admin-billing-row--correction { grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr); }
 .admin-billing-control,
 .admin-billing-row label { min-width: 0; }
 .admin-billing-control .admin-select-trigger { width: 100%; }
@@ -1479,7 +1480,8 @@
   .admin-style-range:nth-child(2n) { border-left: 1px solid var(--divider); }
   .admin-style-range:nth-child(n + 3) { border-top: 1px solid var(--divider); }
   .admin-billing-row--cycle,
-  .admin-billing-row--traffic { grid-template-columns: 1fr; }
+  .admin-billing-row--traffic,
+  .admin-billing-row--correction { grid-template-columns: 1fr; }
   .admin-action-footer {
     margin: 16px 0 0;
     padding: 14px 0 max(10px, env(safe-area-inset-bottom));

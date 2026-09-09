@@ -185,6 +185,34 @@ export function parseQuota(value: string, unit: string): number | null {
   return Math.round(parsed * multiplier)
 }
 
+// Manual per-period traffic correction bounds: 0 to 1,000,000 GB per
+// direction. Corrections only offset the current billing period's measured
+// usage; lifetime counters stay honest.
+export const MAX_TRAFFIC_CORRECTION_GB = 1000000
+export const TRAFFIC_CORRECTION_BYTES_PER_GB = 1024 ** 3
+
+export function formatCorrectionGB(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value) || value <= 0) return ''
+  return String(Math.round((value / TRAFFIC_CORRECTION_BYTES_PER_GB) * 100) / 100)
+}
+
+export function isValidCorrectionGB(value: string): boolean {
+  const trimmed = value.trim()
+  if (trimmed === '') return true
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= MAX_TRAFFIC_CORRECTION_GB
+}
+
+// Returns undefined for empty input (leave unchanged); callers must check
+// isValidCorrectionGB first, as invalid input also yields undefined.
+export function parseCorrectionBytes(value: string): number | undefined {
+  const trimmed = value.trim()
+  if (trimmed === '') return undefined
+  const parsed = Number(trimmed)
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > MAX_TRAFFIC_CORRECTION_GB) return undefined
+  return Math.round(parsed * TRAFFIC_CORRECTION_BYTES_PER_GB)
+}
+
 export function parseRenewalAmount(value: string): number | null {
   const trimmed = value.trim()
   if (trimmed === '') return null

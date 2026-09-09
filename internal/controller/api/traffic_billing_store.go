@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// maxMonthlyTrafficCorrectionBytes caps a single billing period's manual
+// traffic correction: 1,000,000 GiB per direction, matching the CF-Server-Monitor
+// correction range. Corrections only ever offset the current billing period's
+// measured aggregates; lifetime counters are never touched.
+const maxMonthlyTrafficCorrectionBytes = 1000000 * 1024 * 1024 * 1024
+
 func upsertLifetimeTraffic(ctx context.Context, tx *sql.Tx, nodeID string, inTotal, outTotal int64, counterSource string, sampleTS, now int64) error {
 	var lifetimeIn, lifetimeOut int64
 	var previousIn, previousOut, lastSampleTS sql.NullInt64
@@ -97,8 +103,8 @@ func upsertMonthlyTraffic(ctx context.Context, tx *sql.Tx, nodeID, month string,
 	`, nodeID, month, billingEpoch).Scan(&aggregateIn, &aggregateOut, &aggregateBillable, &previousIn, &previousOut, &previousSource, &lastSampleTS)
 	if err == sql.ErrNoRows {
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO traffic_monthly (node_id, month, billing_epoch, reset_day, billing_mode, in_bytes, out_bytes, billable_bytes, last_in_total_bytes, last_out_total_bytes, counter_source, last_sample_ts, updated_at)
-			VALUES (?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?)
+			INSERT INTO traffic_monthly (node_id, month, billing_epoch, reset_day, billing_mode, in_bytes, out_bytes, billable_bytes, in_correction_bytes, out_correction_bytes, billable_correction_bytes, last_in_total_bytes, last_out_total_bytes, counter_source, last_sample_ts, updated_at)
+			VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?, ?, ?, ?, ?)
 		`, nodeID, month, billingEpoch, normalizeBillingResetDay(resetDay), normalizeTrafficBillingMode(billingMode), inTotal, outTotal, counterSource, sampleTS, now)
 		return err
 	}
@@ -187,6 +193,70 @@ func billableTrafficDelta(mode string, deltaIn, deltaOut int64) int64 {
 
 func billingPeriodKey(ts time.Time, resetDay int) string {
 	return billingPeriodFor(ts, resetDay).Key
+}
+
+// validMonthlyTrafficCorrectionBytes reports whether a manual per-period
+// traffic offset is within the supported range (0 to 1,000,000 GiB).
+func validMonthlyTrafficCorrectionBytes(value int64) bool {
+	return value >= 0 && value <= maxMonthlyTrafficCorrectionBytes
+}
+
+// setMonthlyTrafficCorrectionTx overwrites the current billing period's manual
+// traffic offset for a node. Measured aggregates (in/out/billable_bytes) and
+// counter baselines are left untouched, so later agent samples keep
+// accumulating on top of the offset - the server-side equivalent of the
+// agent-side "RX_PERIOD = correction, RX_PREV = current" reset. Lifetime
+// counters are never affected. A missing period row is created empty (without
+// baselines) so the next agent sample establishes its baseline without
+// billing phantom usage.
+func setMonthlyTrafficCorrectionTx(ctx context.Context, tx *sql.Tx, nodeID string, inCorrection, outCorrection int64, now time.Time) error {
+	if !validMonthlyTrafficCorrectionBytes(inCorrection) || !validMonthlyTrafficCorrectionBytes(outCorrection) {
+		return errInvalidAdminNodeUpdate
+	}
+	var billingMode string
+	var monthlyResetDay int
+	var billingEpoch int64
+	if err := tx.QueryRowContext(ctx,
+		`SELECT billing_mode, monthly_reset_day, billing_traffic_epoch FROM nodes WHERE id = ?`,
+		nodeID,
+	).Scan(&billingMode, &monthlyResetDay, &billingEpoch); err != nil {
+		return err
+	}
+	month := billingPeriodKey(now, monthlyResetDay)
+	billableCorrection := billableTrafficDelta(billingMode, inCorrection, outCorrection)
+	nowUnix := now.Unix()
+	result, err := tx.ExecContext(ctx, `
+		UPDATE traffic_monthly
+		SET in_correction_bytes = ?,
+		    out_correction_bytes = ?,
+		    billable_correction_bytes = ?,
+		    updated_at = ?
+		WHERE node_id = ? AND month = ? AND billing_epoch = ?
+	`, inCorrection, outCorrection, billableCorrection, nowUnix, nodeID, month, billingEpoch)
+	if err != nil {
+		return err
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return err
+	} else if affected > 0 {
+		return nil
+	}
+	_, err = tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO traffic_monthly (node_id, month, billing_epoch, reset_day, billing_mode, in_bytes, out_bytes, billable_bytes, in_correction_bytes, out_correction_bytes, billable_correction_bytes, updated_at)
+		VALUES (?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?)
+	`, nodeID, month, billingEpoch, normalizeBillingResetDay(monthlyResetDay), normalizeTrafficBillingMode(billingMode), inCorrection, outCorrection, billableCorrection, nowUnix)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `
+		UPDATE traffic_monthly
+		SET in_correction_bytes = ?,
+		    out_correction_bytes = ?,
+		    billable_correction_bytes = ?,
+		    updated_at = ?
+		WHERE node_id = ? AND month = ? AND billing_epoch = ?
+	`, inCorrection, outCorrection, billableCorrection, nowUnix, nodeID, month, billingEpoch)
+	return err
 }
 
 type billingPeriod struct {

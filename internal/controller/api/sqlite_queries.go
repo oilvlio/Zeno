@@ -18,9 +18,9 @@ func (s *sqliteReadQueries) nodes(ctx context.Context) ([]Node, error) {
 		       ss.cpu_percent, ss.load1, ss.load5, ss.load15, ss.uptime_seconds, ss.memory_used_bytes, ss.disk_used_bytes,
 		       ss.net_in_speed_bps, ss.net_out_speed_bps, ss.net_in_total_bytes, ss.net_out_total_bytes,
 		       lifetime.in_bytes, lifetime.out_bytes,
-		       (
-		         SELECT tm.billable_bytes
-		         FROM traffic_monthly tm
+	       (
+	         SELECT tm.billable_bytes + COALESCE(tm.billable_correction_bytes, 0)
+	         FROM traffic_monthly tm
 		         WHERE tm.node_id = n.id
 		           AND tm.billing_epoch = COALESCE(n.billing_traffic_epoch, 0)
 		           AND tm.month = CASE

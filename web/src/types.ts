@@ -149,6 +149,8 @@ export interface AdminNode {
   publicIPv4?: string
   publicIPv6?: string
   monthlyQuotaBytes: number | null
+  monthlyInCorrectionBytes: number | null
+  monthlyOutCorrectionBytes: number | null
   lastSeenAt?: string
   createdAt: string
   updatedAt: string

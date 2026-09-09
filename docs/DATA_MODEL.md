@@ -127,6 +127,9 @@ CREATE TABLE traffic_monthly (
   in_bytes INTEGER NOT NULL DEFAULT 0,
   out_bytes INTEGER NOT NULL DEFAULT 0,
   billable_bytes INTEGER NOT NULL DEFAULT 0,
+  in_correction_bytes INTEGER NOT NULL DEFAULT 0,
+  out_correction_bytes INTEGER NOT NULL DEFAULT 0,
+  billable_correction_bytes INTEGER NOT NULL DEFAULT 0,
   last_in_total_bytes INTEGER,
   last_out_total_bytes INTEGER,
   last_sample_ts INTEGER,
@@ -134,6 +137,8 @@ CREATE TABLE traffic_monthly (
   PRIMARY KEY (node_id, month, billing_epoch)
 );
 ```
+
+`in/out/billable_correction_bytes` 是管理后台手工录入的本账期流量校正偏移（单位字节，上限单向 1,000,000 GiB），用于对齐商家口径。展示侧月计费 = 实测累计 + 校正偏移；counter 基线、实测累计与 `traffic_lifetime` 永久累计不受校正影响；新账期行默认偏移为 0。
 
 ## traffic_lifetime
 

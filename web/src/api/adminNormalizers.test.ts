@@ -55,6 +55,8 @@ describe('normalizeAdminNodes', () => {
     expect(data.nodes[0].publicIPv4).toBe('198.51.100.8')
     expect(data.nodes[0].publicIPv6).toBe('2001:db8::8')
     expect(data.nodes[0].monthlyQuotaBytes).toBe(1099511627776)
+    expect(data.nodes[0].monthlyInCorrectionBytes).toBeNull()
+    expect(data.nodes[0].monthlyOutCorrectionBytes).toBeNull()
   })
 
   it('normalizes null node collections from fresh controller installs', () => {
@@ -171,6 +173,8 @@ describe('admin node serialization', () => {
     publicIPv4: '192.0.2.1',
     publicIPv6: '2001:db8::1',
     monthlyQuotaBytes: 1024,
+    monthlyInCorrectionBytes: 1073741824,
+    monthlyOutCorrectionBytes: null,
     disabled: false,
   }
 
@@ -180,6 +184,18 @@ describe('admin node serialization', () => {
     const { id, ...createWithoutID } = create
     expect(id).toBe('node-a')
     expect(createWithoutID).toEqual(update)
+  })
+
+  it('round-trips monthly traffic corrections and omits absent ones', () => {
+    expect(serializeAdminNodeUpdate({
+      monthlyInCorrectionBytes: 1073741824,
+      monthlyOutCorrectionBytes: null,
+    })).toEqual({
+      monthly_in_correction_bytes: 1073741824,
+      monthly_out_correction_bytes: null,
+    })
+    expect(serializeAdminNodeUpdate({})).not.toHaveProperty('monthly_in_correction_bytes')
+    expect(serializeAdminNodeUpdate({})).not.toHaveProperty('monthly_out_correction_bytes')
   })
 
   it('keeps operation-specific fields out of the shared serializer', () => {

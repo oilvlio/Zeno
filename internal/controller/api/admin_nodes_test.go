@@ -399,6 +399,8 @@ func TestAdminNodePatchRejectsUnauthorizedUnknownAndInvalidRequests(t *testing.T
 		{name: "invalid renewal currency", nodeID: "example-node-a", body: `{"renewal_currency":"BTC"}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "zero monthly reset day", nodeID: "example-node-a", body: `{"monthly_reset_day":0}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 		{name: "invalid monthly reset day", nodeID: "example-node-a", body: `{"monthly_reset_day":32}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
+		{name: "negative in correction", nodeID: "example-node-a", body: `{"monthly_in_correction_bytes":-1}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
+		{name: "oversize out correction", nodeID: "example-node-a", body: `{"monthly_out_correction_bytes":1073741824000001}`, adminToken: "admin-pass", wantStatus: http.StatusBadRequest},
 	}
 
 	for _, tc := range cases {

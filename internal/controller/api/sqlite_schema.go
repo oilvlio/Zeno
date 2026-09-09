@@ -152,6 +152,9 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			in_bytes INTEGER NOT NULL DEFAULT 0,
 			out_bytes INTEGER NOT NULL DEFAULT 0,
 			billable_bytes INTEGER NOT NULL DEFAULT 0,
+			in_correction_bytes INTEGER NOT NULL DEFAULT 0,
+			out_correction_bytes INTEGER NOT NULL DEFAULT 0,
+			billable_correction_bytes INTEGER NOT NULL DEFAULT 0,
 			last_in_total_bytes INTEGER,
 			last_out_total_bytes INTEGER,
 			counter_source TEXT NOT NULL DEFAULT '',
@@ -487,7 +490,10 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 	})
 	stage.run("traffic-monthly-schema", func() error { return s.migrateTrafficMonthlySchema(ctx) })
 	stage.columns("traffic-monthly-columns", "traffic_monthly", map[string]string{
-		"counter_source": "TEXT NOT NULL DEFAULT ''",
+		"counter_source":            "TEXT NOT NULL DEFAULT ''",
+		"in_correction_bytes":       "INTEGER NOT NULL DEFAULT 0",
+		"out_correction_bytes":      "INTEGER NOT NULL DEFAULT 0",
+		"billable_correction_bytes": "INTEGER NOT NULL DEFAULT 0",
 	})
 	stage.run("traffic-aggregate-normalize", func() error { return s.normalizeTrafficAggregateStorage(ctx) })
 	probeTargetColumns := map[string]string{
@@ -525,15 +531,27 @@ func (s *sqliteSchemaStore) normalizeTrafficAggregateStorage(ctx context.Context
 	// builds performed monthly accumulation inside SQL and could therefore leave
 	// a REAL value or a negative billable value after int64 overflow. Traffic is
 	// monotonic and non-negative, so the only safe recovery is saturation.
+	// Manual per-period corrections are additionally clamped to the supported
+	// correction range (0 to 1,000,000 GiB per direction); out-of-range values
+	// reset to 0 rather than inflating billed usage. The derived billable
+	// correction may legitimately reach twice the per-direction cap under the
+	// "both" mode, so it saturates like any other aggregate.
 	const maxInt64 = "9223372036854775807"
+	const maxTrafficCorrectionSQL = "1073741824000000"
 	statements := []string{
 		`UPDATE traffic_monthly SET
 			in_bytes = CASE WHEN typeof(in_bytes) <> 'integer' OR in_bytes < 0 THEN ` + maxInt64 + ` ELSE in_bytes END,
 			out_bytes = CASE WHEN typeof(out_bytes) <> 'integer' OR out_bytes < 0 THEN ` + maxInt64 + ` ELSE out_bytes END,
-			billable_bytes = CASE WHEN typeof(billable_bytes) <> 'integer' OR billable_bytes < 0 THEN ` + maxInt64 + ` ELSE billable_bytes END
+			billable_bytes = CASE WHEN typeof(billable_bytes) <> 'integer' OR billable_bytes < 0 THEN ` + maxInt64 + ` ELSE billable_bytes END,
+			in_correction_bytes = CASE WHEN typeof(in_correction_bytes) <> 'integer' OR in_correction_bytes < 0 THEN 0 WHEN in_correction_bytes > ` + maxTrafficCorrectionSQL + ` THEN ` + maxTrafficCorrectionSQL + ` ELSE in_correction_bytes END,
+			out_correction_bytes = CASE WHEN typeof(out_correction_bytes) <> 'integer' OR out_correction_bytes < 0 THEN 0 WHEN out_correction_bytes > ` + maxTrafficCorrectionSQL + ` THEN ` + maxTrafficCorrectionSQL + ` ELSE out_correction_bytes END,
+			billable_correction_bytes = CASE WHEN typeof(billable_correction_bytes) <> 'integer' OR billable_correction_bytes < 0 THEN ` + maxInt64 + ` ELSE billable_correction_bytes END
 		 WHERE typeof(in_bytes) <> 'integer' OR in_bytes < 0
 		    OR typeof(out_bytes) <> 'integer' OR out_bytes < 0
-		    OR typeof(billable_bytes) <> 'integer' OR billable_bytes < 0`,
+		    OR typeof(billable_bytes) <> 'integer' OR billable_bytes < 0
+		    OR typeof(in_correction_bytes) <> 'integer' OR in_correction_bytes < 0 OR in_correction_bytes > ` + maxTrafficCorrectionSQL + `
+		    OR typeof(out_correction_bytes) <> 'integer' OR out_correction_bytes < 0 OR out_correction_bytes > ` + maxTrafficCorrectionSQL + `
+		    OR typeof(billable_correction_bytes) <> 'integer' OR billable_correction_bytes < 0`,
 		`UPDATE traffic_lifetime SET
 			in_bytes = CASE WHEN typeof(in_bytes) <> 'integer' OR in_bytes < 0 THEN ` + maxInt64 + ` ELSE in_bytes END,
 			out_bytes = CASE WHEN typeof(out_bytes) <> 'integer' OR out_bytes < 0 THEN ` + maxInt64 + ` ELSE out_bytes END
@@ -649,6 +667,57 @@ func (s *sqliteSchemaStore) ensureStateSampleIdempotency(ctx context.Context) er
 	return nil
 }
 
+// trafficMonthlyCopyExprs holds the per-column SELECT expressions used when
+// rebuilding traffic_monthly, tolerating legacy tables that predate a column.
+type trafficMonthlyCopyExprs struct {
+	billingEpoch       string
+	resetDay           string
+	billingMode        string
+	lastSample         string
+	counterSource      string
+	inCorrection       string
+	outCorrection      string
+	billableCorrection string
+}
+
+func resolveTrafficMonthlyCopyExprs(columns map[string]bool) trafficMonthlyCopyExprs {
+	exprs := trafficMonthlyCopyExprs{
+		billingEpoch:       "0",
+		resetDay:           "COALESCE((SELECT n.monthly_reset_day FROM nodes n WHERE n.id = traffic_monthly.node_id), 1)",
+		billingMode:        "COALESCE((SELECT n.billing_mode FROM nodes n WHERE n.id = traffic_monthly.node_id), 'both')",
+		lastSample:         "NULL",
+		counterSource:      "''",
+		inCorrection:       "0",
+		outCorrection:      "0",
+		billableCorrection: "0",
+	}
+	if columns["billing_epoch"] {
+		exprs.billingEpoch = "COALESCE(billing_epoch, 0)"
+	}
+	if columns["reset_day"] {
+		exprs.resetDay = "COALESCE(reset_day, " + exprs.resetDay + ")"
+	}
+	if columns["billing_mode"] {
+		exprs.billingMode = "COALESCE(NULLIF(TRIM(billing_mode), ''), " + exprs.billingMode + ")"
+	}
+	if columns["last_sample_ts"] {
+		exprs.lastSample = "last_sample_ts"
+	}
+	if columns["counter_source"] {
+		exprs.counterSource = "COALESCE(counter_source, '')"
+	}
+	if columns["in_correction_bytes"] {
+		exprs.inCorrection = "COALESCE(in_correction_bytes, 0)"
+	}
+	if columns["out_correction_bytes"] {
+		exprs.outCorrection = "COALESCE(out_correction_bytes, 0)"
+	}
+	if columns["billable_correction_bytes"] {
+		exprs.billableCorrection = "COALESCE(billable_correction_bytes, 0)"
+	}
+	return exprs
+}
+
 func (s *sqliteSchemaStore) migrateTrafficMonthlySchema(ctx context.Context) error {
 	columns, err := s.tableColumns(ctx, "traffic_monthly")
 	if err != nil {
@@ -658,31 +727,15 @@ func (s *sqliteSchemaStore) migrateTrafficMonthlySchema(ctx context.Context) err
 	if err != nil {
 		return err
 	}
-	requiresRebuild := !pkIncludesEpoch || !columns["billing_epoch"] || !columns["reset_day"] || !columns["billing_mode"] || !columns["last_sample_ts"]
+	requiresRebuild := !pkIncludesEpoch
+	for _, column := range []string{"billing_epoch", "reset_day", "billing_mode", "last_sample_ts", "in_correction_bytes", "out_correction_bytes", "billable_correction_bytes"} {
+		requiresRebuild = requiresRebuild || !columns[column]
+	}
 	if !requiresRebuild {
 		return nil
 	}
 
-	billingEpochExpr := "0"
-	if columns["billing_epoch"] {
-		billingEpochExpr = "COALESCE(billing_epoch, 0)"
-	}
-	resetDayExpr := "COALESCE((SELECT n.monthly_reset_day FROM nodes n WHERE n.id = traffic_monthly.node_id), 1)"
-	if columns["reset_day"] {
-		resetDayExpr = "COALESCE(reset_day, " + resetDayExpr + ")"
-	}
-	billingModeExpr := "COALESCE((SELECT n.billing_mode FROM nodes n WHERE n.id = traffic_monthly.node_id), 'both')"
-	if columns["billing_mode"] {
-		billingModeExpr = "COALESCE(NULLIF(TRIM(billing_mode), ''), " + billingModeExpr + ")"
-	}
-	lastSampleExpr := "NULL"
-	if columns["last_sample_ts"] {
-		lastSampleExpr = "last_sample_ts"
-	}
-	counterSourceExpr := "''"
-	if columns["counter_source"] {
-		counterSourceExpr = "COALESCE(counter_source, '')"
-	}
+	exprs := resolveTrafficMonthlyCopyExprs(columns)
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -702,6 +755,9 @@ func (s *sqliteSchemaStore) migrateTrafficMonthlySchema(ctx context.Context) err
 			in_bytes INTEGER NOT NULL DEFAULT 0,
 			out_bytes INTEGER NOT NULL DEFAULT 0,
 			billable_bytes INTEGER NOT NULL DEFAULT 0,
+			in_correction_bytes INTEGER NOT NULL DEFAULT 0,
+			out_correction_bytes INTEGER NOT NULL DEFAULT 0,
+			billable_correction_bytes INTEGER NOT NULL DEFAULT 0,
 			last_in_total_bytes INTEGER,
 			last_out_total_bytes INTEGER,
 			counter_source TEXT NOT NULL DEFAULT '',
@@ -715,14 +771,16 @@ func (s *sqliteSchemaStore) migrateTrafficMonthlySchema(ctx context.Context) err
 	insertSQL := fmt.Sprintf(`
 		INSERT OR REPLACE INTO traffic_monthly_new (
 			node_id, month, billing_epoch, reset_day, billing_mode,
-			in_bytes, out_bytes, billable_bytes, last_in_total_bytes,
+			in_bytes, out_bytes, billable_bytes, in_correction_bytes,
+			out_correction_bytes, billable_correction_bytes, last_in_total_bytes,
 			last_out_total_bytes, counter_source, last_sample_ts, updated_at
 		)
 		SELECT node_id, month, %s, %s, %s,
-		       in_bytes, out_bytes, billable_bytes, last_in_total_bytes,
+		       in_bytes, out_bytes, billable_bytes, %s,
+		       %s, %s, last_in_total_bytes,
 		       last_out_total_bytes, %s, %s, updated_at
 		FROM traffic_monthly
-	`, billingEpochExpr, resetDayExpr, billingModeExpr, counterSourceExpr, lastSampleExpr)
+	`, exprs.billingEpoch, exprs.resetDay, exprs.billingMode, exprs.inCorrection, exprs.outCorrection, exprs.billableCorrection, exprs.counterSource, exprs.lastSample)
 	if _, err := tx.ExecContext(ctx, insertSQL); err != nil {
 		return err
 	}

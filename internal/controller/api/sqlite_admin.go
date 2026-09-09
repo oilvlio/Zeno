@@ -11,7 +11,7 @@ func (s *sqliteAdminDomain) AdminNodes(ctx context.Context) ([]AdminNode, error)
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT n.id, n.display_name, n.status, n.country_code, n.region, n.disabled,
 		       n.home_probe_target_id, n.billing_mode, n.monthly_reset_day, n.expiry_date, n.expiry_permanent, n.billing_cycle, n.renewal_amount, n.renewal_currency, n.display_order, n.public_ipv4, n.public_ipv6,
-		       n.monthly_quota_bytes, n.last_seen_at, n.created_at, n.updated_at,
+		       n.monthly_quota_bytes, n.billing_traffic_epoch, n.last_seen_at, n.created_at, n.updated_at,
 		       COALESCE((
 		         SELECT MAX(ar.duration_sec)
 		         FROM alert_rules ar
@@ -40,6 +40,7 @@ func (s *sqliteAdminDomain) AdminNodes(ctx context.Context) ([]AdminNode, error)
 	defer rows.Close()
 
 	var nodes []AdminNode
+	var trafficEpochs []int64
 	now := time.Now()
 	for rows.Next() {
 		var node AdminNode
@@ -50,13 +51,14 @@ func (s *sqliteAdminDomain) AdminNodes(ctx context.Context) ([]AdminNode, error)
 		var expiryPermanent int
 		var monthlyResetDay int
 		var displayOrder int
+		var billingTrafficEpoch int64
 		var quota, lastSeenAt, createdAt, updatedAt, offlineDurationSec sql.NullInt64
 		var hostname, osName, osVersion, kernel, arch, virtualization, cpuModel, agentVersion sql.NullString
 		var cpuCores, memoryTotal, diskTotal, bootTime sql.NullInt64
 		if err := rows.Scan(
 			&node.ID, &node.DisplayName, &status, &countryCode, &region, &disabled,
 			&homeProbeTargetID, &billingMode, &monthlyResetDay, &expiryDate, &expiryPermanent, &billingCycle, &renewalAmount, &renewalCurrency, &displayOrder, &publicIPv4, &publicIPv6,
-			&quota, &lastSeenAt, &createdAt, &updatedAt, &offlineDurationSec,
+			&quota, &billingTrafficEpoch, &lastSeenAt, &createdAt, &updatedAt, &offlineDurationSec,
 			&hostname, &osName, &osVersion, &kernel, &arch, &virtualization,
 			&cpuModel, &cpuCores, &memoryTotal, &diskTotal,
 			&bootTime, &agentVersion,
@@ -101,14 +103,66 @@ func (s *sqliteAdminDomain) AdminNodes(ctx context.Context) ([]AdminNode, error)
 		node.BootTime = unixStringPtr(bootTime)
 		node.AgentVersion = nullStringOr(agentVersion, "")
 		nodes = append(nodes, node)
+		trafficEpochs = append(trafficEpochs, billingTrafficEpoch)
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.attachMonthlyTrafficCorrections(ctx, nodes, trafficEpochs, now); err != nil {
 		return nil, err
 	}
 	if nodes == nil {
 		nodes = []AdminNode{}
 	}
 	return nodes, nil
+}
+
+// attachMonthlyTrafficCorrections fills the current billing period's manual
+// traffic offset into each admin node. Corrections live on the period row, so
+// a fresh billing period naturally reports no offset.
+func (s *sqliteAdminDomain) attachMonthlyTrafficCorrections(ctx context.Context, nodes []AdminNode, trafficEpochs []int64, now time.Time) error {
+	if len(nodes) == 0 {
+		return nil
+	}
+	conditions := make([]string, 0, len(nodes))
+	args := make([]any, 0, len(nodes)*3)
+	for index := range nodes {
+		month := billingPeriodKey(now, nodes[index].MonthlyResetDay)
+		conditions = append(conditions, "(node_id = ? AND month = ? AND billing_epoch = ?)")
+		args = append(args, nodes[index].ID, month, trafficEpochs[index])
+	}
+	queryRows, err := s.db.QueryContext(ctx, `
+		SELECT node_id, COALESCE(in_correction_bytes, 0), COALESCE(out_correction_bytes, 0)
+		FROM traffic_monthly
+		WHERE `+strings.Join(conditions, " OR ")+`
+	`, args...)
+	if err != nil {
+		return err
+	}
+	defer queryRows.Close()
+	corrections := make(map[string][2]int64, len(nodes))
+	for queryRows.Next() {
+		var id string
+		var inCorr, outCorr int64
+		if err := queryRows.Scan(&id, &inCorr, &outCorr); err != nil {
+			return err
+		}
+		corrections[id] = [2]int64{inCorr, outCorr}
+	}
+	if err := queryRows.Err(); err != nil {
+		return err
+	}
+	for index := range nodes {
+		if corr, ok := corrections[nodes[index].ID]; ok {
+			if corr[0] > 0 {
+				nodes[index].MonthlyInCorrectionBytes = &corr[0]
+			}
+			if corr[1] > 0 {
+				nodes[index].MonthlyOutCorrectionBytes = &corr[1]
+			}
+		}
+	}
+	return nil
 }
 
 func (s *sqliteAdminDomain) AdminProbeTargets(ctx context.Context) ([]AdminProbeTarget, error) {
@@ -478,6 +532,11 @@ func (s *sqliteAdminDomain) UpdateAdminNode(ctx context.Context, nodeID string, 
 	if err := applyAdminNodeUpdateTx(ctx, tx, nodeID, update); err != nil {
 		return AdminNode{}, err
 	}
+	if update.MonthlyInCorrectionBytes.Set || update.MonthlyOutCorrectionBytes.Set {
+		if err := applyMonthlyTrafficCorrectionTx(ctx, tx, nodeID, update); err != nil {
+			return AdminNode{}, err
+		}
+	}
 
 	if err := tx.Commit(); err != nil {
 		return AdminNode{}, err
@@ -632,4 +691,47 @@ func applyAdminNodeUpdateTx(ctx context.Context, tx *sql.Tx, nodeID string, upda
 		return err
 	}
 	return bumpProbeConfigVersionTx(ctx, tx)
+}
+
+// applyMonthlyTrafficCorrectionTx persists the current billing period's manual
+// traffic offset. Fields the request leaves absent keep their stored value;
+// explicit null clears that direction back to zero. The write happens in the
+// same transaction as the node patch (after any billing mode/reset-day change,
+// so the offset always lands on the effective period) and never touches
+// measured aggregates, counter baselines, or lifetime counters.
+func applyMonthlyTrafficCorrectionTx(ctx context.Context, tx *sql.Tx, nodeID string, update AdminNodeUpdateRequest) error {
+	var billingMode string
+	var monthlyResetDay int
+	var billingEpoch int64
+	if err := tx.QueryRowContext(ctx,
+		`SELECT billing_mode, monthly_reset_day, billing_traffic_epoch FROM nodes WHERE id = ?`,
+		nodeID,
+	).Scan(&billingMode, &monthlyResetDay, &billingEpoch); err != nil {
+		return err
+	}
+	month := billingPeriodKey(time.Now().UTC(), monthlyResetDay)
+	var inCorrection, outCorrection int64
+	err := tx.QueryRowContext(ctx, `
+		SELECT COALESCE(in_correction_bytes, 0), COALESCE(out_correction_bytes, 0)
+		FROM traffic_monthly
+		WHERE node_id = ? AND month = ? AND billing_epoch = ?
+	`, nodeID, month, billingEpoch).Scan(&inCorrection, &outCorrection)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if update.MonthlyInCorrectionBytes.Set {
+		if update.MonthlyInCorrectionBytes.Valid {
+			inCorrection = update.MonthlyInCorrectionBytes.Value
+		} else {
+			inCorrection = 0
+		}
+	}
+	if update.MonthlyOutCorrectionBytes.Set {
+		if update.MonthlyOutCorrectionBytes.Valid {
+			outCorrection = update.MonthlyOutCorrectionBytes.Value
+		} else {
+			outCorrection = 0
+		}
+	}
+	return setMonthlyTrafficCorrectionTx(ctx, tx, nodeID, inCorrection, outCorrection, time.Now().UTC())
 }

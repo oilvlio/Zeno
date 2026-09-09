@@ -193,6 +193,8 @@ export interface ApiAdminNode {
   public_ipv4?: string
   public_ipv6?: string
   monthly_quota_bytes?: number | null
+  monthly_in_correction_bytes?: number | null
+  monthly_out_correction_bytes?: number | null
   last_seen_at?: string | null
   created_at: string
   updated_at: string
@@ -427,6 +429,8 @@ export interface AdminNodeSharedInput {
   publicIPv4?: string
   publicIPv6?: string
   monthlyQuotaBytes?: number | null
+  monthlyInCorrectionBytes?: number | null
+  monthlyOutCorrectionBytes?: number | null
   disabled?: boolean
 }
 
