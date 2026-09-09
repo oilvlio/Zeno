@@ -462,6 +462,7 @@ func (s *sqliteAdminDeletion) finalizeAdminNodeDeletion(ctx context.Context, nod
 		for _, statement := range []string{
 			`DELETE FROM traffic_monthly WHERE node_id = ?`,
 			`DELETE FROM traffic_lifetime WHERE node_id = ?`,
+			`DELETE FROM traffic_calendar_monthly WHERE node_id = ?`,
 			`DELETE FROM node_probe_targets WHERE node_id = ?`,
 			`DELETE FROM alert_rule_states WHERE node_id = ?`,
 			`DELETE FROM host_info WHERE node_id = ?`,

@@ -73,6 +73,8 @@ export interface ApiNode {
   net_out_total_bytes: number | null
   net_in_lifetime_bytes?: number | null
   net_out_lifetime_bytes?: number | null
+  calendar_month_in_bytes?: number | null
+  calendar_month_out_bytes?: number | null
   billing_mode?: string
   monthly_reset_day?: number
   monthly_period_start?: string

@@ -313,6 +313,8 @@ Controller 对下发给单个节点的探针配置做资源上限：最多 32 �
       "net_out_total_bytes": 8192,
       "net_in_lifetime_bytes": 1099511631872,
       "net_out_lifetime_bytes": 1099511635968,
+      "calendar_month_in_bytes": 123456789,
+      "calendar_month_out_bytes": 987654321,
       "billing_mode": "both",
       "monthly_reset_day": 15,
       "monthly_period_start": "2026-06-15",
@@ -344,7 +346,7 @@ Controller 对下发给单个节点的探针配置做资源上限：最多 32 �
 
 `monthly_period_start` / `monthly_period_end` 是当前流量计费周期的 UTC 日期范围，按该节点 `monthly_reset_day` 计算；`monthly_billable_bytes` 也取同一周期。
 
-`net_in_total_bytes` / `net_out_total_bytes` 保留 Agent 当前网卡 counter，供节点详情和状态历史使用，服务器重启后可能归零。`net_in_lifetime_bytes` / `net_out_lifetime_bytes` 由 Controller 持久化累计：首次有效样本保留当时 counter，之后按 counter delta 累计；服务器、Agent 或网卡重启使 counter 降低时，重置后的较小 counter 会作为重置后已产生的流量计入永久累计，并成为下一次采样的基线。首页顶部“接收 / 发送”使用 lifetime 字段；旧缓存缺少字段时临时回退到 raw counter。
+`net_in_total_bytes` / `net_out_total_bytes` 保留 Agent 当前网卡 counter，供节点详情和状态历史使用，服务器重启后可能归零。`net_in_lifetime_bytes` / `net_out_lifetime_bytes` 由 Controller 持久化累计：首次有效样本保留当时 counter，之后按 counter delta 累计；服务器、Agent 或网卡重启使 counter 降低时，重置后的较小 counter 会作为重置后已产生的流量计入永久累计，并成为下一次采样的基线。`calendar_month_in_bytes` / `calendar_month_out_bytes` 是本自然月（UTC）的实测累计：与节点账单日、计费口径、流量校正均无关，跨月时清零重计，不保留历史月份；首页顶部“本月发送 / 本月接收”使用这两个字段求和，旧缓存缺少字段时按 0 处理。
 
 `services` 是公开服务详情页使用的探针目标摘要。它按后台探针目标显示顺序返回有效目标，`assigned_node_count` 是分配且启用的节点数量，`reporting_node_count` 是最近 24 小时内有上报的节点数量，延迟/丢包取该服务最新一条探测结果；公开 DTO 不返回探测地址或端口，完整端点只在管理员接口中可见；前台首页不单独展示监控服务列表。
 

@@ -159,6 +159,8 @@ export function normalizeNode(node: ApiNode): HomeCardNode {
     netOutTotalBytes: node.net_out_total_bytes,
     netInLifetimeBytes: node.net_in_lifetime_bytes,
     netOutLifetimeBytes: node.net_out_lifetime_bytes,
+    calendarMonthInBytes: node.calendar_month_in_bytes ?? null,
+    calendarMonthOutBytes: node.calendar_month_out_bytes ?? null,
     billingMode: node.billing_mode,
     monthlyResetDay: node.monthly_reset_day,
     monthlyPeriodStart: node.monthly_period_start,

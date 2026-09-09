@@ -18,6 +18,7 @@ func (s *sqliteReadQueries) nodes(ctx context.Context) ([]Node, error) {
 		       ss.cpu_percent, ss.load1, ss.load5, ss.load15, ss.uptime_seconds, ss.memory_used_bytes, ss.disk_used_bytes,
 		       ss.net_in_speed_bps, ss.net_out_speed_bps, ss.net_in_total_bytes, ss.net_out_total_bytes,
 		       lifetime.in_bytes, lifetime.out_bytes,
+	       calendar.in_bytes, calendar.out_bytes,
 	       (
 	         SELECT tm.billable_bytes + COALESCE(tm.billable_correction_bytes, 0)
 	         FROM traffic_monthly tm
@@ -48,6 +49,7 @@ func (s *sqliteReadQueries) nodes(ctx context.Context) ([]Node, error) {
 			SELECT id FROM state_samples WHERE node_id = n.id ORDER BY ts DESC, id DESC LIMIT 1
 		)
 		LEFT JOIN traffic_lifetime lifetime ON lifetime.node_id = n.id
+		LEFT JOIN traffic_calendar_monthly calendar ON calendar.node_id = n.id
 		LEFT JOIN exchange_rates fx ON fx.currency = COALESCE(NULLIF(TRIM(n.renewal_currency), ''), 'CNY')
 		WHERE n.disabled = 0
 		ORDER BY n.display_order ASC, n.id ASC
@@ -66,8 +68,8 @@ func (s *sqliteReadQueries) nodes(ctx context.Context) ([]Node, error) {
 		var expiryPermanent int
 		var monthlyResetDay, cpuCores, memoryTotal, diskTotal, bootTime, lastSeenAt, uptimeSeconds sql.NullInt64
 		var cpuPercent, load1, load5, load15, netInSpeed, netOutSpeed sql.NullFloat64
-		var memoryUsed, diskUsed, netInTotal, netOutTotal, netInLifetime, netOutLifetime, billable, quota, offlineDurationSec sql.NullInt64
-		if err := rows.Scan(&id, &displayName, &status, &countryCode, &expiryDate, &expiryPermanent, &billingCycle, &renewalAmount, &renewalCurrency, &renewalCNYRate, &billingMode, &monthlyResetDay, &lastSeenAt, &osName, &osVersion, &kernel, &arch, &virtualization, &cpuModel, &cpuCores, &memoryTotal, &diskTotal, &bootTime, &cpuPercent, &load1, &load5, &load15, &uptimeSeconds, &memoryUsed, &diskUsed, &netInSpeed, &netOutSpeed, &netInTotal, &netOutTotal, &netInLifetime, &netOutLifetime, &billable, &quota, &offlineDurationSec); err != nil {
+		var memoryUsed, diskUsed, netInTotal, netOutTotal, netInLifetime, netOutLifetime, calendarIn, calendarOut, billable, quota, offlineDurationSec sql.NullInt64
+		if err := rows.Scan(&id, &displayName, &status, &countryCode, &expiryDate, &expiryPermanent, &billingCycle, &renewalAmount, &renewalCurrency, &renewalCNYRate, &billingMode, &monthlyResetDay, &lastSeenAt, &osName, &osVersion, &kernel, &arch, &virtualization, &cpuModel, &cpuCores, &memoryTotal, &diskTotal, &bootTime, &cpuPercent, &load1, &load5, &load15, &uptimeSeconds, &memoryUsed, &diskUsed, &netInSpeed, &netOutSpeed, &netInTotal, &netOutTotal, &netInLifetime, &netOutLifetime, &calendarIn, &calendarOut, &billable, &quota, &offlineDurationSec); err != nil {
 			return nil, err
 		}
 		resetDay := 1
@@ -76,44 +78,46 @@ func (s *sqliteReadQueries) nodes(ctx context.Context) ([]Node, error) {
 		}
 		period := billingPeriodFor(now, resetDay)
 		node := Node{
-			ID:                   id,
-			DisplayName:          displayName,
-			Status:               publicNodeStatusAfter(status, lastSeenAt, now, nodeOfflineAfterFromSeconds(offlineDurationSec)),
-			OS:                   nullStringOr(osName, "linux"),
-			OSVersion:            nullStringOr(osVersion, ""),
-			Kernel:               nullStringOr(kernel, ""),
-			Arch:                 nullStringOr(arch, ""),
-			Virtualization:       nullStringOr(virtualization, ""),
-			CPUModel:             nullStringOr(cpuModel, ""),
-			CountryCode:          nullStringOr(countryCode, ""),
-			ExpiryLabel:          expiryLabelValue(expiryDate, billingCycle, expiryPermanent != 0, now),
-			RenewalAmount:        floatPtr(renewalAmount),
-			RenewalCurrency:      nullStringOr(renewalCurrency, "CNY"),
-			BillingCycle:         nullStringOr(billingCycle, ""),
-			MonthlyCostCNY:       monthlyRenewalCostCNY(renewalAmount, renewalCNYRate, billingCycle, expiryPermanent != 0),
-			CPUCores:             intPtr(cpuCores),
-			CPUPercent:           floatPtr(cpuPercent),
-			MemoryUsedBytes:      intPtr(memoryUsed),
-			MemoryTotalBytes:     intPtr(memoryTotal),
-			DiskUsedBytes:        intPtr(diskUsed),
-			DiskTotalBytes:       intPtr(diskTotal),
-			BootTime:             unixStringPtr(bootTime),
-			Load1:                floatPtr(load1),
-			Load5:                floatPtr(load5),
-			Load15:               floatPtr(load15),
-			UptimeSeconds:        intPtr(uptimeSeconds),
-			NetInSpeedBps:        floatPtr(netInSpeed),
-			NetOutSpeedBps:       floatPtr(netOutSpeed),
-			NetInTotalBytes:      intPtr(netInTotal),
-			NetOutTotalBytes:     intPtr(netOutTotal),
-			NetInLifetimeBytes:   intPtr(netInLifetime),
-			NetOutLifetimeBytes:  intPtr(netOutLifetime),
-			BillingMode:          nullStringOr(billingMode, "both"),
-			MonthlyResetDay:      resetDay,
-			MonthlyPeriodStart:   period.StartDate,
-			MonthlyPeriodEnd:     period.EndDate,
-			MonthlyBillableBytes: intPtr(billable),
-			MonthlyQuotaBytes:    intPtr(quota),
+			ID:                    id,
+			DisplayName:           displayName,
+			Status:                publicNodeStatusAfter(status, lastSeenAt, now, nodeOfflineAfterFromSeconds(offlineDurationSec)),
+			OS:                    nullStringOr(osName, "linux"),
+			OSVersion:             nullStringOr(osVersion, ""),
+			Kernel:                nullStringOr(kernel, ""),
+			Arch:                  nullStringOr(arch, ""),
+			Virtualization:        nullStringOr(virtualization, ""),
+			CPUModel:              nullStringOr(cpuModel, ""),
+			CountryCode:           nullStringOr(countryCode, ""),
+			ExpiryLabel:           expiryLabelValue(expiryDate, billingCycle, expiryPermanent != 0, now),
+			RenewalAmount:         floatPtr(renewalAmount),
+			RenewalCurrency:       nullStringOr(renewalCurrency, "CNY"),
+			BillingCycle:          nullStringOr(billingCycle, ""),
+			MonthlyCostCNY:        monthlyRenewalCostCNY(renewalAmount, renewalCNYRate, billingCycle, expiryPermanent != 0),
+			CPUCores:              intPtr(cpuCores),
+			CPUPercent:            floatPtr(cpuPercent),
+			MemoryUsedBytes:       intPtr(memoryUsed),
+			MemoryTotalBytes:      intPtr(memoryTotal),
+			DiskUsedBytes:         intPtr(diskUsed),
+			DiskTotalBytes:        intPtr(diskTotal),
+			BootTime:              unixStringPtr(bootTime),
+			Load1:                 floatPtr(load1),
+			Load5:                 floatPtr(load5),
+			Load15:                floatPtr(load15),
+			UptimeSeconds:         intPtr(uptimeSeconds),
+			NetInSpeedBps:         floatPtr(netInSpeed),
+			NetOutSpeedBps:        floatPtr(netOutSpeed),
+			NetInTotalBytes:       intPtr(netInTotal),
+			NetOutTotalBytes:      intPtr(netOutTotal),
+			NetInLifetimeBytes:    intPtr(netInLifetime),
+			NetOutLifetimeBytes:   intPtr(netOutLifetime),
+			CalendarMonthInBytes:  intPtr(calendarIn),
+			CalendarMonthOutBytes: intPtr(calendarOut),
+			BillingMode:           nullStringOr(billingMode, "both"),
+			MonthlyResetDay:       resetDay,
+			MonthlyPeriodStart:    period.StartDate,
+			MonthlyPeriodEnd:      period.EndDate,
+			MonthlyBillableBytes:  intPtr(billable),
+			MonthlyQuotaBytes:     intPtr(quota),
 		}
 		nodes = append(nodes, node)
 	}

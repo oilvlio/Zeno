@@ -146,6 +146,24 @@ CREATE TABLE traffic_monthly (
 
 旧数据库升级时，Controller 仅使用每台节点最新的有效 raw counter 进行一次性回填，并以该样本作为后续基线，不尝试从可能已裁剪的历史记录中重建永久累计值。
 
+## traffic_calendar_monthly
+
+本自然月（UTC）实测流量账本。每个节点固定一行（`node_id` 主键），只保留运行中的月份，不存历史：样本落到新月份时实测累计清零，counter 基线不断（网卡 counter 跨月连续），因此跨月样本的整段增量计入新月，误差不超过一个上报间隔。流量校正、计费口径、账单日均不影响本表。
+
+```sql
+CREATE TABLE traffic_calendar_monthly (
+	node_id TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+	month TEXT NOT NULL,
+	in_bytes INTEGER NOT NULL DEFAULT 0,
+	out_bytes INTEGER NOT NULL DEFAULT 0,
+	last_in_total_bytes INTEGER,
+	last_out_total_bytes INTEGER,
+	counter_source TEXT NOT NULL DEFAULT '',
+	last_sample_ts INTEGER,
+	updated_at INTEGER NOT NULL
+);
+```
+
 ```sql
 CREATE TABLE traffic_lifetime (
   node_id TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,

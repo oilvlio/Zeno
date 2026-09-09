@@ -18,11 +18,6 @@ function compactBytes(value: number): string {
   return `${amount} ${units[unit]}`
 }
 
-function compactRateParts(value: number): { value: string; unit: string } {
-  const [amount, unit = 'B'] = compactBytes(value).split(' ')
-  return { value: amount, unit: `${unit}/s` }
-}
-
 interface HomeOverviewPanelProps {
   settings?: AdminSettings
   totalCount: number
@@ -35,8 +30,8 @@ interface HomeOverviewPanelProps {
   onCurrencyChange?: (currency: CurrencyCode) => void
   totalUp: number
   totalDown: number
-  upSpeed: number
-  downSpeed: number
+  monthUp: number
+  monthDown: number
 }
 
 interface HomeTopPanelProps extends HomeOverviewPanelProps {
@@ -90,16 +85,6 @@ export function HomeRegionFilter({ regions, activeRegion, onChange }: { regions:
   )
 }
 
-function HomeTrafficDirectionIcon({ direction }: { direction: 'upload' | 'download' }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d={direction === 'upload' ? 'M12 16V4' : 'M12 4v12'} />
-      <path d={direction === 'upload' ? 'm7 9 5-5 5 5' : 'm7 11 5 5 5-5'} />
-      <path d="M5 20h14" />
-    </svg>
-  )
-}
-
 function HomeMonthlyCostIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -123,32 +108,18 @@ function HomeTrafficTotalIcon({ direction }: { direction: 'upload' | 'download' 
 
 interface HomeTrafficSummaryProps {
   direction: 'upload' | 'download'
-  kind: 'rate' | 'total'
-  rate: ReturnType<typeof compactRateParts>
+  kind: 'month' | 'total'
   total: string
 }
 
-function HomeTrafficSummary({ direction, kind, rate, total }: HomeTrafficSummaryProps) {
+function HomeTrafficSummary({ direction, kind, total }: HomeTrafficSummaryProps) {
   const isUpload = direction === 'upload'
-  if (kind === 'rate') {
-    return (
-      <div className={`home-summary__metric home-summary__metric--rate home-summary__metric--${direction}`} aria-label={isUpload ? 'upload rate' : 'download rate'}>
-        <div className="home-summary__metric-label">
-          <span className="home-summary__metric-icon"><HomeTrafficDirectionIcon direction={direction} /></span>
-          <span>{isUpload ? '上传' : '下载'}</span>
-        </div>
-        <div className="home-summary__metric-value home-summary__metric-value--rate">
-          <strong>{rate.value}</strong>
-          <span>{rate.unit}</span>
-        </div>
-      </div>
-    )
-  }
+  const isMonth = kind === 'month'
   return (
-    <div className={`home-summary__metric home-summary__metric--total home-summary__metric--${direction}`} aria-label={isUpload ? 'total sent' : 'total received'}>
+    <div className={`home-summary__metric home-summary__metric--total home-summary__metric--${direction}`} aria-label={isUpload ? (isMonth ? 'month sent' : 'total sent') : (isMonth ? 'month received' : 'total received')}>
       <div className="home-summary__metric-label">
         <span className="home-summary__metric-icon home-summary__metric-icon--total"><HomeTrafficTotalIcon direction={direction} /></span>
-        <span>{isUpload ? '累计发送' : '累计接收'}</span>
+        <span>{isUpload ? (isMonth ? '本月发送' : '累计发送') : (isMonth ? '本月接收' : '累计接收')}</span>
       </div>
       <div className="home-summary__metric-value home-summary__metric-value--total">
         <strong>{total}</strong>
@@ -316,9 +287,7 @@ function HomeCurrencyMenu({ value, options, onChange }: HomeCurrencyMenuProps) {
   )
 }
 
-export function HomeOverviewPanel({ totalCount, onlineCount, monthlyCost, displayCurrency = 'CNY', totalUp, totalDown, upSpeed, downSpeed }: HomeOverviewPanelProps) {
-  const uploadRate = compactRateParts(upSpeed)
-  const downloadRate = compactRateParts(downSpeed)
+export function HomeOverviewPanel({ totalCount, onlineCount, monthlyCost, displayCurrency = 'CNY', totalUp, totalDown, monthUp, monthDown }: HomeOverviewPanelProps) {
   const activeCurrency = normalizeCurrencyCode(displayCurrency)
   return (
     <section className="home-summary" aria-label="server overview">
@@ -341,10 +310,10 @@ export function HomeOverviewPanel({ totalCount, onlineCount, monthlyCost, displa
           <strong>{formatCurrencyAmount(monthlyCost, activeCurrency, { fixed: true, spaced: true })}</strong>
         </div>
       </div>
-      <HomeTrafficSummary direction="upload" kind="total" rate={uploadRate} total={compactBytes(totalUp)} />
-      <HomeTrafficSummary direction="download" kind="total" rate={downloadRate} total={compactBytes(totalDown)} />
-      <HomeTrafficSummary direction="upload" kind="rate" rate={uploadRate} total={compactBytes(totalUp)} />
-      <HomeTrafficSummary direction="download" kind="rate" rate={downloadRate} total={compactBytes(totalDown)} />
+      <HomeTrafficSummary direction="upload" kind="month" total={compactBytes(monthUp)} />
+      <HomeTrafficSummary direction="download" kind="month" total={compactBytes(monthDown)} />
+      <HomeTrafficSummary direction="upload" kind="total" total={compactBytes(totalUp)} />
+      <HomeTrafficSummary direction="download" kind="total" total={compactBytes(totalDown)} />
     </section>
   )
 }

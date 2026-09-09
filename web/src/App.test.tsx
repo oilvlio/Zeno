@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { DashboardRouteState, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, documentBrandingForSettings, filterHomeNodesByRegion, homeMonthlyCostForNodes, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, preloadAdminRoute, preloadNodeDetailRoute, shellStyleForSettings, shouldPreloadAdminRoute, shouldPreloadNodeDetailRoute, shouldRefreshHomeRealtimeSnapshot } from './App'
+import { DashboardRouteState, HomeRegionFilter, HomeTopPanel, adminTokenMaxAgeMs, documentBrandingForSettings, filterHomeNodesByRegion, homeCalendarMonthTotalsForNodes, homeMonthlyCostForNodes, homeRegionOptions, homeTrafficTotalsForNodes, isAdminUnauthorizedError, orderHomeNodes, preloadAdminRoute, preloadNodeDetailRoute, shellStyleForSettings, shouldPreloadAdminRoute, shouldPreloadNodeDetailRoute, shouldRefreshHomeRealtimeSnapshot } from './App'
 import type { HomeCardNode } from './types'
 import { settings } from '../test/fixtures/adminTestFixtures'
 
@@ -11,8 +11,8 @@ const overviewProps = {
   monthlyCost: 88.5,
   totalUp: 1024,
   totalDown: 2048,
-  upSpeed: 128,
-  downSpeed: 256,
+  monthUp: 512,
+  monthDown: 256,
 }
 
 const trafficNode: HomeCardNode = {
@@ -46,6 +46,18 @@ describe('homeTrafficTotalsForNodes', () => {
   it('falls back to raw counters for a cached summary created before lifetime totals existed', () => {
     const legacyNode = { ...trafficNode, netInLifetimeBytes: undefined, netOutLifetimeBytes: undefined }
     expect(homeTrafficTotalsForNodes([legacyNode])).toEqual({ totalUp: 200, totalDown: 100 })
+  })
+
+  it('sums the running natural-month usage for the homepage panel', () => {
+    const monthNode = { ...trafficNode, calendarMonthInBytes: 300, calendarMonthOutBytes: 500 }
+    expect(homeCalendarMonthTotalsForNodes([monthNode, { ...monthNode, id: 'second', calendarMonthInBytes: 700, calendarMonthOutBytes: 900 }])).toEqual({
+      monthUp: 1_400,
+      monthDown: 1_000,
+    })
+  })
+
+  it('treats a missing calendar month row as zero usage', () => {
+    expect(homeCalendarMonthTotalsForNodes([trafficNode])).toEqual({ monthUp: 0, monthDown: 0 })
   })
 
   it('derives the selected-currency monthly total from original renewal amounts without double rounding', () => {
@@ -280,7 +292,7 @@ describe('HomeTopPanel', () => {
     expect(html).not.toContain('home-summary__network-board')
     expect(html).not.toContain('home-summary__tile')
     expect(html).toContain('home-summary__status-dot')
-    expect(html).toMatch(/home-summary__metric--status[\s\S]*?home-summary__metric--cost[\s\S]*?home-summary__metric--total home-summary__metric--upload[\s\S]*?home-summary__metric--total home-summary__metric--download[\s\S]*?home-summary__metric--rate home-summary__metric--upload[\s\S]*?home-summary__metric--rate home-summary__metric--download/)
+    expect(html).toMatch(/home-summary__metric--status[\s\S]*?home-summary__metric--cost[\s\S]*?home-summary__metric--total home-summary__metric--upload[\s\S]*?home-summary__metric--total home-summary__metric--download[\s\S]*?home-summary__metric--total home-summary__metric--upload[\s\S]*?home-summary__metric--total home-summary__metric--download/)
     expect(html).toContain('在线节点')
     expect(html).toContain('月均消费')
     expect(html).toContain('¥ 88.50')
@@ -316,16 +328,17 @@ describe('HomeTopPanel', () => {
     expect(html).not.toContain('11 台服务器')
     expect(html).toContain('累计发送')
     expect(html).toContain('累计接收')
-    expect(html).toContain('上传')
-    expect(html).toContain('下载')
+    expect(html).toContain('本月发送')
+    expect(html).toContain('本月接收')
     expect(html).not.toContain('上传速率')
     expect(html).not.toContain('下载速率')
     expect(html).toContain('home-summary__metric-icon')
     expect(html).toMatch(/home-summary__status-dot[^>]*><\/span><span>在线节点<\/span>/)
     expect(html).toMatch(/home-summary__metric-icon[\s\S]*?月均消费/)
+    expect(html).toMatch(/aria-label="month sent"[\s\S]*?home-summary__metric-icon home-summary__metric-icon--total[\s\S]*?本月发送/)
+    expect(html).toMatch(/aria-label="month received"[\s\S]*?home-summary__metric-icon home-summary__metric-icon--total[\s\S]*?本月接收/)
     expect(html).toMatch(/aria-label="total sent"[\s\S]*?home-summary__metric-icon home-summary__metric-icon--total[\s\S]*?累计发送/)
     expect(html).toMatch(/aria-label="total received"[\s\S]*?home-summary__metric-icon home-summary__metric-icon--total[\s\S]*?累计接收/)
-    expect(html).toMatch(/home-summary__metric-icon[\s\S]*?上传<\/span>/)
     expect(html).not.toContain('实时')
     expect(html).not.toContain('累计上传')
     expect(html).not.toContain('累计下载')

@@ -76,6 +76,8 @@ export interface HomeCardNode {
   netOutTotalBytes: number | null
   netInLifetimeBytes?: number | null
   netOutLifetimeBytes?: number | null
+  calendarMonthInBytes?: number | null
+  calendarMonthOutBytes?: number | null
   billingMode?: string
   monthlyResetDay?: number
   monthlyPeriodStart?: string

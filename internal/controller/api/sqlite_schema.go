@@ -172,6 +172,20 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context) error {
 			last_sample_ts INTEGER,
 			updated_at INTEGER NOT NULL
 		);`,
+		// Natural-month usage ledger. One row per node by construction: only the
+		// running UTC calendar month is kept, no history. Corrections never
+		// apply here; see traffic_calendar_store.go.
+		`CREATE TABLE IF NOT EXISTS traffic_calendar_monthly (
+			node_id TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+			month TEXT NOT NULL,
+			in_bytes INTEGER NOT NULL DEFAULT 0,
+			out_bytes INTEGER NOT NULL DEFAULT 0,
+			last_in_total_bytes INTEGER,
+			last_out_total_bytes INTEGER,
+			counter_source TEXT NOT NULL DEFAULT '',
+			last_sample_ts INTEGER,
+			updated_at INTEGER NOT NULL
+		);`,
 		`CREATE TABLE IF NOT EXISTS exchange_rates (
 			currency TEXT PRIMARY KEY,
 			cny_rate REAL NOT NULL,
