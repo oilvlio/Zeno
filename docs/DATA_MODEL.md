@@ -138,7 +138,7 @@ CREATE TABLE traffic_monthly (
 );
 ```
 
-`in/out/billable_correction_bytes` 是管理后台手工录入的本账期流量校正偏移（单位字节，上限单向 1,000,000 GiB），用于对齐商家口径。展示侧月计费 = 实测累计 + 校正偏移；counter 基线、实测累计与 `traffic_lifetime` 永久累计不受校正影响；新账期行默认偏移为 0。
+`in/out/billable_correction_bytes` 是管理后台手工录入的本账期流量校正快照（单位字节，上限单向 1,000,000 GiB），录入值即视为商家口径的本期计费流量：保存时当期实测累计清零作废，后续上报在此快照上继续累加。展示侧月计费 = 快照 + 快照后新增；counter 基线在快照后由下一样本重建，`traffic_lifetime` 永久累计不受校正影响；新账期行默认快照为 0。
 
 ## traffic_lifetime
 

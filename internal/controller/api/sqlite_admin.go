@@ -697,8 +697,9 @@ func applyAdminNodeUpdateTx(ctx context.Context, tx *sql.Tx, nodeID string, upda
 // traffic offset. Fields the request leaves absent keep their stored value;
 // explicit null clears that direction back to zero. The write happens in the
 // same transaction as the node patch (after any billing mode/reset-day change,
-// so the offset always lands on the effective period) and never touches
-// measured aggregates, counter baselines, or lifetime counters.
+// so the offset always lands on the effective period) and re-snapshots the
+// period: previously measured usage is discarded, later samples accumulate on
+// top of the entered snapshot. Lifetime counters are never touched.
 func applyMonthlyTrafficCorrectionTx(ctx context.Context, tx *sql.Tx, nodeID string, update AdminNodeUpdateRequest) error {
 	var billingMode string
 	var monthlyResetDay int

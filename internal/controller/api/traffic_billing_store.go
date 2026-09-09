@@ -202,11 +202,14 @@ func validMonthlyTrafficCorrectionBytes(value int64) bool {
 }
 
 // setMonthlyTrafficCorrectionTx overwrites the current billing period's manual
-// traffic offset for a node. Measured aggregates (in/out/billable_bytes) and
-// counter baselines are left untouched, so later agent samples keep
-// accumulating on top of the offset - the server-side equivalent of the
-// agent-side "RX_PERIOD = correction, RX_PREV = current" reset. Lifetime
-// counters are never affected. A missing period row is created empty (without
+// traffic offset for a node, using snapshot semantics: the entered values ARE
+// the provider's billed totals for the period, so previously measured usage is
+// discarded and later agent samples accumulate on top of the snapshot - the
+// server-side equivalent of the agent-side "RX_PERIOD = correction,
+// RX_PREV = current" reset. Counter baselines are cleared (kept as NULL) so
+// the next agent sample re-establishes its baseline without billing phantom
+// usage; at most one report interval of delta is skipped. Lifetime counters
+// are never affected. A missing period row is created empty (without
 // baselines) so the next agent sample establishes its baseline without
 // billing phantom usage.
 func setMonthlyTrafficCorrectionTx(ctx context.Context, tx *sql.Tx, nodeID string, inCorrection, outCorrection int64, now time.Time) error {
@@ -227,9 +230,14 @@ func setMonthlyTrafficCorrectionTx(ctx context.Context, tx *sql.Tx, nodeID strin
 	nowUnix := now.Unix()
 	result, err := tx.ExecContext(ctx, `
 		UPDATE traffic_monthly
-		SET in_correction_bytes = ?,
+		SET in_bytes = 0,
+		    out_bytes = 0,
+		    billable_bytes = 0,
+		    in_correction_bytes = ?,
 		    out_correction_bytes = ?,
 		    billable_correction_bytes = ?,
+		    last_in_total_bytes = NULL,
+		    last_out_total_bytes = NULL,
 		    updated_at = ?
 		WHERE node_id = ? AND month = ? AND billing_epoch = ?
 	`, inCorrection, outCorrection, billableCorrection, nowUnix, nodeID, month, billingEpoch)

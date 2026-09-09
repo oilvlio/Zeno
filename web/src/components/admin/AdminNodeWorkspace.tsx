@@ -322,7 +322,7 @@ function AdminNodeEditModal({ node, targets, onUpdate, onInstallCommand, onClose
                 <input name="monthly-out-correction" type="number" min="0" max="1000000" step="0.1" inputMode="decimal" placeholder="0" defaultValue={formatCorrectionGB(node.monthlyOutCorrectionBytes)} />
               </label>
             </div>
-            <p className="admin-inline-note">流量校正只叠加到本账期的计费与配额进度，不影响累计流量；下个账期自动归零。留空保持不变，填 0 清零。</p>
+            <p className="admin-inline-note">流量校正请填商家面板的本月计费流量：保存后本期已用从该值起算，此前累计作废，后续上报继续累加；不影响累计流量，下个账期自动归零。留空保持不变，填 0 清零重计。</p>
           </div>
         </AdminFormSection>
         <AdminInstallCommand nodeId={node.id} onInstallCommand={onInstallCommand} />

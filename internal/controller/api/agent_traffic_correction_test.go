@@ -44,7 +44,7 @@ func correctionBytes(t *testing.T, ctx context.Context, store *SQLiteStore) (in,
 	return in, out, billable
 }
 
-func TestMonthlyTrafficCorrectionOffsetsBilledUsageOnly(t *testing.T) {
+func TestMonthlyTrafficCorrectionSnapshotsBilledUsage(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {
 		t.Fatalf("open sqlite store: %v", err)
@@ -74,9 +74,10 @@ func TestMonthlyTrafficCorrectionOffsetsBilledUsageOnly(t *testing.T) {
 		t.Fatalf("nodes len = %d, want 1", len(summary.Nodes))
 	}
 	node := summary.Nodes[0]
-	// Measured delta is 400000 + 600000 = 1000000; correction bills 1000 + 2000.
-	if node.MonthlyBillableBytes == nil || *node.MonthlyBillableBytes != 1_003_000 {
-		t.Fatalf("monthly billable = %v, want 1003000 (measured + correction)", floatPtrValue(node.MonthlyBillableBytes))
+	// Snapshot semantics: the entered values ARE the provider's billed totals,
+	// so previously measured usage is discarded and only the snapshot bills.
+	if node.MonthlyBillableBytes == nil || *node.MonthlyBillableBytes != 3_000 {
+		t.Fatalf("monthly billable = %v, want 3000 (snapshot only)", floatPtrValue(node.MonthlyBillableBytes))
 	}
 	// Lifetime counters stay honest: the first sample seeds the baseline at its
 	// full counter value, later samples add deltas. Corrections never apply.
@@ -88,8 +89,8 @@ func TestMonthlyTrafficCorrectionOffsetsBilledUsageOnly(t *testing.T) {
 	}
 
 	measuredIn, measuredOut, measuredBillable := correctionBytes(t, ctx, store)
-	if measuredIn != 400_000 || measuredOut != 600_000 || measuredBillable != 1_000_000 {
-		t.Fatalf("stored measured = %d/%d/%d, want 400000/600000/1000000", measuredIn, measuredOut, measuredBillable)
+	if measuredIn != 0 || measuredOut != 0 || measuredBillable != 0 {
+		t.Fatalf("stored measured = %d/%d/%d, want 0/0/0 reset by snapshot", measuredIn, measuredOut, measuredBillable)
 	}
 
 	nodes, err := store.AdminNodes(ctx)
@@ -106,14 +107,20 @@ func TestMonthlyTrafficCorrectionOffsetsBilledUsageOnly(t *testing.T) {
 		t.Fatalf("admin out correction = %v, want 2000", nodes[0].MonthlyOutCorrectionBytes)
 	}
 
-	// Later samples keep accumulating on top of the offset.
+	// Later samples accumulate on top of the snapshot: the first sample after
+	// the reset only re-establishes the counter baseline, the second bills.
 	postCorrectionTestState(t, ctx, store, now.Add(2*time.Second), 1_900_000, 3_100_000)
+	postCorrectionTestState(t, ctx, store, now.Add(3*time.Second), 2_400_000, 3_700_000)
 	summary, err = store.Summary(ctx)
 	if err != nil {
-		t.Fatalf("summary after third sample: %v", err)
+		t.Fatalf("summary after later samples: %v", err)
 	}
-	if got := *summary.Nodes[0].MonthlyBillableBytes; got != 2_003_000 {
-		t.Fatalf("monthly billable after third sample = %v, want 2003000", got)
+	if got := *summary.Nodes[0].MonthlyBillableBytes; got != 1_103_000 {
+		t.Fatalf("monthly billable after later samples = %v, want 1103000 (500000+600000 deltas + 3000 snapshot)", got)
+	}
+	measuredIn, measuredOut, measuredBillable = correctionBytes(t, ctx, store)
+	if measuredIn != 500_000 || measuredOut != 600_000 || measuredBillable != 1_100_000 {
+		t.Fatalf("stored measured = %d/%d/%d, want 500000/600000/1100000", measuredIn, measuredOut, measuredBillable)
 	}
 }
 
@@ -174,6 +181,7 @@ func TestMonthlyTrafficCorrectionClearsWithNull(t *testing.T) {
 		t.Fatalf("set correction: %v", err)
 	}
 	// Absent out correction stays zero; explicit null clears the in direction.
+	// Clearing re-snapshots at zero, so previously measured usage is dropped.
 	if _, err := store.UpdateAdminNode(ctx, "example-node-a", AdminNodeUpdateRequest{
 		MonthlyInCorrectionBytes: adminOptionalInt64{Set: true, Valid: false},
 	}); err != nil {
@@ -184,8 +192,8 @@ func TestMonthlyTrafficCorrectionClearsWithNull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("summary: %v", err)
 	}
-	if got := *summary.Nodes[0].MonthlyBillableBytes; got != 1_000_000 {
-		t.Fatalf("monthly billable after clear = %v, want measured 1000000", got)
+	if got := *summary.Nodes[0].MonthlyBillableBytes; got != 0 {
+		t.Fatalf("monthly billable after clear = %v, want 0 (re-snapshotted)", got)
 	}
 	nodes, err := store.AdminNodes(ctx)
 	if err != nil {
@@ -227,9 +235,9 @@ func TestMonthlyTrafficCorrectionBillsLumpUnderMaxMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("summary: %v", err)
 	}
-	// Measured billable under max is max(100000, 600000) = 600000 accumulated
-	// per delta; the correction bills as one lump: max(100, 900) = 900.
-	if got := *summary.Nodes[0].MonthlyBillableBytes; got != 600_900 {
-		t.Fatalf("monthly billable under max = %v, want 600900", got)
+	// Snapshot semantics discard the measured 600000: only the correction lump
+	// bills, max(100, 900) = 900.
+	if got := *summary.Nodes[0].MonthlyBillableBytes; got != 900 {
+		t.Fatalf("monthly billable under max = %v, want 900", got)
 	}
 }

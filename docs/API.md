@@ -680,7 +680,7 @@ X-Admin-Token: <admin-token>
 }
 ```
 
-字段均可部分提交；`monthly_quota_bytes: null` 表示清空月配额，`renewal_amount: null` 表示清空续费金额；`expiry_date` / `billing_cycle` / `public_ipv4` / `public_ipv6` 提交空字符串表示清空。币种范围与创建接口一致。`billing_mode` 可选 `both`（入站+出站）、`in`（只算入站）、`out`（只算出站）、`max`（入/出取较大）；`monthly_reset_day` 范围 1–31。`monthly_in/out_correction_bytes` 是本账期上下行流量校正（字节，0–1000000 GiB，不传表示保持不变，`null` 表示清零），只叠加到本期计费与配额进度，不影响累计流量与永久累计，下个账期自动归零。
+字段均可部分提交；`monthly_quota_bytes: null` 表示清空月配额，`renewal_amount: null` 表示清空续费金额；`expiry_date` / `billing_cycle` / `public_ipv4` / `public_ipv6` 提交空字符串表示清空。币种范围与创建接口一致。`billing_mode` 可选 `both`（入站+出站）、`in`（只算入站）、`out`（只算出站）、`max`（入/出取较大）；`monthly_reset_day` 范围 1–31。`monthly_in/out_correction_bytes` 是本账期上下行流量校正快照（字节，0–1000000 GiB，不传表示保持不变，`null` 表示清零重计）：填入值即视为商家口径的本期计费流量，保存时此前累计作废、后续上报继续累加；不影响累计流量与永久累计，下个账期自动归零。
 
 编辑服务器时可同时提交 `probe_target_ids`，后端会在同一事务内替换该服务器的延迟监控关联并更新 `home_probe_target_id`，避免前端为每个目标分别发送 PATCH。首页目标非空时必须包含在 `probe_target_ids` 中；空数组表示取消全部关联。
 
