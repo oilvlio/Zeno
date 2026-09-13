@@ -61,9 +61,9 @@ export function ServiceDetail({ target, points, range, loading, error, canUseExt
             </label>
           </div>
         </header>
-        {loading && <div className="detail-state">正在读取服务延迟…</div>}
-        {error && <div className="detail-state is-error">服务延迟读取失败：{error}</div>}
-        {!loading && !error && points.length === 0 && <div className="detail-state">暂无服务延迟历史</div>}
+        {loading && <div className="detail-state" data-state="loading" role="status" aria-live="polite">正在读取服务延迟…</div>}
+        {error && <div className="detail-state is-error" data-state="error" role="alert">服务延迟读取失败：{error}</div>}
+        {!loading && !error && points.length === 0 && <div className="detail-state" data-state="empty" role="status" aria-live="polite">暂无服务延迟历史</div>}
         {!loading && !error && points.length > 0 && (
           <LatencyChart points={points} title={`${target.name} 多节点延迟`} eyebrow={`${rangeLabel} · ${target.reportingNodeCount} 个节点`} compactHeader peakCut={peakCut} />
         )}

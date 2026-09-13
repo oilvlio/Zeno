@@ -1184,6 +1184,10 @@
   background: transparent;
 }
 .admin-rule-picker-row + .admin-rule-picker-row { border-top: 1px solid var(--divider); }
+:root[data-zeno-appearance='gaussian_blur'] .admin-modal-backdrop {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 .admin-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1193,8 +1197,8 @@
   justify-content: center;
   padding: 24px;
   background: light-dark(rgba(15, 23, 42, .1), rgba(2, 6, 23, .24));
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: var(--zeno-modal-backdrop-filter, blur(10px));
+  backdrop-filter: var(--zeno-modal-backdrop-filter, blur(10px));
 }
 .admin-modal {
   --surface-strong: transparent;

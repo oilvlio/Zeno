@@ -271,7 +271,7 @@ function AdminAppearancePreview({ appearance, settings, theme }: { appearance: A
     '--appearance-preview-surface': String(previewShellStyle?.['--page-surface'] ?? 'rgba(255, 255, 255, 0.7)'),
     '--appearance-preview-border': String(previewShellStyle?.['--border'] ?? appearance.themeColor),
     '--appearance-preview-shadow': String(previewShellStyle?.['--zeno-card-shadow'] ?? 'none'),
-    '--appearance-preview-filter': appearance.cardBlur > 0 ? `blur(${appearance.cardBlur}px) saturate(1.06)` : 'none',
+    '--appearance-preview-filter': String(previewShellStyle?.['--zeno-card-filter'] ?? (appearance.cardBlur > 0 ? `blur(${appearance.cardBlur}px) saturate(1.06)` : 'none')),
     '--appearance-preview-overlay': String(previewShellStyle?.['--zeno-background-overlay-color'] ?? 'transparent'),
     '--appearance-preview-foreground': String(previewShellStyle?.['--foreground'] ?? 'var(--foreground)'),
     '--appearance-preview-muted': String(previewShellStyle?.['--muted'] ?? 'var(--muted)'),

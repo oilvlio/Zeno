@@ -150,7 +150,7 @@ export function LatencyDetail({
         </header>
 
         {showLatencySkeleton && <LatencyLoadingSkeleton />}
-        {error && <div className="detail-state is-error">网络延迟读取失败：{error}</div>}
+        {error && <div className="detail-state is-error" data-state="error" role="alert">网络延迟读取失败：{error}</div>}
 
         {!showLatencySkeleton && !error && hasLatencyData && (
           <>
@@ -194,7 +194,7 @@ export function LatencyDetail({
             />
           </>
         )}
-        {!showLatencySkeleton && !error && !hasLatencyData && <div className="detail-state">暂无网络延迟历史</div>}
+        {!showLatencySkeleton && !error && !hasLatencyData && <div className="detail-state" data-state="empty" role="status" aria-live="polite">暂无网络延迟历史</div>}
       </section>
 
       <StateHistoryPanel
@@ -212,6 +212,7 @@ export function LatencyDetail({
 function LatencyLoadingSkeleton() {
   return (
     <>
+      <div className="sr-only" role="status" data-state="loading" aria-live="polite">正在读取网络延迟…</div>
       <div className="latency-target-grid is-loading" aria-label="monitor services loading" aria-hidden="true">
         {Array.from({ length: 7 }).map((_, index) => (
           <button key={index} type="button" disabled>

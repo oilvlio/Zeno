@@ -151,9 +151,9 @@ export function StateHistoryPanel({ points, range, loading = false, error, canUs
         />
       </header>
 
-      {loading && <div className="detail-state">正在读取系统资源…</div>}
-      {error && <div className="detail-state is-error">系统资源读取失败：{error}</div>}
-      {!loading && !error && sampleCount === 0 && <div className="detail-state">暂无系统资源趋势数据</div>}
+      {loading && <div className="detail-state" data-state="loading" role="status" aria-live="polite">正在读取系统资源…</div>}
+      {error && <div className="detail-state is-error" data-state="error" role="alert">系统资源读取失败：{error}</div>}
+      {!loading && !error && sampleCount === 0 && <div className="detail-state" data-state="empty" role="status" aria-live="polite">暂无系统资源趋势数据</div>}
 
       {!loading && !error && sampleCount > 0 && (
         <div className="resource-history-grid">

@@ -218,7 +218,7 @@ describe('LatencyDetail', () => {
     expect(html).toContain('2.00 KB / 8.00 KB')
     expect(html).toContain('latency-target-grid is-loading')
     expect(html).toContain('latency-panel-skeleton')
-    expect(html).not.toContain('正在读取网络延迟')
+    expect(html).toContain('class="sr-only" role="status" data-state="loading" aria-live="polite">正在读取网络延迟…</div>')
   })
 
   it('keeps warning detail status distinct from offline', () => {

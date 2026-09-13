@@ -1,4 +1,18 @@
 import { describe, expect, it } from 'vitest'
+// @ts-ignore -- Node-only acceptance test; the app intentionally has no @types/node.
+import { existsSync, readFileSync } from 'node:fs'
+
+// Geometry is also exercised against real Chromium in acceptance/touch-worker probes.
+describe('mobile touch stylesheet contract', () => {
+  it('loads a scoped touch layer without changing the base theme', () => {
+    const url = new URL('../../styles/touch.css', import.meta.url)
+    expect(existsSync(url)).toBe(true)
+    const css = readFileSync(url, 'utf8')
+    expect(css).toMatch(/@media\s*\(pointer:\s*coarse\),\s*\(max-width:\s*767px\)/)
+    expect(css).toMatch(/min-height:\s*44px/)
+    expect(readFileSync(new URL('../../main.tsx', import.meta.url), 'utf8')).toContain("import './styles/touch.css'")
+  })
+})
 import { adminPopoverExpanded, calculateAnchoredPopoverStyle } from './AdminFields'
 
 const trigger = { top: 100, right: 380, bottom: 140, left: 200, width: 180, height: 40 }
@@ -27,6 +41,14 @@ describe('calculateAnchoredPopoverStyle', () => {
       left: 748,
       width: 240,
     })
+  })
+
+  it('fits seven touch columns at 320px and respects reserved scrollbar space', () => {
+    const mobile = calculateAnchoredPopoverStyle(trigger, { width: 320, height: 568 }, { width: 328, height: 367 }, 2)
+    expect(mobile).toMatchObject({ left: 2, width: 316 })
+    expect((Number(mobile.width) - 6) / 7).toBeGreaterThanOrEqual(44)
+    const gutter = calculateAnchoredPopoverStyle(trigger, { width: 305, height: 568 }, { width: 328, height: 367 }, 2)
+    expect(Number(gutter.left) + Number(gutter.width)).toBeLessThanOrEqual(303)
   })
 
   it('clamps both dimensions inside a very small viewport', () => {

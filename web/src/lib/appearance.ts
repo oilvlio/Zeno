@@ -1,4 +1,4 @@
-import { type CSSProperties, useLayoutEffect } from 'react'
+import { type CSSProperties, useLayoutEffect, useSyncExternalStore } from 'react'
 import type { AdminSettings, AdminTheme, AppearancePreset } from '../types'
 
 export type AppearanceValues = Pick<AdminSettings, 'appearancePreset' | 'cardOpacity' | 'cardBlur' | 'cardRadius' | 'borderStrength' | 'shadowStrength' | 'backgroundOverlay' | 'themeColor'>
@@ -33,11 +33,12 @@ export const appearancePresets: Record<AppearancePreset, AppearanceValues> = {
   gaussian_blur: {
     ...defaultAppearancePreset,
     appearancePreset: 'gaussian_blur',
-    cardOpacity: 0.5,
-    cardBlur: 15,
-    borderStrength: 0.3,
-    shadowStrength: 0.3,
-    backgroundOverlay: 0.05,
+    cardOpacity: 0.8,
+    cardBlur: 20,
+    borderStrength: 0.08,
+    shadowStrength: 0.08,
+    backgroundOverlay: 0.08,
+    themeColor: '#0071e3',
   },
 }
 
@@ -119,10 +120,11 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
   const themeColor = appearance.themeColor
   const themeRgb = hexToRgb(themeColor)
   const cardOpacity = appearance.cardOpacity
-  const highContrastGaussian = resolved === 'dark' && appearance.appearancePreset === 'gaussian_blur'
-  const foreground = resolved === 'dark' ? '#f8fafc' : '#0f172a'
-  const muted = highContrastGaussian ? '#cbd5e1' : resolved === 'dark' ? '#94a3b8' : '#53657d'
-  const surfaceBase = resolved === 'dark' ? '15, 23, 42' : '255, 255, 255'
+  const gaussian = appearance.appearancePreset === 'gaussian_blur'
+  const highContrastGaussian = resolved === 'dark' && gaussian
+  const foreground = gaussian ? (resolved === 'dark' ? '#ffffff' : '#1d1d1f') : resolved === 'dark' ? '#f8fafc' : '#0f172a'
+  const muted = gaussian ? (resolved === 'dark' ? '#d2d2d7' : '#48484a') : resolved === 'dark' ? '#94a3b8' : '#53657d'
+  const surfaceBase = gaussian ? (resolved === 'dark' ? '39, 39, 41' : '255, 255, 255') : resolved === 'dark' ? '15, 23, 42' : '255, 255, 255'
   const shadowBase = resolved === 'dark' ? '0, 0, 0' : '15, 23, 42'
   const shadowAlpha = 0.04 + appearance.shadowStrength * (resolved === 'dark' ? 0.44 : 0.22)
   const backgroundOverlayBase = resolved === 'dark' ? '0, 0, 0' : '255, 255, 255'
@@ -130,13 +132,15 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
   const gaussianOverlay = appearance.appearancePreset === 'gaussian_blur'
   const overlayOpacity = Math.min(0.84, Math.max(0.62, cardOpacity + (gaussianOverlay ? 0.14 : 0.1)))
   const overlayFilter = appearance.cardBlur > 0 ? `blur(${appearance.cardBlur}px) saturate(1.08)` : 'none'
+  const gaussianFilter = appearance.cardBlur > 0 ? `blur(${appearance.cardBlur}px) saturate(1.2)` : 'none'
+  const gaussianShadow = appearance.shadowStrength > 0 ? `0 5px 30px rgba(0, 0, 0, ${appearance.shadowStrength.toFixed(3)})` : 'none'
   return {
     '--zeno-desktop-background-image': desktopBackgroundUrl === '' ? 'none' : backgroundImageValue(desktopBackgroundUrl),
     '--zeno-mobile-background-image': hasDedicatedMobileBackground ? backgroundImageValue(mobileBackgroundUrl) : (desktopBackgroundUrl === '' ? 'none' : backgroundImageValue(desktopBackgroundUrl)),
     '--blue': themeColor,
     '--foreground': foreground,
     '--muted': muted,
-    '--border': rgbaFromHex(themeColor, appearance.borderStrength),
+    '--border': rgbaFromHex(gaussian ? (resolved === 'dark' ? '#ffffff' : '#000000') : themeColor, appearance.borderStrength),
     '--metric-shadow': rgbaFromHex(themeColor, Math.max(0.06, appearance.shadowStrength * 0.22)),
     '--page-surface': pageSurface,
     '--admin-secondary-surface': `rgb(${surfaceBase})`,
@@ -156,7 +160,14 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
     '--radius-field': `${Math.max(8, appearance.cardRadius - 8)}px`,
     '--zeno-card-blur': `${appearance.cardBlur}px`,
     '--zeno-card-highlight': resolved === 'dark' ? `rgba(255, 255, 255, ${Math.min(0.18, 0.04 + appearance.shadowStrength * 0.12).toFixed(3)})` : `rgba(255, 255, 255, ${Math.min(0.9, 0.28 + cardOpacity * 0.42).toFixed(3)})`,
-    '--zeno-card-shadow': `0 10px 26px -24px rgba(${shadowBase}, ${shadowAlpha.toFixed(3)}), 0 1px 2px rgba(${shadowBase}, ${(0.02 + appearance.shadowStrength * 0.05).toFixed(3)})`,
+    '--zeno-card-shadow': gaussian ? gaussianShadow : `0 10px 26px -24px rgba(${shadowBase}, ${shadowAlpha.toFixed(3)}), 0 1px 2px rgba(${shadowBase}, ${(0.02 + appearance.shadowStrength * 0.05).toFixed(3)})`,
+    // Keep default CSS fallbacks intact; mirror opt-in tokens to body portals below.
+    ...(gaussian ? {
+      '--zeno-card-filter': gaussianFilter,
+      '--zeno-overlay-shadow': gaussianShadow,
+      '--zeno-modal-filter': 'none',
+      '--zeno-modal-backdrop-filter': gaussianFilter,
+    } : {}),
     '--zeno-background-overlay-color': `rgba(${backgroundOverlayBase}, ${appearance.backgroundOverlay.toFixed(3)})`,
     '--zeno-theme-rgb': `${themeRgb.r}, ${themeRgb.g}, ${themeRgb.b}`,
     backgroundSize: 'cover',
@@ -165,6 +176,9 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
 }
 
 const documentThemeVariableNames = [
+  '--zeno-desktop-background-image',
+  '--zeno-mobile-background-image',
+  '--zeno-background-overlay-color',
   '--blue',
   '--foreground',
   '--muted',
@@ -187,22 +201,36 @@ const documentThemeVariableNames = [
   '--radius-card',
   '--radius-field',
   '--zeno-card-blur',
+  '--zeno-card-filter',
+  '--zeno-overlay-shadow',
+  '--zeno-modal-filter',
+  '--zeno-modal-backdrop-filter',
   '--zeno-card-highlight',
   '--zeno-card-shadow',
   '--zeno-theme-rgb',
 ] as const
 
+function subscribeSystemTheme(onChange: () => void) {
+  const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+  media?.addEventListener?.('change', onChange)
+  return () => media?.removeEventListener?.('change', onChange)
+}
+
 export function useDocumentTheme(settings: AdminSettings) {
+  // Re-render the owner as well as updating root variables: the shell paints inline tokens.
+  const observedSystemTheme = useSyncExternalStore(subscribeSystemTheme, systemTheme, () => 'light')
   useLayoutEffect(() => {
     if (typeof document === 'undefined') return undefined
     const root = document.documentElement
     const previousTheme = root.getAttribute('data-zeno-theme')
+    const previousAppearance = root.getAttribute('data-zeno-appearance')
     const previousValues = new Map(documentThemeVariableNames.map((name) => [name, root.style.getPropertyValue(name)]))
     const media = window.matchMedia?.('(prefers-color-scheme: dark)')
     const apply = () => {
       const theme = resolvedTheme(settings.theme)
       const themeStyle = shellStyleForSettings(settings) as Record<string, string | number> | undefined
       root.dataset.zenoTheme = theme
+      root.dataset.zenoAppearance = settings.appearancePreset
       for (const name of documentThemeVariableNames) {
         const value = themeStyle?.[name]
         if (value === undefined || value === null || value === '') root.style.removeProperty(name)
@@ -215,12 +243,15 @@ export function useDocumentTheme(settings: AdminSettings) {
       if (settings.theme === 'system') media?.removeEventListener?.('change', apply)
       if (previousTheme === null) root.removeAttribute('data-zeno-theme')
       else root.setAttribute('data-zeno-theme', previousTheme)
+      if (previousAppearance === null) root.removeAttribute('data-zeno-appearance')
+      else root.setAttribute('data-zeno-appearance', previousAppearance)
       for (const [name, value] of previousValues) {
         if (value === '') root.style.removeProperty(name)
         else root.style.setProperty(name, value)
       }
     }
   }, [
+    observedSystemTheme,
     settings.theme,
     settings.backgroundUrl,
     settings.desktopBackgroundUrl,

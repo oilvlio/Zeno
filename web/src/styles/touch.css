@@ -1,0 +1,72 @@
+/* Touch geometry only: keep theme, glyphs, drag handles and card layout intact.
+   Specific descendants also win when lazy admin/detail styles load later. */
+@media (pointer: coarse), (max-width: 767px) {
+  /* The 5px navigation gaps cannot safely host overlapping 44px pseudo boxes. */
+  .nav-actions .nav-icon-button { width: 44px; min-width: 44px; }
+  .nav-actions .nav-icon-button svg { flex: none; }
+  .nav-actions :is(.nav-icon-button, .login-link, .home-currency-select) {
+    position: relative;
+  }
+  .nav-actions :is(.nav-icon-button, .login-link, .home-currency-select)::after {
+    content: '';
+    position: absolute;
+    left: -1px;
+    right: -1px;
+    top: 50%;
+    height: 44px;
+    transform: translateY(-50%);
+  }
+
+  /* Retain the painted row/close controls; reserve enough space for their hits. */
+  .admin-row-actions:has(.admin-row-action.is-icon),
+  .admin-notification-list .admin-row-actions:has(.admin-row-action.is-icon) { gap: 10px; }
+  .admin-row-action.is-icon, .admin-modal .admin-modal-close {
+    position: relative;
+  }
+  .admin-row-action.is-icon::after, .admin-modal .admin-modal-close::after {
+    content: '';
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .admin-date-picker .admin-date-trigger,
+  .admin-date-picker .admin-date-permanent,
+  .admin-select-menu-field .admin-select-trigger { min-height: 44px; }
+
+  /* Segments abut and clip overflow, so expand their actual boxes instead. */
+  .detail-range-row.sliding-selector {
+    --selector-height: 44px;
+    grid-template-columns: repeat(var(--slider-columns), minmax(44px, 1fr));
+  }
+  .detail-range-row.sliding-selector > button { min-width: 44px; }
+  .peak-switch.sliding-selector--compact { --selector-height: 44px; min-height: 44px; }
+
+  .home-currency-popover button,
+  .admin-select-popover button,
+  .admin-install-platforms button,
+  .admin-date-popover button { min-height: 44px; }
+
+  /* JS uses the same 2px viewport margin. 316px at 320 leaves seven >44px days. */
+  .admin-date-popover.zeno-overlay-surface { padding: 2px; }
+  .admin-date-popover .admin-date-grid,
+  .admin-date-popover .admin-date-weekdays { gap: 0; }
+  .admin-date-popover .admin-date-empty { min-height: 44px; }
+  .admin-date-popover .admin-date-current {
+    grid-template-columns: minmax(0, 1fr) minmax(0, .72fr);
+  }
+  .admin-date-popover .admin-date-calendar-header > button { width: 44px; }
+}
+
+@media (pointer: coarse) and (min-width: 768px) {
+  /* 30px painted buttons need 16px gaps for 2px between their 44px hit areas. */
+  .admin-row-actions:has(.admin-row-action.is-icon),
+  .admin-notification-list .admin-row-actions:has(.admin-row-action.is-icon) { gap: 16px; }
+}
+
+@media (max-width: 767px) {
+  /* Existing 32px buttons shrink their 16px glyph to 14px; retain that size. */
+  .nav-actions .nav-icon-button svg { width: 14px; height: 14px; }
+}

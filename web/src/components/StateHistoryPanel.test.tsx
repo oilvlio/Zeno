@@ -106,6 +106,16 @@ describe('StateHistoryPanel', () => {
     expect(html).not.toContain('data-series="net-out-total"')
   })
 
+  it.each([
+    { loading: true, error: undefined, state: 'loading', role: 'status' },
+    { loading: false, error: undefined, state: 'empty', role: 'status' },
+    { loading: false, error: '请求超时', state: 'error', role: 'alert' },
+  ])('announces the $state history state distinctly', ({ loading, error, state, role }) => {
+    const html = renderToStaticMarkup(<StateHistoryPanel points={[]} range="1h" loading={loading} error={error} />)
+    expect(html).toContain(`data-state="${state}"`)
+    expect(html).toContain(`role="${role}"`)
+  })
+
   it('shows an explicit empty state instead of a blank chart', () => {
     const html = renderToStaticMarkup(
       <StateHistoryPanel points={[]} range="1d" loading={false} />,

@@ -53,15 +53,18 @@ function useAnchoredPopoverPosition({ open, disabled, triggerRef, popoverRef, va
       const trigger = triggerRef.current
       if (!trigger) return
       const rect = trigger.getBoundingClientRect()
-      const margin = 12
-      const availableWidth = Math.max(296, window.innerWidth - margin * 2)
+      // Keep this margin in sync with touch.css: seven 44px day columns fit at 320px.
+      const touchCalendar = variant === 'calendar' && window.matchMedia('(pointer: coarse), (max-width: 767px)').matches
+      const margin = touchCalendar ? 2 : 12
+      const viewportWidth = Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth)
+      const availableWidth = Math.max(0, viewportWidth - margin * 2)
       const width = variant === 'calendar'
         ? Math.min(340, availableWidth, Math.max(328, rect.width))
         : Math.min(Math.max(rect.width, 160), Math.max(180, window.innerWidth - margin * 2))
       const fallbackHeight = variant === 'calendar' ? 354 : Math.min(260, optionCount * 40 + 12)
       const popoverElement = popoverRef.current
       const height = popoverElement ? Math.max(popoverElement.offsetHeight, popoverElement.scrollHeight) : fallbackHeight
-      setStyle(calculateAnchoredPopoverStyle(rect, { width: window.innerWidth, height: window.innerHeight }, { width, height }))
+      setStyle(calculateAnchoredPopoverStyle(rect, { width: viewportWidth, height: window.innerHeight }, { width, height }, margin))
     }
     updatePopoverPosition()
     const frame = window.requestAnimationFrame(updatePopoverPosition)
