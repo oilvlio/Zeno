@@ -28,13 +28,13 @@
   --purple: #8b5cf6;
   --orange: #f97316;
   --billing-gold: light-dark(#b8860b, #ffd45c);
-  /* Vivid light metrics; retain the softer, already-bright dark palette. */
-  --metric-blue: light-dark(var(--blue), color-mix(in srgb, var(--blue) 36%, white));
-  --metric-purple: light-dark(#8b5cf6, #ddc0ff);
-  --metric-red: light-dark(#ef4444, #ffb4b4);
-  --metric-gold: light-dark(#ca8a04, #ffe08a);
-  --metric-green: light-dark(#10b981, #9aefc7);
-  --metric-orange: light-dark(#f97316, #ffcca3);
+  /* Keep accepted light colors and restore the original dark metric palette. */
+  --metric-blue: var(--blue);
+  --metric-purple: light-dark(#8b5cf6, var(--purple));
+  --metric-red: light-dark(#ef4444, #CD5555);
+  --metric-gold: light-dark(#ca8a04, #EEAD0E);
+  --metric-green: light-dark(#10b981, var(--green));
+  --metric-orange: light-dark(#f97316, var(--orange));
   --radius-pill: 999px;
   --radius-field: 12px;
   --radius-card: 16px;
@@ -694,7 +694,8 @@ svg { display: block; }
   color: var(--blue);
   transform: none;
 }
-.home-currency-popover button[data-active="true"] {
+.home-currency-popover button[data-active="true"],
+.region-filter-buttons > button[aria-pressed='true'] {
   border-color: var(--control-selected-border);
   background: var(--control-selected-background);
   color: var(--control-selected-foreground);
@@ -733,38 +734,39 @@ svg { display: block; }
   backdrop-filter: none;
 }
 .region-filter-buttons {
-  --selector-border-width: 0px;
-  --selector-inner-radius: var(--selector-radius);
-  --selector-height: 40px;
-  --selector-radius: 14px;
-  --selector-option-width: 48px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--selector-option-width), 1fr));
-  grid-auto-rows: var(--selector-height);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  border-radius: inherit;
-}
-.region-filter-buttons::before {
-  top: var(--slider-top, 0);
-  bottom: auto;
-  left: var(--slider-left, 0);
-  width: var(--slider-width);
-  height: var(--slider-height, var(--selector-height));
-  opacity: var(--slider-measured, 0);
-  transform: none;
-  transition: top 180ms cubic-bezier(.2, .8, .2, 1), left 180ms cubic-bezier(.2, .8, .2, 1);
+  padding: 4px 6px;
 }
 .region-filter-buttons > button {
   display: inline-flex;
-  flex: none;
-  width: auto;
-  justify-self: stretch;
+  flex: 0 0 48px;
+  height: 32px;
   align-items: center;
   justify-content: center;
   padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-field);
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font: inherit;
   white-space: nowrap;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.region-filter-buttons > button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -3px;
+}
+@media (hover: hover) {
+  .region-filter-buttons > button:hover { color: var(--blue); }
 }
 .region-all-text {
   color: inherit;
@@ -1511,12 +1513,8 @@ svg { display: block; }
   .home-currency-menu { width: 50px; height: 32px; flex-basis: 50px; }
   .home-currency-select { padding: 0 7px; }
   .home-currency-select__value { font-size: 12px; font-weight: 500; }
-  .region-filter-buttons {
-    --selector-height: 40px;
-    --selector-option-width: 44px;
-    grid-template-columns: repeat(auto-fill, minmax(var(--selector-option-width), 1fr));
-    width: 100%;
-  }
+  .region-filter-buttons { gap: 0; padding: 4px; }
+  .region-filter-buttons > button { flex-basis: 44px; }
   .region-filter-buttons .server-flag { width: 23px; height: 17px; font-size: 17px; }
   .region-all-text { font-size: 11.5px; }
   .kulin-node-card { max-width: none; min-height: 0; height: auto; padding: 16px 16px 12px; }

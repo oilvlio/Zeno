@@ -5,14 +5,14 @@ import { describe, expect, it } from 'vitest'
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 
 describe('bright semantic metric palette', () => {
-  it('uses vivid light colors without black mixing and preserves dark colors', () => {
-    expect(css).toContain('--metric-blue: light-dark(var(--blue), color-mix(in srgb, var(--blue) 36%, white));')
+  it('preserves vivid light colors and restores original saturated dark metrics', () => {
+    expect(css).toContain('--metric-blue: var(--blue);')
     for (const [name, light, dark] of [
-      ['purple', '#8b5cf6', '#ddc0ff'],
-      ['red', '#ef4444', '#ffb4b4'],
-      ['gold', '#ca8a04', '#ffe08a'],
-      ['green', '#10b981', '#9aefc7'],
-      ['orange', '#f97316', '#ffcca3'],
+      ['purple', '#8b5cf6', 'var(--purple)'],
+      ['red', '#ef4444', '#CD5555'],
+      ['gold', '#ca8a04', '#EEAD0E'],
+      ['green', '#10b981', 'var(--green)'],
+      ['orange', '#f97316', 'var(--orange)'],
     ]) expect(css).toContain(`--metric-${name}: light-dark(${light}, ${dark});`)
   })
 

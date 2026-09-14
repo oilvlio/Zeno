@@ -33,8 +33,8 @@ describe('appearance presets', () => {
 
   it.each([
     ['light', '255, 255, 255', '#1d1d1f', '#48484a', '0, 0, 0'],
-    ['dark', '39, 39, 41', '#ffffff', '#d2d2d7', '255, 255, 255'],
-  ] as const)('uses adaptive neutral Gaussian tokens in %s mode', (theme, base, foreground, muted, border) => {
+    ['dark', '15, 23, 42', '#f8fafc', '#cbd5e1', '37, 99, 235'],
+  ] as const)('keeps light Gaussian colors and restores original slate tokens in %s mode', (theme, base, foreground, muted, border) => {
     const settings = { ...defaultSettings, ...appearancePresets.gaussian_blur, theme, backgroundUrl: '/wallpaper.webp' }
     expect(shellStyleForSettings(settings)).toMatchObject({
       '--foreground': foreground,
@@ -69,6 +69,13 @@ describe('appearance presets', () => {
     })
   })
 
+  it('restores the original dark accent without changing light or custom colors', () => {
+    const settings = { ...defaultSettings, ...appearancePresets.gaussian_blur }
+    expect(shellStyleForSettings({ ...settings, theme: 'dark' })).toMatchObject({ '--blue': '#2563eb' })
+    expect(shellStyleForSettings({ ...settings, theme: 'light' })).toMatchObject({ '--blue': '#0071e3' })
+    expect(shellStyleForSettings({ ...settings, theme: 'dark', themeColor: '#aabbcc' })).toMatchObject({ '--blue': '#aabbcc', '--border': 'rgba(170, 187, 204, 0.080)' })
+  })
+
   it('does not add Gaussian material overrides to the default theme', () => {
     const style = shellStyleForSettings(defaultSettings) as Record<string, string>
     for (const name of ['--zeno-card-filter', '--zeno-overlay-shadow', '--zeno-modal-filter', '--zeno-modal-backdrop-filter']) {
@@ -86,7 +93,7 @@ describe('appearance presets', () => {
   it('uses the same balanced blurred overlay surface for the Gaussian appearance', () => {
     const style = shellStyleForSettings({ ...defaultSettings, theme: 'dark', appearancePreset: 'gaussian_blur', cardOpacity: 0.5, cardBlur: 15, backgroundUrl: '/wallpaper.webp', desktopBackgroundUrl: '/wallpaper.webp' }) as unknown as Record<string, string>
     expect(style['--usage-track-bg']).toBe('rgba(226, 232, 240, 0.17)')
-    expect(style['--zeno-overlay-surface']).toBe('rgba(39, 39, 41, 0.640)')
+    expect(style['--zeno-overlay-surface']).toBe('rgba(15, 23, 42, 0.640)')
     expect(style['--zeno-overlay-filter']).toBe('blur(15px) saturate(1.08)')
   })
 })

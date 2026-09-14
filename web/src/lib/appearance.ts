@@ -117,14 +117,16 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
   const hasBackgroundImage = desktopBackgroundUrl !== '' || mobileBackgroundUrl !== ''
   const appearance = appearanceValuesForSettings(settings)
   const resolved = resolvedTheme(settings.theme)
-  const themeColor = appearance.themeColor
+  const gaussian = appearance.appearancePreset === 'gaussian_blur'
+  // Restore the original dark preset accent while respecting custom colors.
+  const themeColor = resolved === 'dark' && gaussian && appearance.themeColor === appearancePresets.gaussian_blur.themeColor
+    ? defaultAppearancePreset.themeColor : appearance.themeColor
   const themeRgb = hexToRgb(themeColor)
   const cardOpacity = appearance.cardOpacity
-  const gaussian = appearance.appearancePreset === 'gaussian_blur'
   const highContrastGaussian = resolved === 'dark' && gaussian
-  const foreground = gaussian ? (resolved === 'dark' ? '#ffffff' : '#1d1d1f') : resolved === 'dark' ? '#f8fafc' : '#0f172a'
-  const muted = gaussian ? (resolved === 'dark' ? '#d2d2d7' : '#48484a') : resolved === 'dark' ? '#94a3b8' : '#53657d'
-  const surfaceBase = gaussian ? (resolved === 'dark' ? '39, 39, 41' : '255, 255, 255') : resolved === 'dark' ? '15, 23, 42' : '255, 255, 255'
+  const foreground = resolved === 'dark' ? '#f8fafc' : gaussian ? '#1d1d1f' : '#0f172a'
+  const muted = resolved === 'dark' ? (gaussian ? '#cbd5e1' : '#94a3b8') : gaussian ? '#48484a' : '#53657d'
+  const surfaceBase = resolved === 'dark' ? '15, 23, 42' : '255, 255, 255'
   const shadowBase = resolved === 'dark' ? '0, 0, 0' : '15, 23, 42'
   const shadowAlpha = 0.04 + appearance.shadowStrength * (resolved === 'dark' ? 0.44 : 0.22)
   const backgroundOverlayBase = resolved === 'dark' ? '0, 0, 0' : '255, 255, 255'
@@ -140,7 +142,7 @@ export function shellStyleForSettings(settings: AdminSettings): CSSProperties | 
     '--blue': themeColor,
     '--foreground': foreground,
     '--muted': muted,
-    '--border': rgbaFromHex(gaussian ? (resolved === 'dark' ? '#ffffff' : '#000000') : themeColor, appearance.borderStrength),
+    '--border': rgbaFromHex(gaussian && resolved === 'light' ? '#000000' : themeColor, appearance.borderStrength),
     '--metric-shadow': rgbaFromHex(themeColor, Math.max(0.06, appearance.shadowStrength * 0.22)),
     '--page-surface': pageSurface,
     '--admin-secondary-surface': `rgb(${surfaceBase})`,

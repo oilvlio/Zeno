@@ -4,7 +4,6 @@ import { DashboardHeader } from './DashboardHeader'
 import { ServerFlag } from './ServerFlag'
 import { availableCurrencyOptions, formatCurrencyAmount, normalizeCurrencyCode, normalizeCurrencyRates, type CurrencyCode, type CurrencyRates } from '../lib/currency'
 import { defaultSettings } from '../lib/appearance'
-import { SlidingSelector } from './SlidingSelector'
 import type { AdminSettings, AdminTheme } from '../types'
 import { OverlaySurface } from './OverlaySurface'
 
@@ -73,19 +72,22 @@ export function HomeRegionFilter({ regions, activeRegion, onChange }: { regions:
   const options = ['ALL', ...regions]
   return (
     <nav className="region-filter-bar" aria-label="服务器地区筛选">
-      <SlidingSelector
-        ariaLabel="服务器地区"
-        className="region-filter-buttons sliding-selector--medium"
-        options={options.map((region) => ({
-          value: region,
-          className: region === 'ALL' ? 'region-filter-all' : undefined,
-          ariaLabel: region === 'ALL' ? '全部' : `筛选 ${region} 地区`,
-          title: region === 'ALL' ? undefined : region,
-          content: region === 'ALL' ? <span className="region-all-text">全部</span> : <ServerFlag countryCode={region} />,
-        }))}
-        value={activeRegion}
-        onChange={onChange}
-      />
+      <div className="region-filter-buttons" aria-label="服务器地区">
+        {options.map((region) => (
+          <button
+            key={region}
+            type="button"
+            className={region === 'ALL' ? 'region-filter-all' : undefined}
+            data-value={region}
+            aria-label={region === 'ALL' ? '全部' : `筛选 ${region} 地区`}
+            title={region === 'ALL' ? undefined : region}
+            aria-pressed={region === activeRegion}
+            onClick={() => onChange(region)}
+          >
+            {region === 'ALL' ? <span className="region-all-text">全部</span> : <ServerFlag countryCode={region} />}
+          </button>
+        ))}
+      </div>
     </nav>
   )
 }

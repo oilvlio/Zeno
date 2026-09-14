@@ -166,6 +166,12 @@ describe('HomeTopPanel', () => {
 
     const html = renderToStaticMarkup(<HomeRegionFilter regions={['HK', 'JP']} activeRegion="ALL" onChange={() => {}} />)
     expect(html).toContain('aria-label="服务器地区筛选"')
+    expect(html).toContain('class="region-filter-buttons"')
+    expect(html).not.toContain('sliding-selector')
+    expect(html).not.toContain('--slider-')
+    const selected = renderToStaticMarkup(<HomeRegionFilter regions={['HK', 'JP']} activeRegion="JP" onChange={() => {}} />)
+    expect(selected.match(/aria-pressed="true"/g)).toHaveLength(1)
+    expect(selected).toMatch(/data-value="JP"[^>]*aria-pressed="true"/)
     expect(html).toContain('aria-pressed="true"><span class="region-all-text">全部</span></button>')
     expect(html).toContain('title="HK"')
     expect(html).toContain('title="JP"')
@@ -185,12 +191,12 @@ describe('HomeTopPanel', () => {
       '--zeno-desktop-background-image': 'url("https://example.com/desktop-bg.webp")',
       '--zeno-mobile-background-image': 'url("https://example.com/mobile-bg.webp")',
       '--blue': '#6366f1',
-      '--foreground': '#ffffff',
-      '--muted': '#d2d2d7',
-      '--border': 'rgba(255, 255, 255, 0.340)',
+      '--foreground': '#f8fafc',
+      '--muted': '#cbd5e1',
+      '--border': 'rgba(99, 102, 241, 0.340)',
       '--metric-shadow': 'rgba(99, 102, 241, 0.075)',
-      '--page-surface': 'rgba(39, 39, 41, 0.580)',
-      '--admin-secondary-surface': 'rgb(39, 39, 41)',
+      '--page-surface': 'rgba(15, 23, 42, 0.580)',
+      '--admin-secondary-surface': 'rgb(15, 23, 42)',
       '--surface-strong': 'transparent',
       '--surface': 'transparent',
       '--surface-soft': 'transparent',
@@ -200,7 +206,7 @@ describe('HomeTopPanel', () => {
       '--control-bg': 'transparent',
       '--usage-track-bg': 'rgba(226, 232, 240, 0.17)',
       '--usage-track-border': 'rgba(203, 213, 225, 0.24)',
-      '--zeno-overlay-surface': 'rgba(39, 39, 41, 0.720)',
+      '--zeno-overlay-surface': 'rgba(15, 23, 42, 0.720)',
       '--zeno-overlay-filter': 'blur(18px) saturate(1.08)',
       '--radius-panel': '24px',
       '--radius-card': '20px',
@@ -220,9 +226,9 @@ describe('HomeTopPanel', () => {
     expect(shellStyleForSettings({ ...settings, backgroundUrl: '', desktopBackgroundUrl: '', mobileBackgroundUrl: '' })).toMatchObject({
       '--zeno-desktop-background-image': 'none',
       '--zeno-card-blur': '18px',
-      '--page-surface': 'rgb(39, 39, 41)',
-      '--admin-secondary-surface': 'rgb(39, 39, 41)',
-      '--zeno-overlay-surface': 'rgba(39, 39, 41, 0.720)',
+      '--page-surface': 'rgb(15, 23, 42)',
+      '--admin-secondary-surface': 'rgb(15, 23, 42)',
+      '--zeno-overlay-surface': 'rgba(15, 23, 42, 0.720)',
     })
     expect(shellStyleForSettings({ ...settings, mobileBackgroundUrl: '' })).toMatchObject({
       '--zeno-mobile-background-image': 'url("https://example.com/desktop-bg.webp")',
