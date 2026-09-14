@@ -1,8 +1,7 @@
 /* Touch geometry only: keep theme, glyphs, drag handles and card layout intact.
    Specific descendants also win when lazy admin/detail styles load later. */
 @media (pointer: coarse), (max-width: 767px) {
-  /* The 5px navigation gaps cannot safely host overlapping 44px pseudo boxes. */
-  .nav-actions .nav-icon-button { width: 44px; min-width: 44px; }
+  /* Keep the original square navigation paint; expand only vertical hit areas. */
   .nav-actions .nav-icon-button svg { flex: none; }
   .nav-actions :is(.nav-icon-button, .login-link, .home-currency-select) {
     position: relative;
@@ -36,13 +35,7 @@
   .admin-date-picker .admin-date-permanent,
   .admin-select-menu-field .admin-select-trigger { min-height: 44px; }
 
-  /* Segments abut and clip overflow, so expand their actual boxes instead. */
-  .detail-range-row.sliding-selector {
-    --selector-height: 44px;
-    grid-template-columns: repeat(var(--slider-columns), minmax(44px, 1fr));
-  }
-  .detail-range-row.sliding-selector > button { min-width: 44px; }
-  .peak-switch.sliding-selector--compact { --selector-height: 44px; min-height: 44px; }
+  /* Detail range and peak controls retain their shared compact geometry. */
 
   .home-currency-popover button,
   .admin-select-popover button,
