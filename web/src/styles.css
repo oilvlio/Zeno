@@ -28,13 +28,13 @@
   --purple: #8b5cf6;
   --orange: #f97316;
   --billing-gold: light-dark(#b8860b, #ffd45c);
-  /* Text-bearing metric colors keep their hue while adapting to glass in each scheme. */
-  --metric-blue: light-dark(color-mix(in srgb, var(--blue) 75%, black), color-mix(in srgb, var(--blue) 36%, white));
-  --metric-purple: light-dark(#6b21a8, #ddc0ff);
-  --metric-red: light-dark(#962525, #ffb4b4);
-  --metric-gold: light-dark(#754c00, #ffe08a);
-  --metric-green: light-dark(#065c38, #9aefc7);
-  --metric-orange: light-dark(#8a3500, #ffcca3);
+  /* Vivid light metrics; retain the softer, already-bright dark palette. */
+  --metric-blue: light-dark(var(--blue), color-mix(in srgb, var(--blue) 36%, white));
+  --metric-purple: light-dark(#8b5cf6, #ddc0ff);
+  --metric-red: light-dark(#ef4444, #ffb4b4);
+  --metric-gold: light-dark(#ca8a04, #ffe08a);
+  --metric-green: light-dark(#10b981, #9aefc7);
+  --metric-orange: light-dark(#f97316, #ffcca3);
   --radius-pill: 999px;
   --radius-field: 12px;
   --radius-card: 16px;
