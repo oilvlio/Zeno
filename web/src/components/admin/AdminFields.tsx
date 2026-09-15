@@ -30,6 +30,19 @@ export function calculateAnchoredPopoverStyle(trigger: RectLike, viewport: Viewp
   return style
 }
 
+export function measureAnchoredPopoverHeight(popover: HTMLDivElement | null, fallbackHeight: number): number {
+  if (!popover) return fallbackHeight
+  // Re-measure the visible CSS box, not its scrollable content. Remove only our
+  // previous viewport cap so a resize can restore the menu's natural height.
+  const previousMaxHeight = popover.style.maxHeight
+  popover.style.maxHeight = ''
+  try {
+    return popover.offsetHeight || fallbackHeight
+  } finally {
+    popover.style.maxHeight = previousMaxHeight
+  }
+}
+
 export function adminPopoverExpanded(open: boolean, disabled: boolean): boolean {
   return open && !disabled
 }
@@ -53,17 +66,16 @@ function useAnchoredPopoverPosition({ open, disabled, triggerRef, popoverRef, va
       const trigger = triggerRef.current
       if (!trigger) return
       const rect = trigger.getBoundingClientRect()
-      // Keep this margin in sync with touch.css: seven 44px day columns fit at 320px.
+      // Keep calendar paint compact without changing desktop sizing.
       const touchCalendar = variant === 'calendar' && window.matchMedia('(pointer: coarse), (max-width: 767px)').matches
-      const margin = touchCalendar ? 2 : 12
+      const margin = 12
       const viewportWidth = Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth)
       const availableWidth = Math.max(0, viewportWidth - margin * 2)
       const width = variant === 'calendar'
-        ? Math.min(340, availableWidth, Math.max(328, rect.width))
+        ? Math.min(touchCalendar ? 312 : 340, availableWidth, Math.max(328, rect.width))
         : Math.min(Math.max(rect.width, 160), Math.max(180, window.innerWidth - margin * 2))
       const fallbackHeight = variant === 'calendar' ? 354 : Math.min(260, optionCount * 40 + 12)
-      const popoverElement = popoverRef.current
-      const height = popoverElement ? Math.max(popoverElement.offsetHeight, popoverElement.scrollHeight) : fallbackHeight
+      const height = measureAnchoredPopoverHeight(popoverRef.current, fallbackHeight)
       setStyle(calculateAnchoredPopoverStyle(rect, { width: viewportWidth, height: window.innerHeight }, { width, height }, margin))
     }
     updatePopoverPosition()
@@ -255,7 +267,7 @@ export function AdminSegmentedField({ name, label, options, value, defaultValue,
 
   const classes = ['admin-form-control', 'admin-segmented-field admin-select-menu-field', className, disabled ? 'is-disabled' : ''].filter(Boolean).join(' ')
   const popover = open && !disabled ? (
-    <OverlaySurface ref={popoverRef} className="admin-select-popover" role="listbox" aria-label={`${label}选项`} style={popoverStyle}>
+    <OverlaySurface ref={popoverRef} className="admin-select-popover" data-field={name} role="listbox" aria-label={`${label}选项`} style={popoverStyle}>
       {options.map((option) => (
         <button key={option.value} type="button" role="option" aria-selected={selectedValue === option.value} data-active={selectedValue === option.value} onClick={() => setSelectedValue(option.value)}>
           <span>{option.label}</span>

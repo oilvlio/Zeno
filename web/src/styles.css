@@ -157,7 +157,7 @@ svg { display: block; }
   font-weight: 400;
   transition: color 150ms ease, transform 150ms ease;
 }
-.brand-logo { margin-right: 4px; display: inline-flex; align-items: center; justify-content: flex-start; }
+.brand-logo { margin-right: 4px; display: inline-flex; flex: none; align-items: center; justify-content: flex-start; }
 .brand-logo-fallback {
   width: 32px;
   height: 32px;
@@ -174,10 +174,10 @@ svg { display: block; }
   box-shadow: 0 8px 18px -14px var(--blue);
 }
 .brand img { width: 32px; height: 32px; object-fit: cover; object-position: top; border: 0; }
-.brand span:last-child { white-space: nowrap; }
+.brand > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brand:hover { color: var(--blue); transform: translateY(-1px); }
 
-.nav-actions { display: inline-flex; align-items: center; gap: 8px; }
+.nav-actions { display: inline-flex; flex: none; align-items: center; gap: 8px; }
 .theme-menu { position: relative; display: inline-flex; }
 .theme-menu-popover {
   position: fixed;

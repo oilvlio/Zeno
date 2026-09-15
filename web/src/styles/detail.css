@@ -134,8 +134,8 @@
 .detail-fact.is-wide p { font-size: 10.5px; }
 .detail-fact.is-wide strong { font-size: 13px; line-height: 1.22; }
 .detail-fact.is-pending strong { color: color-mix(in srgb, var(--foreground) 48%, transparent); }
-.detail-traffic-values { display: flex; align-items: center; column-gap: 18px; }
-.detail-traffic-value { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.detail-traffic-values { display: flex; flex-wrap: wrap; align-items: center; column-gap: 18px; row-gap: 3px; }
+.detail-traffic-value { display: inline-flex; flex: none; align-items: center; gap: 5px; min-width: 0; }
 
 .detail-range-row {
   grid-template-columns: repeat(var(--slider-columns), minmax(42px, 1fr));

@@ -53,6 +53,14 @@ describe('AdminInstallCommand state', () => {
     expect(isCurrentInstallCommandRequest(3, 3, 'node-1', 'node-2')).toBe(false)
   })
 
+  it('uses the rendered touch height when choosing a side near the viewport bottom', () => {
+    const trigger = { top: 654, right: 200, bottom: 698, left: 20, width: 180, height: 44 }
+    const measuredHeight = 154
+    const style = calculateInstallPlatformMenuStyle(trigger, { width: 390, height: 844 }, measuredHeight)
+    expect(style.top).toBe(trigger.top - measuredHeight - 8)
+    expect(Number(style.top) + measuredHeight).toBeLessThanOrEqual(844 - 12)
+  })
+
   it('keeps the platform picker inside a tiny viewport', () => {
     expect(calculateInstallPlatformMenuStyle(
       { top: 70, right: 150, bottom: 94, left: 120, width: 30, height: 24 },

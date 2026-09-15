@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useDismissibleAnchoredPopover } from '../../hooks/useDismissibleAnchoredPopover'
 import type { AdminNodeInstallCommand } from '../../types'
 import { OverlaySurface } from '../OverlaySurface'
-import { calculateAnchoredPopoverStyle } from './AdminFields'
+import { calculateAnchoredPopoverStyle, measureAnchoredPopoverHeight } from './AdminFields'
 import { AdminFormSection } from './AdminPrimitives'
 
 export type AgentInstallPlatform = 'linux' | 'macos' | 'windows'
@@ -54,11 +54,11 @@ export function shouldOpenInstallPlatformPicker(openAfterGenerate: boolean, bloc
   return openAfterGenerate && !blocked
 }
 
-export function calculateInstallPlatformMenuStyle(trigger: TriggerRect, viewport: { width: number; height: number }): CSSProperties {
-  return calculateAnchoredPopoverStyle(trigger, viewport, { width: 184, height: 124 })
+export function calculateInstallPlatformMenuStyle(trigger: TriggerRect, viewport: { width: number; height: number }, height = 124): CSSProperties {
+  return calculateAnchoredPopoverStyle(trigger, viewport, { width: 184, height })
 }
 
-function useInstallPlatformMenuPosition(open: boolean, triggerRef: React.RefObject<HTMLButtonElement | null>): CSSProperties {
+function useInstallPlatformMenuPosition(open: boolean, triggerRef: React.RefObject<HTMLButtonElement | null>, popoverRef: React.RefObject<HTMLDivElement | null>): CSSProperties {
   const [style, setStyle] = useState<CSSProperties>({})
 
   useLayoutEffect(() => {
@@ -66,7 +66,8 @@ function useInstallPlatformMenuPosition(open: boolean, triggerRef: React.RefObje
     const updatePosition = () => {
       const trigger = triggerRef.current
       if (!trigger) return
-      setStyle(calculateInstallPlatformMenuStyle(trigger.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight }))
+      const height = measureAnchoredPopoverHeight(popoverRef.current, 124)
+      setStyle(calculateInstallPlatformMenuStyle(trigger.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight }, height))
     }
     updatePosition()
     const frame = window.requestAnimationFrame(updatePosition)
@@ -79,7 +80,7 @@ function useInstallPlatformMenuPosition(open: boolean, triggerRef: React.RefObje
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [open, triggerRef])
+  }, [open, triggerRef, popoverRef])
 
   return style
 }
@@ -124,7 +125,7 @@ export function AdminInstallCommand({ nodeId, initialMessage, blocked = false, o
   const currentInstallCommandState: InstallCommandState = installCommandNodeId === nodeId ? installCommandState : { kind: 'idle' }
   const installPlatformPickerVisible = installPlatformPickerOpen && !blocked && currentInstallCommandState.kind === 'ready'
   useDismissibleAnchoredPopover(installPlatformPickerVisible, installCopyButtonRef, installPlatformPopoverRef, dismissInstallPlatformPicker)
-  const installPlatformMenuStyle = useInstallPlatformMenuPosition(installPlatformPickerVisible, installCopyButtonRef)
+  const installPlatformMenuStyle = useInstallPlatformMenuPosition(installPlatformPickerVisible, installCopyButtonRef, installPlatformPopoverRef)
 
   useEffect(() => {
     requestSequenceRef.current += 1

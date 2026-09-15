@@ -37,20 +37,14 @@
 
   /* Detail range and peak controls retain their shared compact geometry. */
 
-  .home-currency-popover button,
-  .admin-select-popover button,
-  .admin-install-platforms button,
-  .admin-date-popover button { min-height: 44px; }
+  /* Currency menus retain their compact 34px base rows on phones too. */
+  .admin-select-popover:not([data-field$="currency"]) button,
+  .admin-install-platforms button { min-height: 44px; }
 
-  /* JS uses the same 2px viewport margin. 316px at 320 leaves seven >44px days. */
-  .admin-date-popover.zeno-overlay-surface { padding: 2px; }
-  .admin-date-popover .admin-date-grid,
-  .admin-date-popover .admin-date-weekdays { gap: 0; }
-  .admin-date-popover .admin-date-empty { min-height: 44px; }
+  /* Calendar paint stays at the base 30–32px size, with normal inset/gaps. */
   .admin-date-popover .admin-date-current {
     grid-template-columns: minmax(0, 1fr) minmax(0, .72fr);
   }
-  .admin-date-popover .admin-date-calendar-header > button { width: 44px; }
 }
 
 @media (pointer: coarse) and (min-width: 768px) {
