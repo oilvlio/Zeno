@@ -16,8 +16,8 @@ function declarations(selector: string, media?: string) {
 }
 
 describe('homepage icon-led presentation', () => {
-  it('keeps the larger node name and original server reading sizes', () => {
-    expect(declarations('.node-title-line p')['font-size']).toBe('15px')
+  it('restores the original compact node name and keeps server reading sizes', () => {
+    expect(declarations('.node-title-line p')['font-size']).toBe('13px')
     expect(declarations('.node-title-line p')['font-weight']).toBe('600')
     for (const selector of ['.node-uptime', '.node-specs', '.node-metric', '.node-health-metric', '.node-metric strong', '.health-history-heading strong']) {
       expect(declarations(selector)['font-size'], selector).toBe('11px')
