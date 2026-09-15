@@ -241,7 +241,7 @@ export function ServerCard({ node, serverCardTheme = 'classic', displayCurrency 
           <ServerFlag countryCode={node.countryCode} className="node-flag" />
           <p>{node.displayName}</p>
         </div>
-        <span className="node-uptime">{formatOnlineDays(node.uptimeSeconds)}</span>
+        <span className="node-uptime">{isOfflineCard ? '离线' : formatOnlineDays(node.uptimeSeconds)}</span>
       </section>
 
       {isOfflineCard && (

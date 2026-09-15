@@ -67,6 +67,21 @@ describe('ServerCard', () => {
 
     expect(html).toContain('class="kulin-node-card is-offline"')
     expect(html).toContain('node-offline-watermark')
+    expect(html).toContain('class="node-uptime">离线</span>')
+    expect(html).not.toContain('在线 3 天')
+  })
+
+  it.each(['offline', 'no_data'] as const)('never shows online uptime for %s nodes in either card theme', status => {
+    for (const serverCardTheme of ['classic', 'capsule'] as const) {
+      for (const uptimeSeconds of [null, 262800]) {
+        const html = renderToStaticMarkup(
+          <ServerCard node={{ ...baseNode, status, uptimeSeconds }} serverCardTheme={serverCardTheme} />,
+        )
+        expect(html).toContain('class="node-uptime">离线</span>')
+        expect(html).not.toMatch(/在线 (?:3|--) 天/)
+        expect(html).toContain('node-offline-watermark')
+      }
+    }
   })
 
   it('keeps online cards clean without offline overlay markup', () => {
