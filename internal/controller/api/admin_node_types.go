@@ -241,8 +241,15 @@ type AdminNodeUpdateRequest struct {
 	PublicIPv4        *string            `json:"public_ipv4,omitempty"`
 	PublicIPv6        *string            `json:"public_ipv6,omitempty"`
 	MonthlyQuotaBytes adminOptionalInt64 `json:"monthly_quota_bytes,omitempty"`
-	Disabled          *bool              `json:"disabled,omitempty"`
-	ProbeTargetIDs    []string           `json:"probe_target_ids,omitempty"`
+	// MonthlyInCorrectionBytes and MonthlyOutCorrectionBytes carry the current
+	// billing period's manual traffic offset in bytes. Absent means "leave
+	// unchanged"; explicit null clears the offset back to zero. Offsets only
+	// ever shift the current period's billed usage - lifetime counters stay
+	// honest.
+	MonthlyInCorrectionBytes  adminOptionalInt64 `json:"monthly_in_correction_bytes,omitempty"`
+	MonthlyOutCorrectionBytes adminOptionalInt64 `json:"monthly_out_correction_bytes,omitempty"`
+	Disabled                  *bool              `json:"disabled,omitempty"`
+	ProbeTargetIDs            []string           `json:"probe_target_ids,omitempty"`
 }
 
 func (request *AdminNodeUpdateRequest) normalize() error {
@@ -275,6 +282,8 @@ func (request *AdminNodeUpdateRequest) normalize() error {
 		return normalizeAdminNodeIP(value, 6)
 	}))
 	normalizer.optionalInt64(&request.MonthlyQuotaBytes, nonNegativeInt64)
+	normalizer.optionalInt64(&request.MonthlyInCorrectionBytes, validMonthlyTrafficCorrectionBytes)
+	normalizer.optionalInt64(&request.MonthlyOutCorrectionBytes, validMonthlyTrafficCorrectionBytes)
 	normalizer.present(request.Disabled != nil)
 	normalizer.identifiers(&request.ProbeTargetIDs)
 	return normalizer.result()
@@ -350,6 +359,11 @@ type AdminNode struct {
 	DiskTotalBytes    *int64   `json:"disk_total_bytes,omitempty"`
 	BootTime          *string  `json:"boot_time,omitempty"`
 	AgentVersion      string   `json:"agent_version,omitempty"`
+	// MonthlyInCorrectionBytes and MonthlyOutCorrectionBytes report the
+	// current billing period's manual traffic offset in bytes. Nil means no
+	// offset is in effect; offsets never apply to lifetime counters.
+	MonthlyInCorrectionBytes  *int64 `json:"monthly_in_correction_bytes,omitempty"`
+	MonthlyOutCorrectionBytes *int64 `json:"monthly_out_correction_bytes,omitempty"`
 }
 
 var adminNodeRenewalCurrencies = map[string]struct{}{

@@ -607,8 +607,8 @@ func TestNodeLatencyEndpointUsesRangeSpecificWindows(t *testing.T) {
 	sevenDays := requestLatency(t, "/api/public/v1/nodes/example-harbor/latency?range=7d")
 	thirtyDays := requestLatency(t, "/api/public/v1/nodes/example-harbor/latency?range=30d")
 
-	if got := len(uniquePointTimes(realtime.Points)); got != 20 {
-		t.Fatalf("1h timestamps = %d, want 20 realtime three-minute buckets", got)
+	if got := len(uniquePointTimes(realtime.Points)); got != 60 {
+		t.Fatalf("1h timestamps = %d, want 60 one-minute samples", got)
 	}
 	if got := len(uniquePointTimes(oneDay.Points)); got != 1440 {
 		t.Fatalf("1d timestamps = %d, want 1440 one-minute samples", got)

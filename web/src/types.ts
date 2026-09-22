@@ -76,6 +76,8 @@ export interface HomeCardNode {
   netOutTotalBytes: number | null
   netInLifetimeBytes?: number | null
   netOutLifetimeBytes?: number | null
+  calendarMonthInBytes?: number | null
+  calendarMonthOutBytes?: number | null
   billingMode?: string
   monthlyResetDay?: number
   monthlyPeriodStart?: string
@@ -149,6 +151,8 @@ export interface AdminNode {
   publicIPv4?: string
   publicIPv6?: string
   monthlyQuotaBytes: number | null
+  monthlyInCorrectionBytes: number | null
+  monthlyOutCorrectionBytes: number | null
   lastSeenAt?: string
   createdAt: string
   updatedAt: string

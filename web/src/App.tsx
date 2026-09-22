@@ -9,7 +9,7 @@ import { applyDocumentBranding, settingsForChrome, shellStyleForSettings, stored
 import { useAdminAccess } from './hooks/useAdminAccess'
 import { usePublicSettings } from './hooks/usePublicSettings'
 import { useDashboardRouter } from './hooks/useDashboardRouter'
-import { homeRealtimeSnapshotForNodes, useSummaryController } from './hooks/useSummaryController'
+import { useSummaryController } from './hooks/useSummaryController'
 import { HomeRegionFilter, HomeTopPanel } from './components/HomeOverviewPanel'
 import type { AdminDashboardContainerProps } from './components/admin/AdminDashboard'
 import type { NodeDetailRouteProps } from './components/NodeDetailRoute'
@@ -110,6 +110,13 @@ export function homeTrafficTotalsForNodes(nodes: HomeCardNode[]): { totalUp: num
   }
 }
 
+export function homeCalendarMonthTotalsForNodes(nodes: HomeCardNode[]): { monthUp: number; monthDown: number } {
+  return {
+    monthUp: sum(nodes.map((node) => node.calendarMonthOutBytes)),
+    monthDown: sum(nodes.map((node) => node.calendarMonthInBytes)),
+  }
+}
+
 export function homeMonthlyCostForNodes(nodes: HomeCardNode[], displayCurrency: CurrencyCode, inputExchangeRates: CurrencyRates): number {
   const exchangeRates = normalizeCurrencyRates(inputExchangeRates)
   return sum(nodes.map((node) => {
@@ -136,7 +143,6 @@ export function orderHomeNodes(nodes: HomeCardNode[]): HomeCardNode[] {
 
 function normalizeHomeRegion(countryCode: string | undefined): string {
   const code = (countryCode ?? '').trim().toUpperCase()
-  if (code === 'TW') return 'CN'
   return /^[A-Z]{2}$/.test(code) ? code : ''
 }
 
@@ -310,10 +316,8 @@ export function App() {
   const onlineCount = homeRealtimeNodes.filter((node) => node.status === 'online').length
   const offlineCount = homeRealtimeNodes.filter((node) => node.status === 'offline').length
   const { totalUp, totalDown } = homeTrafficTotalsForNodes(homeRealtimeNodes)
+  const { monthUp, monthDown } = homeCalendarMonthTotalsForNodes(homeRealtimeNodes)
   const monthlyCost = homeMonthlyCostForNodes(homeRealtimeNodes, activeHomeCurrency, exchangeRates)
-  const currentRealtimeSnapshot = homeRealtimeSnapshot ?? homeRealtimeSnapshotForNodes(homeRealtimeNodes)
-  const upSpeed = currentRealtimeSnapshot.upSpeed
-  const downSpeed = currentRealtimeSnapshot.downSpeed
   const hasBackgroundImage = (effectiveSettings.desktopBackgroundUrl || effectiveSettings.backgroundUrl || effectiveSettings.mobileBackgroundUrl).trim() !== ''
   const changeHomeCurrency = (currency: CurrencyCode) => {
     rememberHomeCurrency(currency)
@@ -435,8 +439,8 @@ export function App() {
             onCurrencyChange={changeHomeCurrency}
             totalUp={totalUp}
             totalDown={totalDown}
-            upSpeed={upSpeed}
-            downSpeed={downSpeed}
+            monthUp={monthUp}
+            monthDown={monthDown}
             onHome={navigateHome}
             onAdmin={navigateAdminSmoothly}
             onAdminIntent={preloadAdminIntent}

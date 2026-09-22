@@ -64,6 +64,8 @@ function serializeAdminNodeShared(input: AdminNodeSharedInput, afterLocation: Re
     ...(input.publicIPv4 !== undefined ? { public_ipv4: input.publicIPv4 } : {}),
     ...(input.publicIPv6 !== undefined ? { public_ipv6: input.publicIPv6 } : {}),
     ...(input.monthlyQuotaBytes !== undefined ? { monthly_quota_bytes: input.monthlyQuotaBytes } : {}),
+    ...(input.monthlyInCorrectionBytes !== undefined ? { monthly_in_correction_bytes: input.monthlyInCorrectionBytes } : {}),
+    ...(input.monthlyOutCorrectionBytes !== undefined ? { monthly_out_correction_bytes: input.monthlyOutCorrectionBytes } : {}),
     ...(input.disabled !== undefined ? { disabled: input.disabled } : {}),
   }
 }
@@ -164,6 +166,8 @@ export function normalizeAdminNode(node: ApiAdminNode): AdminNode {
     publicIPv4: node.public_ipv4,
     publicIPv6: node.public_ipv6,
     monthlyQuotaBytes: node.monthly_quota_bytes ?? null,
+    monthlyInCorrectionBytes: node.monthly_in_correction_bytes ?? null,
+    monthlyOutCorrectionBytes: node.monthly_out_correction_bytes ?? null,
     lastSeenAt: node.last_seen_at ?? undefined,
     createdAt: node.created_at,
     updatedAt: node.updated_at,

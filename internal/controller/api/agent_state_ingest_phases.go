@@ -161,6 +161,10 @@ func applyAgentStateTraffic(
 		state.NetInTotalBytes, state.NetOutTotalBytes, counterSource, sampleTS.Unix(), receivedUnix); err != nil {
 		return err
 	}
-	return upsertMonthlyTraffic(ctx, tx, nodeID, month, billingEpoch, monthlyResetDay, billingMode,
-		state.NetInTotalBytes, state.NetOutTotalBytes, counterSource, sampleTS.Unix(), receivedUnix)
+	if err := upsertMonthlyTraffic(ctx, tx, nodeID, month, billingEpoch, monthlyResetDay, billingMode,
+		state.NetInTotalBytes, state.NetOutTotalBytes, counterSource, sampleTS.Unix(), receivedUnix); err != nil {
+		return err
+	}
+	return upsertCalendarTraffic(ctx, tx, nodeID,
+		state.NetInTotalBytes, state.NetOutTotalBytes, counterSource, sampleTS, receivedUnix)
 }

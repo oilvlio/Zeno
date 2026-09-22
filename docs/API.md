@@ -313,6 +313,8 @@ Controller 对下发给单个节点的探针配置做资源上限：最多 32 �
       "net_out_total_bytes": 8192,
       "net_in_lifetime_bytes": 1099511631872,
       "net_out_lifetime_bytes": 1099511635968,
+      "calendar_month_in_bytes": 123456789,
+      "calendar_month_out_bytes": 987654321,
       "billing_mode": "both",
       "monthly_reset_day": 15,
       "monthly_period_start": "2026-06-15",
@@ -344,7 +346,7 @@ Controller 对下发给单个节点的探针配置做资源上限：最多 32 �
 
 `monthly_period_start` / `monthly_period_end` 是当前流量计费周期的 UTC 日期范围，按该节点 `monthly_reset_day` 计算；`monthly_billable_bytes` 也取同一周期。
 
-`net_in_total_bytes` / `net_out_total_bytes` 保留 Agent 当前网卡 counter，供节点详情和状态历史使用，服务器重启后可能归零。`net_in_lifetime_bytes` / `net_out_lifetime_bytes` 由 Controller 持久化累计：首次有效样本保留当时 counter，之后按 counter delta 累计；服务器、Agent 或网卡重启使 counter 降低时，重置后的较小 counter 会作为重置后已产生的流量计入永久累计，并成为下一次采样的基线。首页顶部“接收 / 发送”使用 lifetime 字段；旧缓存缺少字段时临时回退到 raw counter。
+`net_in_total_bytes` / `net_out_total_bytes` 保留 Agent 当前网卡 counter，供节点详情和状态历史使用，服务器重启后可能归零。`net_in_lifetime_bytes` / `net_out_lifetime_bytes` 由 Controller 持久化累计：首次有效样本保留当时 counter，之后按 counter delta 累计；服务器、Agent 或网卡重启使 counter 降低时，重置后的较小 counter 会作为重置后已产生的流量计入永久累计，并成为下一次采样的基线。`calendar_month_in_bytes` / `calendar_month_out_bytes` 是本自然月（UTC）的实测累计：与节点账单日、计费口径、流量校正均无关，跨月时清零重计，不保留历史月份；首页顶部“本月发送 / 本月接收”使用这两个字段求和，旧缓存缺少字段时按 0 处理。
 
 `services` 是公开服务详情页使用的探针目标摘要。它按后台探针目标显示顺序返回有效目标，`assigned_node_count` 是分配且启用的节点数量，`reporting_node_count` 是最近 24 小时内有上报的节点数量，延迟/丢包取该服务最新一条探测结果；公开 DTO 不返回探测地址或端口，完整端点只在管理员接口中可见；前台首页不单独展示监控服务列表。
 
@@ -672,13 +674,15 @@ X-Admin-Token: <admin-token>
   "public_ipv4": "198.51.100.8",
   "public_ipv6": "2001:db8::8",
   "monthly_quota_bytes": 1099511627776,
+  "monthly_in_correction_bytes": 10737418240,
+  "monthly_out_correction_bytes": 5368709120,
   "home_probe_target_id": "cloudflare",
   "probe_target_ids": ["cloudflare", "google"],
   "disabled": false
 }
 ```
 
-字段均可部分提交；`monthly_quota_bytes: null` 表示清空月配额，`renewal_amount: null` 表示清空续费金额；`expiry_date` / `billing_cycle` / `public_ipv4` / `public_ipv6` 提交空字符串表示清空。币种范围与创建接口一致。`billing_mode` 可选 `both`（入站+出站）、`in`（只算入站）、`out`（只算出站）、`max`（入/出取较大）；`monthly_reset_day` 范围 1–31。
+字段均可部分提交；`monthly_quota_bytes: null` 表示清空月配额，`renewal_amount: null` 表示清空续费金额；`expiry_date` / `billing_cycle` / `public_ipv4` / `public_ipv6` 提交空字符串表示清空。币种范围与创建接口一致。`billing_mode` 可选 `both`（入站+出站）、`in`（只算入站）、`out`（只算出站）、`max`（入/出取较大）；`monthly_reset_day` 范围 1–31。`monthly_in/out_correction_bytes` 是本账期上下行流量校正快照（字节，0–1000000 GiB，不传表示保持不变，`null` 表示清零重计）：填入值即视为商家口径的本期计费流量，保存时此前累计作废、后续上报继续累加；不影响累计流量与永久累计，下个账期自动归零。
 
 编辑服务器时可同时提交 `probe_target_ids`，后端会在同一事务内替换该服务器的延迟监控关联并更新 `home_probe_target_id`，避免前端为每个目标分别发送 PATCH。首页目标非空时必须包含在 `probe_target_ids` 中；空数组表示取消全部关联。
 

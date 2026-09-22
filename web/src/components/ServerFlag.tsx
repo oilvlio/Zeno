@@ -8,7 +8,7 @@ interface ServerFlagProps {
 function normalizeFlagCode(countryCode: string | undefined): string {
   const code = (countryCode ?? '').trim().toUpperCase()
   if (!/^[A-Z]{2}$/.test(code)) return ''
-  return code === 'TW' ? 'CN' : code
+  return code
 }
 
 function unicodeFlagIcon(countryCode: string): string {

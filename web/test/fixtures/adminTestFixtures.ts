@@ -15,6 +15,8 @@ export const exampleNodeANode: AdminNode = {
   publicIPv4: '198.51.100.8',
   publicIPv6: '2001:db8::8',
   monthlyQuotaBytes: 1099511627776,
+  monthlyInCorrectionBytes: null,
+  monthlyOutCorrectionBytes: null,
   lastSeenAt: '2026-07-03T00:00:00Z',
   createdAt: '2026-07-02T00:00:00Z',
   updatedAt: '2026-07-03T00:00:00Z',

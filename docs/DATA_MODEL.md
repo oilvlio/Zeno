@@ -127,6 +127,9 @@ CREATE TABLE traffic_monthly (
   in_bytes INTEGER NOT NULL DEFAULT 0,
   out_bytes INTEGER NOT NULL DEFAULT 0,
   billable_bytes INTEGER NOT NULL DEFAULT 0,
+  in_correction_bytes INTEGER NOT NULL DEFAULT 0,
+  out_correction_bytes INTEGER NOT NULL DEFAULT 0,
+  billable_correction_bytes INTEGER NOT NULL DEFAULT 0,
   last_in_total_bytes INTEGER,
   last_out_total_bytes INTEGER,
   last_sample_ts INTEGER,
@@ -135,11 +138,31 @@ CREATE TABLE traffic_monthly (
 );
 ```
 
+`in/out/billable_correction_bytes` 是管理后台手工录入的本账期流量校正快照（单位字节，上限单向 1,000,000 GiB），录入值即视为商家口径的本期计费流量：保存时当期实测累计清零作废，后续上报在此快照上继续累加。展示侧月计费 = 快照 + 快照后新增；counter 基线在快照后由下一样本重建，`traffic_lifetime` 永久累计不受校正影响；新账期行默认快照为 0。
+
 ## traffic_lifetime
 
 首页永久累计流量。首次有效 state 样本把当时的网卡 counter 作为起点，之后按 counter delta 累计；counter 因服务器、Agent 或网卡重启而降低时，把重置后的较小 counter 视为重置后已经产生的流量并计入永久累计，同时将其设为下一次采样的基线。因此 `in_bytes` / `out_bytes` 不会因重启倒退或漏掉重置后的首次上报，也不受月重置日、计费口径或 billing epoch 变化影响。
 
 旧数据库升级时，Controller 仅使用每台节点最新的有效 raw counter 进行一次性回填，并以该样本作为后续基线，不尝试从可能已裁剪的历史记录中重建永久累计值。
+
+## traffic_calendar_monthly
+
+本自然月（UTC）实测流量账本。每个节点固定一行（`node_id` 主键），只保留运行中的月份，不存历史：样本落到新月份时实测累计清零，counter 基线不断（网卡 counter 跨月连续），因此跨月样本的整段增量计入新月，误差不超过一个上报间隔。流量校正、计费口径、账单日均不影响本表。
+
+```sql
+CREATE TABLE traffic_calendar_monthly (
+	node_id TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+	month TEXT NOT NULL,
+	in_bytes INTEGER NOT NULL DEFAULT 0,
+	out_bytes INTEGER NOT NULL DEFAULT 0,
+	last_in_total_bytes INTEGER,
+	last_out_total_bytes INTEGER,
+	counter_source TEXT NOT NULL DEFAULT '',
+	last_sample_ts INTEGER,
+	updated_at INTEGER NOT NULL
+);
+```
 
 ```sql
 CREATE TABLE traffic_lifetime (
