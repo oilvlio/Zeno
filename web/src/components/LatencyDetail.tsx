@@ -2,14 +2,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { HomeCardNode, LatencyPoint, StatePoint } from '../types'
 import { formatLatency } from '../lib/format'
 import { summarizeLatencyTargets } from '../lib/latencyTargets'
+import { decimateLatencyPoints, LOSS_CHART_RENDER_BUDGET } from '../lib/chartDecimate'
+import { latencyHeatColor, lossHeatColor } from '../lib/metricHeat'
 import { latencySeriesColor, LatencyChart } from './LatencyChart'
+import { LossChart } from './LossChart'
 import { ServerFlag } from './ServerFlag'
 import { StateHistoryPanel } from './StateHistoryPanel'
 import { availableHistoryRanges } from '../lib/historyRange'
 import { HistoryRangeSelector } from './HistoryRangeSelector'
-
-const DESKTOP_LATENCY_COLUMNS = 7
-const MOBILE_LATENCY_COLUMNS = 3
 
 interface LatencyDetailProps {
   node: HomeCardNode
@@ -22,23 +22,23 @@ interface LatencyDetailProps {
   stateLoading?: boolean
   stateError?: string
   canUseExtendedRanges?: boolean
+  initialView?: 'ping' | 'resource'
   onBack: () => void
   onRangeChange: (range: string) => void
   onStateRangeChange?: (range: string) => void
   topHeader?: ReactNode
 }
 
-function latencyTargetCorners(index: number, total: number, columns: number): string {
-  if (total <= 0) return ''
-  const firstRowIsFull = total >= columns
-  const lastRowStart = Math.floor((total - 1) / columns) * columns
-  const lastRowIsFull = total % columns === 0
-  const corners: string[] = []
-  if (index === 0) corners.push('top-left')
-  if (firstRowIsFull && index === columns - 1) corners.push('top-right')
-  if (index === lastRowStart) corners.push('bottom-left')
-  if (lastRowIsFull && index === total - 1) corners.push('bottom-right')
-  return corners.join(' ')
+function targetCardTitle(target: { targetName: string; avgMs: number | null; medianMs: number | null; minMs: number | null; maxMs: number | null; lossPercent: number | null | undefined; sampleCount: number }): string {
+  const parts = [
+    target.targetName,
+    `平均 ${formatLatency(target.avgMs)}`,
+    target.medianMs !== null ? `中位 ${formatLatency(target.medianMs)}` : null,
+    target.minMs !== null && target.maxMs !== null ? `区间 ${formatLatency(target.minMs)} ~ ${formatLatency(target.maxMs)}` : null,
+    `丢包 ${formatLossPercent(target.lossPercent)}`,
+    `${target.sampleCount} 个样本`,
+  ]
+  return parts.filter((part) => part !== null).join(' · ')
 }
 
 export function LatencyDetail({
@@ -52,14 +52,21 @@ export function LatencyDetail({
   stateLoading = false,
   stateError,
   canUseExtendedRanges = false,
+  initialView = 'ping',
   onBack,
   onRangeChange,
   onStateRangeChange = () => {},
   topHeader,
 }: LatencyDetailProps) {
   const targetSummaries = useMemo(() => summarizeLatencyTargets(points), [points])
+  // 图表压点只喂图：统计汇总继续用原始全量点。丢包单独更小的预算，
+  // 1 天 1440 点压成 360（约 4 分钟一步），线更顺。
+  const chartPoints = useMemo(() => decimateLatencyPoints(points), [points])
+  const lossChartPoints = useMemo(() => decimateLatencyPoints(points, LOSS_CHART_RENDER_BUDGET), [points])
   const [activeTargetIds, setActiveTargetIds] = useState<string[]>([])
   const [peakCut, setPeakCut] = useState(false)
+  const [view, setView] = useState<'ping' | 'resource'>(initialView)
+  const [chartMetric, setChartMetric] = useState<'latency' | 'loss'>('latency')
   const rangeOptions = availableHistoryRanges(canUseExtendedRanges)
   const rangeLabel = rangeOptions.find((option) => option.value === range)?.label ?? range
   const latestState = latestStatePoint(statePoints)
@@ -85,8 +92,6 @@ export function LatencyDetail({
   )
   const hasLatencyData = points.length > 0 || targetSummaries.length > 0
   const showLatencySkeleton = loading && !hasLatencyData && !error
-  const desktopLatencyLastRowStart = Math.floor((targetSummaries.length - 1) / DESKTOP_LATENCY_COLUMNS) * DESKTOP_LATENCY_COLUMNS
-  const mobileLatencyLastRowStart = Math.floor((targetSummaries.length - 1) / MOBILE_LATENCY_COLUMNS) * MOBILE_LATENCY_COLUMNS
   const toggleTarget = (targetId: string) => {
     setActiveTargetIds((current) => (
       current.includes(targetId) ? current.filter((id) => id !== targetId) : [...current, targetId]
@@ -94,7 +99,7 @@ export function LatencyDetail({
   }
 
   return (
-    <div className="kulin-container detail-container">
+    <div className="kulin-container detail-container detail-lumina">
       <section className="home-top-card detail-top-card" aria-label={`${node.displayName} server overview`}>
         {topHeader}
         <section className="detail-hero">
@@ -121,6 +126,28 @@ export function LatencyDetail({
         </section>
       </section>
 
+      <div className="lumina-view-tabs" role="tablist" aria-label="详情视图">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'resource'}
+          data-active={view === 'resource'}
+          onClick={() => setView('resource')}
+        >
+          系统资源
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'ping'}
+          data-active={view === 'ping'}
+          onClick={() => setView('ping')}
+        >
+          Ping 历史
+        </button>
+      </div>
+
+      <div hidden={view !== 'ping'}>
       <section className="monitor-panel" aria-label={`${node.displayName} network latency`}>
         <header className="monitor-heading latency-monitor-heading">
           <div className="monitor-heading-title">
@@ -155,48 +182,86 @@ export function LatencyDetail({
         {!showLatencySkeleton && !error && hasLatencyData && (
           <>
             <div
-              className="latency-target-grid"
+              className="lumina-probe-grid"
               aria-label="monitor services"
             >
               {targetSummaries.map((target, index) => (
                 <button
                     key={target.targetId}
                     type="button"
-                    title={`${target.targetName} · ${formatLatency(target.avgMs)} · 丢包 ${formatLossPercent(target.lossPercent)}`}
+                    className="lumina-probe-card"
+                    title={targetCardTitle(target)}
                     data-active={activeTargetIds.includes(target.targetId)}
-                    data-desktop-corners={latencyTargetCorners(index, targetSummaries.length, DESKTOP_LATENCY_COLUMNS)}
-                    data-mobile-corners={latencyTargetCorners(index, targetSummaries.length, MOBILE_LATENCY_COLUMNS)}
-                    data-desktop-full-row-end={(index + 1) % DESKTOP_LATENCY_COLUMNS === 0}
-                    data-desktop-last-row={index >= desktopLatencyLastRowStart}
-                    data-mobile-full-row-end={(index + 1) % MOBILE_LATENCY_COLUMNS === 0}
-                    data-mobile-last-row={index >= mobileLatencyLastRowStart}
                     onClick={() => toggleTarget(target.targetId)}
                   >
-                    <span className="latency-target-name">
-                      <i className="latency-target-color" style={{ backgroundColor: latencySeriesColor(index) }} aria-hidden="true" />
-                      <span>{target.targetName}</span>
-                    </span>
-                    <strong>{formatLatency(target.avgMs)}</strong>
-                    <em>丢包 {formatLossPercent(target.lossPercent)}</em>
+                    <div className="lumina-probe-head">
+                      <span className="lumina-probe-name">
+                        <i className="lumina-probe-color" style={{ backgroundColor: latencySeriesColor(index) }} aria-hidden="true" />
+                        <span>{target.targetName}</span>
+                      </span>
+                      <span className="lumina-probe-primary" style={{ color: latencyHeatColor(target.avgMs) }}>{formatLatency(target.avgMs)}</span>
+                    </div>
+                    <div className="lumina-probe-stats">
+                      <span>均值 {formatLatency(target.avgMs)}</span>
+                      <span>中位 {target.medianMs === null ? '--' : formatLatency(target.medianMs)}</span>
+                      <span style={{ color: lossHeatColor(target.lossPercent) }}>丢包 {formatLossPercent(target.lossPercent)}</span>
+                      <span>样本 {target.sampleCount}</span>
+                    </div>
+                    <div className="lumina-probe-meta">
+                      <span>min {target.minMs === null ? '--' : formatLatency(target.minMs)}</span>
+                      <span>max {target.maxMs === null ? '--' : formatLatency(target.maxMs)}</span>
+                    </div>
                 </button>
               ))}
             </div>
 
-            <LatencyChart
-              points={points}
-              title={`${node.displayName} 网络延迟`}
-              eyebrow={`${rangeLabel} · ${targetSummaries.length} 个监控服务${peakCut ? ' · 平滑' : ''}`}
-              compactHeader
-              hideHeader
-              hideLegend
-              peakCut={peakCut}
-              activeTargetIds={activeTargetIds}
-            />
+            <div className="lumina-metric-tabs" role="tablist" aria-label="Ping 图表指标">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={chartMetric === 'latency'}
+                data-active={chartMetric === 'latency'}
+                onClick={() => setChartMetric('latency')}
+              >
+                延迟
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={chartMetric === 'loss'}
+                data-active={chartMetric === 'loss'}
+                onClick={() => setChartMetric('loss')}
+              >
+                丢包率
+              </button>
+            </div>
+
+            {chartMetric === 'latency' ? (
+              <LatencyChart
+                points={chartPoints}
+                title={`${node.displayName} 网络延迟`}
+                eyebrow={`${rangeLabel} · ${targetSummaries.length} 个监控服务${peakCut ? ' · 平滑' : ''}`}
+                compactHeader
+                hideHeader
+                hideLegend
+                peakCut={peakCut}
+                activeTargetIds={activeTargetIds}
+                hidePacketLossArea
+              />
+            ) : (
+              <LossChart
+                points={lossChartPoints}
+                activeTargetIds={activeTargetIds}
+                eyebrow={`${rangeLabel} · ${targetSummaries.length} 个监控服务`}
+              />
+            )}
           </>
         )}
         {!showLatencySkeleton && !error && !hasLatencyData && <div className="detail-state" data-state="empty" role="status" aria-live="polite">暂无网络延迟历史</div>}
       </section>
+      </div>
 
+      <div hidden={view !== 'resource'}>
       <StateHistoryPanel
         points={statePoints}
         range={stateRange}
@@ -205,6 +270,7 @@ export function LatencyDetail({
         error={stateError}
         canUseExtendedRanges={canUseExtendedRanges}
       />
+      </div>
     </div>
   )
 }

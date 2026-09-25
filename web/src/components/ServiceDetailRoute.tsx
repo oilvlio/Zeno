@@ -4,6 +4,7 @@ import type { AdminTokenIdentity } from '../lib/adminToken'
 import type { ServiceTarget } from '../types'
 import { ServiceDetail } from './ServiceDetail'
 import '../styles/detail.css'
+import '../styles/detail-lumina.css'
 
 interface ServiceDetailRouteProps {
   targetId: string

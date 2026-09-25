@@ -1,0 +1,308 @@
+/* 详情页 Lumina 视觉覆盖层。
+ *
+ * 只在 `.detail-container.detail-lumina` 作用域内生效，不改动 detail.css 里被
+ * styles.test.ts 钉死的基线规则。版式对标 Monitor-Theme-LuminaPlus 的详情页：
+ * 全宽小边距容器 + 带边框的圆角面板 + 分组信息块。
+ */
+.detail-container.detail-lumina {
+  --lumina-line: color-mix(in srgb, var(--foreground) 13%, transparent);
+  --lumina-faint-line: color-mix(in srgb, var(--foreground) 9%, transparent);
+  --lumina-tile-bg: color-mix(in srgb, var(--foreground) 3.5%, transparent);
+  max-width: min(1560px, 100%);
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+/* 顶部信息卡与图表面板：Lumina instance-panel 式带边框圆角卡片。 */
+.detail-container.detail-lumina .detail-top-card,
+.detail-container.detail-lumina .monitor-panel {
+  border: 1px solid var(--lumina-line);
+  border-radius: 20px;
+  background: transparent;
+  padding: 16px;
+  box-shadow: none;
+}
+.detail-container.detail-lumina .detail-top-card .kulin-nav {
+  padding-bottom: 10px;
+}
+.detail-container.detail-lumina .detail-hero {
+  border-top: 0;
+}
+.detail-container.detail-lumina .detail-hero__main {
+  padding: 2px 0 12px;
+}
+.detail-container.detail-lumina .monitor-heading {
+  padding: 0 0 12px;
+}
+.detail-container.detail-lumina .detail-state {
+  margin: 0;
+}
+
+/* 信息条：从发丝线分隔改成 Lumina 式分组小块。 */
+.detail-container.detail-lumina .detail-fact-strip {
+  gap: 10px;
+  border-top: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--lumina-faint-line);
+}
+.detail-container.detail-lumina .detail-fact-strip--server {
+  border-top: 0;
+}
+.detail-container.detail-lumina .detail-fact {
+  border: 1px solid var(--lumina-faint-line);
+  border-radius: 14px;
+  background: var(--lumina-tile-bg);
+  padding: 8px 12px;
+  min-height: 52px;
+}
+.detail-container.detail-lumina .detail-fact.is-wide {
+  padding: 8px 12px;
+}
+.detail-container.detail-lumina .detail-fact-strip--server .detail-fact:nth-child(n),
+.detail-container.detail-lumina .detail-fact-strip--service .detail-fact:nth-child(n) {
+  border-left: 1px solid var(--lumina-faint-line);
+  border-top: 1px solid var(--lumina-faint-line);
+}
+.detail-container.detail-lumina .detail-fact p {
+  font-size: 10.5px;
+}
+.detail-container.detail-lumina .detail-fact strong {
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.detail-container.detail-lumina .detail-fact.is-wide strong {
+  font-size: 13.5px;
+}
+
+/* 延迟目标按钮已有圆角网格，保持不动，只收紧面板内边距。 */
+.detail-container.detail-lumina .latency-target-grid {
+  margin: 0;
+}
+
+/* Ping 探测平铺卡：主题式三行信息卡，字号对标原版任务卡。 */
+.detail-container.detail-lumina .lumina-probe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 10px;
+}
+.detail-container.detail-lumina .lumina-probe-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--lumina-faint-line);
+  border-radius: 14px;
+  background: var(--lumina-tile-bg);
+  padding: 11px 13px;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: opacity 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+.detail-container.detail-lumina .lumina-probe-card[data-active='true'] {
+  border-color: color-mix(in srgb, var(--blue) 55%, transparent);
+}
+.detail-container.detail-lumina .lumina-probe-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.detail-container.detail-lumina .lumina-probe-name {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.detail-container.detail-lumina .lumina-probe-name > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-container.detail-lumina .lumina-probe-color {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 999px;
+}
+.detail-container.detail-lumina .lumina-probe-primary {
+  flex: none;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.detail-container.detail-lumina .lumina-probe-stats,
+.detail-container.detail-lumina .lumina-probe-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.detail-container.detail-lumina .lumina-probe-stats span,
+.detail-container.detail-lumina .lumina-probe-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-container.detail-lumina .lumina-probe-meta {
+  color: color-mix(in srgb, var(--muted) 82%, transparent);
+  font-size: 11px;
+}
+
+/* Ping 指标子切换：延迟 / 丢包率二选一，一次只渲染一张图。 */
+.detail-container.detail-lumina .lumina-metric-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--lumina-line);
+  border-radius: 999px;
+  background: transparent;
+  align-self: flex-start;
+  margin-bottom: 10px;
+}
+.detail-container.detail-lumina .lumina-metric-tabs button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  padding: 5px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.detail-container.detail-lumina .lumina-metric-tabs button[data-active='true'] {
+  background: var(--blue);
+  color: #fff;
+}
+/* 丢包率独立曲线图。 */
+.detail-container.detail-lumina .lumina-loss-chart-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.detail-container.detail-lumina .lumina-loss-chart-head h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--foreground);
+}
+.detail-container.detail-lumina .lumina-loss-chart-head span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.detail-container.detail-lumina .lumina-loss-chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.detail-container.detail-lumina .lumina-loss-grid {
+  stroke: color-mix(in srgb, var(--foreground) 12%, transparent);
+  stroke-width: 1;
+}
+.detail-container.detail-lumina .lumina-loss-axis {
+  fill: var(--muted);
+  font-size: 13px;
+}
+.detail-container.detail-lumina .lumina-loss-chart-wrap {
+  position: relative;
+}
+.detail-container.detail-lumina .lumina-loss-guide {
+  stroke: color-mix(in srgb, var(--foreground) 35%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.detail-container.detail-lumina .lumina-loss-tooltip.zeno-overlay-surface {
+  position: absolute;
+  top: 4px;
+  z-index: 2;
+  min-width: 150px;
+  max-width: 230px;
+  transform: translateX(-50%);
+  padding: 7px 10px;
+  font-size: 11.5px;
+  pointer-events: none;
+}
+.detail-container.detail-lumina .lumina-loss-tooltip time {
+  display: block;
+  margin-bottom: 5px;
+  opacity: .75;
+  font-size: 10.5px;
+}
+.detail-container.detail-lumina .lumina-loss-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.5;
+}
+.detail-container.detail-lumina .lumina-loss-tooltip-row i {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+}
+.detail-container.detail-lumina .lumina-loss-tooltip-row b {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.detail-container.detail-lumina .lumina-loss-tooltip-row strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lumina 式视图切换：系统资源 / Ping 历史二选一。 */
+.detail-container.detail-lumina .lumina-view-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--lumina-line);
+  border-radius: 999px;
+  background: transparent;
+  align-self: flex-start;
+}
+.detail-container.detail-lumina .lumina-view-tabs button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  padding: 5px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.detail-container.detail-lumina .lumina-view-tabs button[data-active='true'] {
+  background: var(--blue);
+  color: #fff;
+}
+
+@media (max-width: 767px) {
+  .detail-container.detail-lumina {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .detail-container.detail-lumina .detail-top-card,
+  .detail-container.detail-lumina .monitor-panel {
+    border-radius: 16px;
+    padding: 12px;
+  }
+  .detail-container.detail-lumina .detail-fact-strip {
+    gap: 8px;
+  }
+  .detail-container.detail-lumina .detail-fact {
+    min-height: 48px;
+  }
+}

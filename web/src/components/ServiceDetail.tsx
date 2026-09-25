@@ -21,7 +21,7 @@ export function ServiceDetail({ target, points, range, loading, error, canUseExt
   const serviceRangeOptions = availableHistoryRanges(canUseExtendedRanges)
   const rangeLabel = serviceRangeOptions.find((option) => option.value === range)?.label ?? range
   return (
-    <div className="kulin-container detail-container">
+    <div className="kulin-container detail-container detail-lumina">
       <section className="home-top-card detail-top-card" aria-label={`${target.name} service overview`}>
         {topHeader}
         <section className="detail-hero">

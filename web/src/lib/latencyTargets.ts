@@ -5,6 +5,9 @@ export interface LatencyTargetSummary {
   targetName: string
   sampleCount: number
   avgMs: number | null
+  medianMs: number | null
+  minMs: number | null
+  maxMs: number | null
   lossPercent: number
 }
 
@@ -13,6 +16,9 @@ interface Accumulator {
   targetName: string
   sampleCount: number
   latestDelay: number | null
+  latestMedian: number | null
+  minDelay: number | null
+  maxDelay: number | null
   lossTotal: number
   lossCount: number
 }
@@ -27,6 +33,9 @@ export function summarizeLatencyTargets(points: LatencyPoint[]): LatencyTargetSu
       targetName: point.targetName,
       sampleCount: 0,
       latestDelay: null,
+      latestMedian: null,
+      minDelay: null,
+      maxDelay: null,
       lossTotal: 0,
       lossCount: 0,
     }
@@ -38,6 +47,12 @@ export function summarizeLatencyTargets(points: LatencyPoint[]): LatencyTargetSu
     if (!missingBucket) acc.sampleCount += 1
     if (hasDelay) {
       acc.latestDelay = delay
+      acc.minDelay = acc.minDelay === null ? delay : Math.min(acc.minDelay, delay)
+      acc.maxDelay = acc.maxDelay === null ? delay : Math.max(acc.maxDelay, delay)
+    }
+    const median = point.medianMs
+    if (typeof median === 'number' && Number.isFinite(median)) {
+      acc.latestMedian = median
     }
     if (!missingBucket && Number.isFinite(point.lossPercent)) {
       acc.lossTotal += point.lossPercent
@@ -52,6 +67,9 @@ export function summarizeLatencyTargets(points: LatencyPoint[]): LatencyTargetSu
     targetName: acc.targetName,
     sampleCount: acc.sampleCount,
     avgMs: acc.latestDelay !== null ? round2(acc.latestDelay) : null,
+    medianMs: acc.latestMedian !== null ? round2(acc.latestMedian) : null,
+    minMs: acc.minDelay !== null ? round2(acc.minDelay) : null,
+    maxMs: acc.maxDelay !== null ? round2(acc.maxDelay) : null,
     lossPercent: acc.lossCount > 0 ? round2(acc.lossTotal / acc.lossCount) : 0,
   }))
 }

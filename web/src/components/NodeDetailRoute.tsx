@@ -5,6 +5,7 @@ import type { AdminTokenIdentity } from '../lib/adminToken'
 import type { HomeCardNode, LatencyPoint } from '../types'
 import { LatencyDetail } from './LatencyDetail'
 import '../styles/detail.css'
+import '../styles/detail-lumina.css'
 
 export interface NodeDetailRouteProps {
   node: HomeCardNode

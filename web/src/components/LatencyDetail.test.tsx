@@ -116,51 +116,41 @@ describe('LatencyDetail', () => {
     expect(html).toContain('<h3>网络延迟</h3>')
     expect(html).not.toContain('1 天 · 0 个监控服务')
     expect(html).toContain('monitor services')
-    expect(html).toContain('latency-target-name')
-    expect(html).toContain('latency-target-color')
-    expect(html).toContain('data-desktop-corners="top-left bottom-left"')
-    expect(html).toContain('data-mobile-corners="top-left bottom-left"')
-    expect(html).not.toContain('data-desktop-first-column')
-    expect(html).not.toContain('data-desktop-first-row')
-    expect(html).not.toContain('data-mobile-first-column')
-    expect(html).not.toContain('data-mobile-first-row')
+    expect(html).toContain('lumina-probe-grid')
+    expect(html).toContain('lumina-probe-name')
+    expect(html).toContain('lumina-probe-color')
+    expect(html).not.toContain('data-desktop-corners')
     expect(html).not.toContain('latency-legend')
     expect(html).not.toContain('latency-target-toolbar')
   })
 
-  it('assigns corners only to cells that reach the responsive grid edges', () => {
-    const cases = [
-      { count: 1, desktopFirst: 'top-left bottom-left', desktopLast: 'top-left bottom-left', mobileFirst: 'top-left bottom-left', mobileLast: 'top-left bottom-left' },
-      { count: 2, desktopFirst: 'top-left bottom-left', desktopLast: '', mobileFirst: 'top-left bottom-left', mobileLast: '' },
-      { count: 7, desktopFirst: 'top-left bottom-left', desktopLast: 'top-right bottom-right', mobileFirst: 'top-left', mobileLast: 'bottom-left' },
-      { count: 8, desktopFirst: 'top-left', desktopLast: 'bottom-left', mobileFirst: 'top-left', mobileLast: '' },
-      { count: 17, desktopFirst: 'top-left', desktopLast: '', mobileFirst: 'top-left', mobileLast: '' },
-    ]
-
-    for (const testCase of cases) {
-      const html = renderToStaticMarkup(
-        <LatencyDetail
-          node={node}
-          points={Array.from({ length: testCase.count }, (_, index) => ({
-            ts: `2026-07-02T12:${String(index + 1).padStart(2, '0')}:00Z`,
-            targetId: `target-${index}`,
-            targetName: `Target ${index}`,
-            medianMs: 20 + index,
-            avgMs: 21 + index,
-            lossPercent: 0,
-          }))}
-          range="1d"
-          onBack={vi.fn()}
-          onRangeChange={vi.fn()}
-        />,
-      )
-      const buttons = [...html.matchAll(/<button[^>]+data-desktop-corners="([^"]*)"[^>]+data-mobile-corners="([^"]*)"/g)]
-      expect(buttons).toHaveLength(testCase.count)
-      expect(buttons[0]?.[1]).toBe(testCase.desktopFirst)
-      expect(buttons[testCase.count - 1]?.[1]).toBe(testCase.desktopLast)
-      expect(buttons[0]?.[2]).toBe(testCase.mobileFirst)
-      expect(buttons[testCase.count - 1]?.[2]).toBe(testCase.mobileLast)
-    }
+  it('renders one airy Lumina probe card per target without edge bookkeeping', () => {
+    const count = 8
+    const html = renderToStaticMarkup(
+      <LatencyDetail
+        node={node}
+        points={Array.from({ length: count }, (_, index) => ({
+          ts: `2026-07-02T12:${String(index + 1).padStart(2, '0')}:00Z`,
+          targetId: `target-${index}`,
+          targetName: `Target ${index}`,
+          medianMs: 20 + index,
+          avgMs: 21 + index,
+          lossPercent: index,
+        }))}
+        range="1d"
+        onBack={vi.fn()}
+        onRangeChange={vi.fn()}
+      />,
+    )
+    expect(html.match(/class="lumina-probe-card"/g)).toHaveLength(count)
+    expect(html).toContain('Target 0')
+    expect(html).toContain('>21.0 ms</span>')
+    expect(html).toContain('均值 28.0 ms')
+    expect(html).toContain('中位 27.0 ms')
+    expect(html).toContain('丢包 7.00%')
+    expect(html).toContain('样本 1')
+    expect(html).toContain('min 21.0 ms')
+    expect(html).toContain('max 28.0 ms')
   })
 
   it('labels detail CPU cores as physical when the host does not look virtualized', () => {
@@ -236,6 +226,95 @@ describe('LatencyDetail', () => {
     expect(html).toContain('异常')
     expect(html).not.toContain('detail-status-pill status-offline')
     expect(html).not.toContain('>离线</span>')
+  })
+
+  it('renders the detail page in the wide Lumina layout', () => {
+    const html = renderToStaticMarkup(
+      <LatencyDetail
+        node={node}
+        points={latencyPoints}
+        range="1d"
+        onBack={vi.fn()}
+        onRangeChange={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('kulin-container detail-container detail-lumina')
+  })
+
+  it('shows resource and ping views behind a Lumina-style tab switch defaulting to ping', () => {
+    const html = renderToStaticMarkup(
+      <LatencyDetail
+        node={node}
+        points={latencyPoints}
+        range="1d"
+        onBack={vi.fn()}
+        onRangeChange={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('role="tablist"')
+    expect(html).toContain('data-active="false">系统资源</button>')
+    expect(html).toContain('data-active="true">Ping 历史</button>')
+  })
+
+  it('opens the resource view first when requested', () => {
+    const html = renderToStaticMarkup(
+      <LatencyDetail
+        node={node}
+        points={latencyPoints}
+        range="1d"
+        initialView="resource"
+        onBack={vi.fn()}
+        onRangeChange={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('data-active="true">系统资源</button>')
+    expect(html).toContain('data-active="false">Ping 历史</button>')
+  })
+
+  it('shows latency and loss metric tabs with latency rendered first', () => {
+    const html = renderToStaticMarkup(
+      <LatencyDetail
+        node={node}
+        points={latencyPoints}
+        range="1d"
+        onBack={vi.fn()}
+        onRangeChange={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('aria-label="Ping 图表指标"')
+    expect(html).toContain('data-active="true">延迟</button>')
+    expect(html).toContain('data-active="false">丢包率</button>')
+    expect(html).toContain('aria-label="latency chart"')
+    // 一次只渲染一张图：丢包率视图默认不在 DOM 里，切换才挂载。
+    expect(html).not.toContain('aria-label="丢包率曲线"')
+    expect(html).not.toContain('packet-loss-area')
+  })
+
+  it('renders Lumina-style probe cards with average, median, loss and range', () => {
+    const html = renderToStaticMarkup(
+      <LatencyDetail
+        node={node}
+        points={latencyPoints}
+        range="1d"
+        onBack={vi.fn()}
+        onRangeChange={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('>33.1 ms</span>')
+    expect(html).toContain('均值 33.1 ms')
+    expect(html).toContain('中位 32.5 ms')
+    expect(html).toContain('丢包 0.00%')
+    expect(html).toContain('样本 1')
+    expect(html).toContain('min 33.1 ms')
+    expect(html).toContain('max 33.1 ms')
+    // Lumina 热力色：延迟五阶绿，丢包连续渐变。
+    expect(html).toContain('style="color:#2fc66e"')
+    expect(html).toContain('style="color:hsl(145 62% 48%)"')
   })
 
   it('includes range controls with the latency chart actions', () => {

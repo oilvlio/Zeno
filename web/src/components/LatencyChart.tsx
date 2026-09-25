@@ -20,6 +20,7 @@ interface LatencyChartProps {
   hideLegend?: boolean
   peakCut?: boolean
   activeTargetIds?: string[]
+  hidePacketLossArea?: boolean
 }
 
 const desktopLayout = { width: 960, height: 360, lineStrokeWidth: 1, pad: { left: 52, right: 24, top: 24, bottom: 44 } }
@@ -42,6 +43,7 @@ export function LatencyChart({
   hideLegend = false,
   peakCut = false,
   activeTargetIds = [],
+  hidePacketLossArea = false,
 }: LatencyChartProps) {
   const { width, height, lineStrokeWidth, pad } = useLatencyChartLayout()
   const reactClipId = useId()
@@ -190,7 +192,7 @@ export function LatencyChart({
           )
         })}
 
-        {lossRows.length > 0 && baseView.packetLossKey && (
+        {lossRows.length > 0 && baseView.packetLossKey && !hidePacketLossArea && (
           <path
             className="packet-loss-area"
             d={packetLossAreaPath(lossRows, baseView.packetLossKey, x, yLoss)}
@@ -263,7 +265,7 @@ export function LatencyChart({
             const seriesIndex = series.findIndex((seriesItem) => seriesItem.targetId === item.targetId)
             return <span key={item.targetId}><i style={{ background: latencySeriesColor(seriesIndex >= 0 ? seriesIndex : index) }} />{item.targetName}</span>
           })}
-          {baseView.showPacketLossArea && baseView.packetLossKey && packetLossSeries && (
+          {baseView.showPacketLossArea && baseView.packetLossKey && !hidePacketLossArea && packetLossSeries && (
             <span><i style={{ background: packetLossColor }} />{packetLossSeries.targetName} 丢包 {formatPercent(avgPacketLoss(lossRows, baseView.packetLossKey))}</span>
           )}
         </div>

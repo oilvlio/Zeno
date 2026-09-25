@@ -19,6 +19,9 @@ describe('summarizeLatencyTargets', () => {
       targetName: 'Google',
       sampleCount: 2,
       avgMs: 3,
+      medianMs: 3,
+      minMs: 1.5,
+      maxMs: 3,
       lossPercent: 1,
     })
     expect(targets[1]).toMatchObject({
@@ -26,6 +29,9 @@ describe('summarizeLatencyTargets', () => {
       targetName: 'DC1',
       sampleCount: 2,
       avgMs: 180,
+      medianMs: 180,
+      minMs: 180,
+      maxMs: 180,
       lossPercent: 50,
     })
   })
@@ -42,6 +48,9 @@ describe('summarizeLatencyTargets', () => {
         targetName: 'DC2',
         sampleCount: 2,
         avgMs: null,
+        medianMs: null,
+        minMs: null,
+        maxMs: null,
         lossPercent: 100,
       },
     ])
@@ -53,6 +62,6 @@ describe('summarizeLatencyTargets', () => {
       { ts: '2026-07-02T12:01:00Z', targetId: 'dc2', targetName: 'DC2', medianMs: 190, avgMs: 190, lossPercent: 10 },
     ])
 
-    expect(targets[0]).toMatchObject({ sampleCount: 1, avgMs: 190, lossPercent: 10 })
+    expect(targets[0]).toMatchObject({ sampleCount: 1, avgMs: 190, medianMs: 190, minMs: 190, maxMs: 190, lossPercent: 10 })
   })
 })
