@@ -673,7 +673,7 @@ func TestSQLiteBackedLatencyUsesKulinMinuteGridAndAverageDelay(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	now := time.Now().UTC().Truncate(time.Minute)
+	now := time.Now().UTC().Truncate(time.Minute).Add(-time.Minute)
 	if _, err := store.db.ExecContext(ctx, `
 		INSERT INTO nodes (id, display_name, token_hash, status, country_code, created_at, updated_at, last_seen_at)
 		VALUES ('example-node-a', 'Example Node A', 'hash-for-test', 'online', 'HK', ?, ?, ?);
