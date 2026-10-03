@@ -16,8 +16,8 @@ func TestLatencyWindowVariants(t *testing.T) {
 			name:    "series",
 			resolve: resolveLatencyWindow,
 			want: map[string]latencyWindow{
-				"":    {Name: "1h", Samples: 20, Step: 3 * time.Minute},
-				"1h":  {Name: "1h", Samples: 20, Step: 3 * time.Minute},
+				"":    {Name: "1h", Samples: 60, Step: time.Minute},
+				"1h":  {Name: "1h", Samples: 60, Step: time.Minute},
 				"1d":  {Name: "1d", Samples: 48, Step: 30 * time.Minute},
 				"7d":  {Name: "7d", Samples: 56, Step: 3 * time.Hour},
 				"30d": {Name: "30d", Samples: 60, Step: 12 * time.Hour},
@@ -27,8 +27,8 @@ func TestLatencyWindowVariants(t *testing.T) {
 			name:    "grid",
 			resolve: resolveLatencyGridWindow,
 			want: map[string]latencyWindow{
-				"":    {Name: "1h", Samples: 20, Step: 3 * time.Minute},
-				"1h":  {Name: "1h", Samples: 20, Step: 3 * time.Minute},
+				"":    {Name: "1h", Samples: 60, Step: time.Minute},
+				"1h":  {Name: "1h", Samples: 60, Step: time.Minute},
 				"1d":  {Name: "1d", Samples: 720, Step: 2 * time.Minute},
 				"7d":  {Name: "7d", Samples: 720, Step: 14 * time.Minute},
 				"30d": {Name: "30d", Samples: 720, Step: time.Hour},

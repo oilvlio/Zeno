@@ -665,7 +665,7 @@ func TestAgentStateSampleLookupUsesPartialUniqueIndex(t *testing.T) {
 	}
 }
 
-func TestSQLiteBackedLatencyUsesKulinMinuteGridAndAverageDelay(t *testing.T) {
+func TestSQLiteBackedLatencyAdaptsCadenceAndAveragesGroupedRounds(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "zeno.db"))
 	if err != nil {
 		t.Fatalf("open sqlite store: %v", err)
@@ -682,7 +682,7 @@ func TestSQLiteBackedLatencyUsesKulinMinuteGridAndAverageDelay(t *testing.T) {
 	}
 	if _, err := store.db.ExecContext(ctx, `
 		INSERT INTO probe_targets (id, name, type, address, count, timeout_ms, interval_sec, created_at, updated_at)
-		VALUES ('google', 'Google', 'ping', '8.8.8.8', 3, 1000, 60, ?, ?);
+		VALUES ('google', 'Google', 'ping', '8.8.8.8', 3, 1000, 3600, ?, ?);
 	`, now.Unix(), now.Unix()); err != nil {
 		t.Fatalf("insert target: %v", err)
 	}
@@ -709,7 +709,11 @@ func TestSQLiteBackedLatencyUsesKulinMinuteGridAndAverageDelay(t *testing.T) {
 		}
 	}
 
-	response, err := store.NodeLatency(ctx, "example-node-a", latencyWindow{Name: "1d", Samples: 48, Step: 30 * time.Minute})
+	window, ok := resolveLatencyWindow("1h")
+	if !ok {
+		t.Fatal("1h latency window not found")
+	}
+	response, err := store.NodeLatency(ctx, "example-node-a", window)
 	if err != nil {
 		t.Fatalf("node latency: %v", err)
 	}
@@ -728,7 +732,7 @@ func TestSQLiteBackedLatencyUsesKulinMinuteGridAndAverageDelay(t *testing.T) {
 		}
 	}
 	if bucketPoint == nil {
-		t.Fatalf("missing minute bucket %s", wantTS)
+		t.Fatalf("missing grouped latency point %s", wantTS)
 	}
 	if bucketPoint.AvgMS == nil || *bucketPoint.AvgMS != 21 {
 		t.Fatalf("avg_ms = %v, want average delay 21", bucketPoint.AvgMS)

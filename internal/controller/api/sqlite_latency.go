@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"math"
 	"time"
 
 	"github.com/shui1iao/zeno/internal/controller/history"
@@ -468,7 +469,8 @@ func latencyAdaptiveMeasurementsQuery(dimension latencyGridDimension) string {
 			FROM latency_history_rollups WHERE ` + dimension.filterColumn + ` = ? AND bucket_start >= ? AND bucket_start < ? AND bucket_start < ?` + dimension.sourceFilter + `
 		)
 		SELECT measurements.ts, measurements.` + dimension.seriesColumn + `,
-		       median_sum, median_count, avg_sum, avg_count, loss_sum, loss_count, is_rollup
+		       median_sum, median_count, avg_sum, avg_count, loss_sum, loss_count, is_rollup,
+		       SUM(measurements.loss_count) OVER (PARTITION BY measurements.` + dimension.seriesColumn + `) AS series_round_count
 		FROM measurements` + dimension.extraJoins + `
 		JOIN probe_targets pt ON pt.id = measurements.target_id
 		LEFT JOIN node_probe_targets npt ON npt.node_id = measurements.node_id AND npt.target_id = measurements.target_id
@@ -504,11 +506,7 @@ func latencyAdaptivePointValuesFor(ctx context.Context, s *sqliteLatencyQueries,
 		if budget < 1 {
 			budget = 1
 		}
-		factor := (expected + budget - 1) / budget
-		if factor < 1 {
-			factor = 1
-		}
-		byID[item.ID] = &latencyAdaptiveSeries{target: item, interval: interval, groupRounds: factor}
+		byID[item.ID] = &latencyAdaptiveSeries{target: item, interval: interval, pointBudget: budget, groupRounds: 1}
 	}
 
 	now := time.Now().UTC()
@@ -534,12 +532,17 @@ func latencyAdaptivePointValuesFor(ctx context.Context, s *sqliteLatencyQueries,
 		var seriesID string
 		var medianSum, medianCount, avgSum, avgCount, lossSum, lossCount float64
 		var isRollup int
-		if err := rows.Scan(&ts, &seriesID, &medianSum, &medianCount, &avgSum, &avgCount, &lossSum, &lossCount, &isRollup); err != nil {
+		var seriesRoundCount float64
+		if err := rows.Scan(&ts, &seriesID, &medianSum, &medianCount, &avgSum, &avgCount, &lossSum, &lossCount, &isRollup, &seriesRoundCount); err != nil {
 			return nil, err
 		}
 		item := byID[seriesID]
 		if item == nil {
 			continue
+		}
+		item.groupRounds = int64(math.Ceil(seriesRoundCount / float64(item.pointBudget)))
+		if item.groupRounds < 1 {
+			item.groupRounds = 1
 		}
 		resolution := item.interval
 		if isRollup != 0 && resolution < history.LatencyRollupStep {
@@ -621,6 +624,7 @@ const maxLatencyChartPoints int64 = 720
 type latencyAdaptiveSeries struct {
 	target        latencyGridTarget
 	interval      time.Duration
+	pointBudget   int64
 	groupRounds   int64
 	currentRounds int64
 	previousTS    int64

@@ -12,8 +12,11 @@ func extendedHistoryWindow(window latencyWindow) bool {
 	return window.Name == "7d" || window.Name == "30d"
 }
 
+// Samples and Step retain fixed-grid helper contracts. Public latency queries
+// use the range name for duration and calculate each series' point budget from
+// its configured probe interval and the number of measurements in that range.
 var latencyWindowVariants = map[string][2]latencyWindow{
-	"1h":  {{Name: "1h", Samples: 20, Step: 3 * time.Minute}, {Name: "1h", Samples: 20, Step: 3 * time.Minute}},
+	"1h":  {{Name: "1h", Samples: 60, Step: time.Minute}, {Name: "1h", Samples: 60, Step: time.Minute}},
 	"1d":  {{Name: "1d", Samples: 48, Step: 30 * time.Minute}, {Name: "1d", Samples: 720, Step: 2 * time.Minute}},
 	"7d":  {{Name: "7d", Samples: 56, Step: 3 * time.Hour}, {Name: "7d", Samples: 720, Step: 14 * time.Minute}},
 	"30d": {{Name: "30d", Samples: 60, Step: 12 * time.Hour}, {Name: "30d", Samples: 720, Step: time.Hour}},

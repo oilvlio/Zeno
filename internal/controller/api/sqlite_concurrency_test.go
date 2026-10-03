@@ -37,7 +37,11 @@ func TestOpenSQLiteStoreAllowsWALReadsWhileWriterTransactionIsOpen(t *testing.T)
 
 	readCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer cancel()
-	if _, err := store.NodeLatency(readCtx, "example-node-a", latencyWindow{Name: "1h", Samples: 20, Step: 3 * time.Minute}); err != nil {
+	window, ok := resolveLatencyWindow("1h")
+	if !ok {
+		t.Fatal("1h latency window not found")
+	}
+	if _, err := store.NodeLatency(readCtx, "example-node-a", window); err != nil {
 		t.Fatalf("history read blocked behind writer transaction: %v", err)
 	}
 

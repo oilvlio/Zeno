@@ -20,8 +20,8 @@ func TestLiveDetailInitialPayloadMatchesCompactContractBytes(t *testing.T) {
 		handle     func(*handler, http.ResponseWriter, *http.Request)
 	}{
 		{name: "node-state", path: "/api/public/v1/nodes/example-node-a/state/ws?range=1d", wantBytes: 468859, wantSHA256: "e9b01e10276ba317d02db5f4f230fc66fe460dfa3995952c6e73ca695eb9998b", handle: (*handler).handlePublicNodeResource},
-		{name: "node-latency", path: "/api/public/v1/nodes/example-node-a/latency/ws?range=1h", wantBytes: 5621, wantSHA256: "6bf6802b92ea41d5e13e28207a5d52efc34461c8ee1f7d65f17629624078c63c", handle: (*handler).handlePublicNodeResource},
-		{name: "service-latency", path: "/api/public/v1/services/google/latency/ws?range=1h", wantBytes: 4549, wantSHA256: "cc109d49dd90367b15d1b46f87ec1acc07892e984ab2670209a43037efdab0d2", handle: (*handler).handlePublicServiceResource},
+		{name: "node-latency", path: "/api/public/v1/nodes/example-node-a/latency/ws?range=1h", wantBytes: 14249, wantSHA256: "fb65dc50e1c640c559d11f6f5e2f9d47c5768fc195138b52f40c1d51262ec452", handle: (*handler).handlePublicNodeResource},
+		{name: "service-latency", path: "/api/public/v1/services/google/latency/ws?range=1h", wantBytes: 10997, wantSHA256: "36a986fe4203e45eee019c7cec173208195e0d002684f1e3fbfe594ae4d6dc3c", handle: (*handler).handlePublicServiceResource},
 	}
 
 	for _, test := range tests {
