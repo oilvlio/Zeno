@@ -1158,12 +1158,8 @@ services:
     volumes:
       - ./data:/data
       - ./secrets:/run/secrets:ro
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18980/ready >/dev/null || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 5m
+    # No in-container healthcheck: the scratch image ships no shell or curl.
+    # Readiness is polled from the host by wait_ready below.
     networks:
       zeno_proxy:
         ipv4_address: ${ZENO_CONTAINER_IP:-172.30.250.2}

@@ -325,6 +325,21 @@
 .admin-list-row > .admin-ip-stack { overflow: visible; white-space: normal; }
 .admin-ip-stack.is-single { justify-content: center; }
 .admin-ip-stack span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-ip-copy {
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.admin-ip-copy span { display: inline-block; max-width: 100%; }
+.admin-ip-copy:hover { color: var(--blue); text-decoration: underline; }
+.admin-ip-copy:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
+.admin-ip-copy.is-copied { color: var(--green); }
 .admin-row-action {
   height: 34px;
   justify-self: end;

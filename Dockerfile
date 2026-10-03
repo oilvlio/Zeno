@@ -23,10 +23,30 @@ ARG VERSION=dev
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
-RUN if [ "${TARGETARCH}/${TARGETVARIANT}" = "arm/v6" ]; then export GOARM=6; fi \
+# ca-certificates and tzdata are data files only: the Go binary reads the CA
+# bundle for outbound TLS (exchange-rate refresh, notification webhooks) and
+# the zone files for TZ-aware billing windows. None of this leaves the build
+# stage; the runtime image stays dependency-free. /out/data gives the final
+# stage a pre-owned data directory since scratch has no mkdir.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates tzdata \
+  && rm -rf /var/lib/apt/lists/* \
+  && mkdir -p /out/data \
+  && if [ "${TARGETARCH}/${TARGETVARIANT}" = "arm/v6" ]; then export GOARM=6; fi \
   && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags "-s -w" -o /out/zeno-controller ./cmd/controller
 
-FROM debian:13.6-slim@sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd
+# Runtime is FROM scratch: the controller is a static Go binary
+# (CGO_ENABLED=0, pure-Go SQLite via modernc.org/sqlite) and the dashboard is
+# static files, so no distribution userland ships. What lands here is the
+# binary, the web assets, two data files (CA bundle, zoneinfo), and docs.
+# Deliberately absent: shell, curl, ping.
+# - Readiness is polled from the host (install.sh wait_ready hits /ready);
+#   there is no in-container curl healthcheck.
+# - `ping` only serves the opt-in -collect-local preview collector, which is
+#   off by default. Enabling it needs a `ping` binary in PATH (extend this
+#   image or bind-mount iputils); without it ping probes fail closed as
+#   connect errors and agent-reported data is unaffected.
+FROM scratch
 ARG VERSION=dev
 ARG REVISION=unknown
 ARG ZENO_UID=10001
@@ -38,21 +58,15 @@ LABEL org.opencontainers.image.title="Zeno" \
   org.opencontainers.image.licenses="MIT" \
   org.opencontainers.image.version="${VERSION}" \
   org.opencontainers.image.revision="${REVISION}"
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends --only-upgrade libcap2 \
-  && apt-get install -y --no-install-recommends ca-certificates curl iputils-ping tzdata \
-  && rm -rf /var/lib/apt/lists/* \
-  && groupadd --system --gid "${ZENO_GID}" zeno \
-  && useradd --system --uid "${ZENO_UID}" --gid zeno --home-dir /opt/zeno --shell /usr/sbin/nologin zeno \
-  && mkdir -p /opt/zeno /data \
-  && chown -R zeno:zeno /opt/zeno /data
+COPY --from=go-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=go-builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=go-builder --chown=${ZENO_UID}:${ZENO_GID} /out/zeno-controller /usr/local/bin/zeno-controller
+COPY --from=web-builder --chown=${ZENO_UID}:${ZENO_GID} /src/web/dist /opt/zeno/web
+COPY --chown=${ZENO_UID}:${ZENO_GID} LICENSE THIRD_PARTY_NOTICES.txt /usr/share/doc/zeno/
+COPY --from=go-builder --chown=${ZENO_UID}:${ZENO_GID} /out/data /data
+USER ${ZENO_UID}:${ZENO_GID}
 WORKDIR /opt/zeno
-COPY --from=go-builder /out/zeno-controller /usr/local/bin/zeno-controller
-COPY --from=web-builder /src/web/dist /opt/zeno/web
-COPY LICENSE THIRD_PARTY_NOTICES.txt /usr/share/doc/zeno/
-RUN chown -R zeno:zeno /opt/zeno/web /usr/local/bin/zeno-controller
 ENV TZ=Asia/Shanghai
 EXPOSE 18980
-USER zeno:zeno
 ENTRYPOINT ["/usr/local/bin/zeno-controller"]
 CMD ["-addr", "0.0.0.0:18980", "-web-dir", "/opt/zeno/web", "-db", "/data/zeno.db", "-admin-token-file", "/run/secrets/zeno_admin_token", "-agent-token-file", "/run/secrets/zeno_agent_token", "-notification-authority-key-file", "/run/secrets/zeno_notification_authority"]

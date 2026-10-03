@@ -4,6 +4,7 @@ import { sortAdminNodes, sortAdminProbeTargets } from '../../lib/adminCollection
 import { runMaybePromise } from '../../lib/maybePromise'
 import type { AdminNode, AdminNodeInstallCommand, AdminProbeTarget } from '../../types'
 import { ServerFlag } from '../ServerFlag'
+import { AdminIpCopyButton } from './AdminIpCopy'
 import { AdminDateField, AdminExpandedCheckList, AdminSegmentedField } from './AdminFields'
 import { AdminInstallCommand } from './AdminInstallCommand'
 import { AdminInlineSortList } from './AdminInlineSortList'
@@ -76,8 +77,8 @@ function AdminNodeList({ nodes, onEdit, onDelete, onReorder }: { nodes: AdminNod
               <strong className="admin-node-title"><ServerFlag countryCode={node.countryCode} className="admin-list-flag" /><span>{node.displayName}</span></strong>
             </div>
             <span data-label="公网 IP" className={`admin-ip-stack${node.publicIPv6 ? '' : ' is-single'}`}>
-              {node.publicIPv4 && <span>{node.publicIPv4}</span>}
-              {node.publicIPv6 && <span>{node.publicIPv6}</span>}
+              {node.publicIPv4 && <AdminIpCopyButton ip={node.publicIPv4} />}
+              {node.publicIPv6 && <AdminIpCopyButton ip={node.publicIPv6} />}
               {!node.publicIPv4 && !node.publicIPv6 && <span>—</span>}
             </span>
             <span data-label="Agent 版本">{node.agentVersion || '—'}</span>

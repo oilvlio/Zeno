@@ -220,6 +220,8 @@ Controller 使用 Docker Compose 安装器部署：
 
 `install.sh` 负责镜像 provenance 校验、停服前预检、一致性备份、SQLite 检查、配置替换、readiness 和失败恢复。Agent 二进制和服务由独立 Zeno-Agent 项目发布。`scripts/import-guko-servers.py` 可把 GUKO `server-manager/servers.json` 导入 Zeno Admin nodes，只同步展示元数据，不删除节点、不轮换 Agent token。
 
+Controller 运行时镜像是 `FROM scratch`：静态 Go 二进制 + 静态前端 + CA 根证书 + 时区数据，没有 shell/curl/ping。Readiness 由宿主机轮询 `/ready`（`install.sh wait_ready`），不依赖容器内 healthcheck。`-collect-local` 预览采集默认关闭；开启它需要在 PATH 里自备 `ping`（扩展镜像或 bind-mount iputils），否则 ping 探测会 fail closed，不影响 Agent 上报的数据。
+
 安全更新顺序：
 
 1. 本地测试和镜像构建门禁。
