@@ -14,9 +14,9 @@ func extendedHistoryWindow(window latencyWindow) bool {
 
 var latencyWindowVariants = map[string][2]latencyWindow{
 	"1h":  {{Name: "1h", Samples: 20, Step: 3 * time.Minute}, {Name: "1h", Samples: 20, Step: 3 * time.Minute}},
-	"1d":  {{Name: "1d", Samples: 48, Step: 30 * time.Minute}, {Name: "1d", Samples: 1440, Step: time.Minute}},
-	"7d":  {{Name: "7d", Samples: 56, Step: 3 * time.Hour}, {Name: "7d", Samples: 1440, Step: 7 * time.Minute}},
-	"30d": {{Name: "30d", Samples: 60, Step: 12 * time.Hour}, {Name: "30d", Samples: 1440, Step: 30 * time.Minute}},
+	"1d":  {{Name: "1d", Samples: 48, Step: 30 * time.Minute}, {Name: "1d", Samples: 720, Step: 2 * time.Minute}},
+	"7d":  {{Name: "7d", Samples: 56, Step: 3 * time.Hour}, {Name: "7d", Samples: 720, Step: 14 * time.Minute}},
+	"30d": {{Name: "30d", Samples: 60, Step: 12 * time.Hour}, {Name: "30d", Samples: 720, Step: time.Hour}},
 }
 
 func resolveLatencyWindowVariant(rangeName string, variant int) (latencyWindow, bool) {

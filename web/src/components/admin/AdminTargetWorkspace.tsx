@@ -176,7 +176,7 @@ function AdminTargetCreateModal({ nodes, onCreate, onClose }: { nodes: AdminNode
             </label>
             <label>
               <span>间隔 s</span>
-              <input name="new-target-interval-sec" type="number" min="1" defaultValue="30" />
+              <input name="new-target-interval-sec" type="number" min="5" max="3600" defaultValue="30" />
             </label>
           </div>
         </AdminFormSection>
@@ -259,7 +259,7 @@ function AdminTargetEditModal({ target, nodes, onUpdate, onClose }: { target: Ad
             </label>
             <label>
               <span>间隔 s</span>
-              <input name="target-interval-sec" type="number" min="1" defaultValue={target.intervalSec} />
+              <input name="target-interval-sec" type="number" min="5" max="3600" defaultValue={target.intervalSec} />
             </label>
           </div>
         </AdminFormSection>

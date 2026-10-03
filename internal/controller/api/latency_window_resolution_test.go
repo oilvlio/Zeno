@@ -29,9 +29,9 @@ func TestLatencyWindowVariants(t *testing.T) {
 			want: map[string]latencyWindow{
 				"":    {Name: "1h", Samples: 20, Step: 3 * time.Minute},
 				"1h":  {Name: "1h", Samples: 20, Step: 3 * time.Minute},
-				"1d":  {Name: "1d", Samples: 1440, Step: time.Minute},
-				"7d":  {Name: "7d", Samples: 1440, Step: 7 * time.Minute},
-				"30d": {Name: "30d", Samples: 1440, Step: 30 * time.Minute},
+				"1d":  {Name: "1d", Samples: 720, Step: 2 * time.Minute},
+				"7d":  {Name: "7d", Samples: 720, Step: 14 * time.Minute},
+				"30d": {Name: "30d", Samples: 720, Step: time.Hour},
 			},
 		},
 	}

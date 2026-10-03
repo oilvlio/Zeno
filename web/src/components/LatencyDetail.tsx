@@ -184,6 +184,7 @@ export function LatencyDetail({
 
             <LatencyChart
               points={points}
+              range={range}
               title={`${node.displayName} 网络延迟`}
               eyebrow={`${rangeLabel} · ${targetSummaries.length} 个监控服务${peakCut ? ' · 平滑' : ''}`}
               compactHeader

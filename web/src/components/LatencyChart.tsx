@@ -4,6 +4,7 @@ import {
   applyKulinPeakCut,
   buildKulinChartRows,
   buildKulinTargetSeries,
+  kulinGapBeforeKey,
   selectKulinChartView,
   type KulinChartRow,
   type KulinTargetSeries,
@@ -13,6 +14,7 @@ import { OverlaySurface } from './OverlaySurface'
 
 interface LatencyChartProps {
   points: LatencyPoint[]
+  range?: string
   eyebrow?: string
   title?: string
   compactHeader?: boolean
@@ -35,6 +37,7 @@ export function latencySeriesColor(index: number): string {
 
 export function LatencyChart({
   points,
+  range,
   eyebrow = 'Latency',
   title = '多目标延迟图',
   compactHeader = false,
@@ -52,9 +55,12 @@ export function LatencyChart({
   const baseView = useMemo(() => selectKulinChartView(series, allRows, activeTargetIds), [series, allRows, activeTargetKey])
   const rows = useMemo(() => (peakCut ? applyKulinPeakCut(baseView.rows, baseView.lineKeys) : baseView.rows), [baseView, peakCut])
   const timestamps = useMemo(() => rows.map((row) => row.created_at), [rows])
-  const timeStart = timestamps[0] ?? 0
-  const timeEnd = timestamps.at(-1) ?? timeStart
-  const timeSpan = Math.max(0, timeEnd - timeStart)
+  const dataStart = timestamps[0] ?? 0
+  const dataEnd = timestamps.at(-1) ?? dataStart
+  const requestedSpan = latencyRangeDurationMs(range)
+  const timeEnd = requestedSpan > 0 ? Math.max(dataEnd, Date.now()) : dataEnd
+  const timeStart = requestedSpan > 0 ? timeEnd - requestedSpan : dataStart
+  const timeSpan = requestedSpan > 0 ? requestedSpan : Math.max(0, dataEnd - dataStart)
   const maxAxisTicks = width <= 480 ? 4 : 14
   const axisLabelCharWidth = width <= 480 ? 6 : 7.2
   const candidateAxisTicks = useMemo(
@@ -324,17 +330,25 @@ function linePath(rows: KulinChartRow[], key: string, x: (createdAt: number) => 
   let hasOpenSegment = false
   return rows
     .map((row) => {
+      if (row[kulinGapBeforeKey(key)] === true) hasOpenSegment = false
       const value = rowNumber(row, key)
-      if (value === null) {
-        hasOpenSegment = false
-        return ''
-      }
+      if (value === null) return ''
       const command = hasOpenSegment ? 'L' : 'M'
       hasOpenSegment = true
       return `${command} ${x(row.created_at).toFixed(2)} ${y(value).toFixed(2)}`
     })
     .filter(Boolean)
     .join(' ')
+}
+
+function latencyRangeDurationMs(range?: string): number {
+  switch (range) {
+    case '1h': return 60 * 60 * 1000
+    case '1d': return 24 * 60 * 60 * 1000
+    case '7d': return 7 * 24 * 60 * 60 * 1000
+    case '30d': return 30 * 24 * 60 * 60 * 1000
+    default: return 0
+  }
 }
 
 function packetLossAreaPath(rows: KulinChartRow[], packetLossKey: string, x: (createdAt: number) => number, yLoss: (value: number) => number): string {

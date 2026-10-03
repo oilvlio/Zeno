@@ -13,65 +13,24 @@ type sqliteLatencyQueries struct {
 }
 
 func (s *sqliteLatencyQueries) latencyPoints(ctx context.Context, nodeID string, window latencyWindow) ([]LatencyPoint, error) {
-	if useLatencyGrid(window) {
-		return s.latencyGridPoints(ctx, nodeID, window)
-	}
-	since := time.Now().UTC().Add(-time.Duration(window.Samples) * window.Step).Unix()
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT pr.ts, pr.target_id, pt.name, pr.median_ms, pr.avg_ms, pr.loss_percent
-		FROM probe_rounds pr
-		JOIN probe_targets pt ON pt.id = pr.target_id
-		LEFT JOIN node_probe_targets npt ON npt.node_id = pr.node_id AND npt.target_id = pr.target_id
-		WHERE pr.node_id = ?
-		  AND pr.ts >= ?
-		  AND COALESCE(npt.enabled, 0) = 1
-		ORDER BY pr.ts ASC, pt.display_order ASC, pt.name ASC, pr.id ASC
-	`, nodeID, since)
+	values, err := latencyAdaptivePointValuesFor(ctx, s, nodeID, window, latencyGridByNode)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	return scanLatencyRows(rows, []LatencyPoint(nil), func(ts, targetID, targetName string, median, avg *float64, loss float64) LatencyPoint {
-		return LatencyPoint{TS: ts, TargetID: targetID, TargetName: targetName, MedianMS: median, AvgMS: avg, LossPercent: loss}
-	})
-}
-
-func scanLatencyRows[T any](rows *sql.Rows, points []T, point func(ts, dimensionID, dimensionName string, median, avg *float64, loss float64) T) ([]T, error) {
-	for rows.Next() {
-		var ts int64
-		var dimensionID, dimensionName string
-		var median, avg sql.NullFloat64
-		var loss float64
-		if err := rows.Scan(&ts, &dimensionID, &dimensionName, &median, &avg, &loss); err != nil {
-			return nil, err
-		}
-		points = append(points, point(time.Unix(ts, 0).UTC().Format(time.RFC3339), dimensionID, dimensionName, floatPtr(median), floatPtr(avg), loss))
+	if len(values) == 0 {
+		return nil, nil
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	points := make([]LatencyPoint, 0, len(values))
+	for _, value := range values {
+		points = append(points, latencyPointFromGridValue(value))
 	}
 	return points, nil
 }
 
-func useLatencyGrid(window latencyWindow) bool {
-	gridWindow, ok := resolveLatencyGridWindow(window.Name)
-	if !ok {
-		return false
-	}
-	// Some unit tests pass a custom 1h latencyWindow directly to the store to
-	// assert raw round storage. Public 1h requests use resolveLatencyWindow's
-	// canonical 20 × 3m realtime grid and should stay bucketed for fast initial
-	// chart paint.
-	if window.Name == "1h" && (window.Samples != gridWindow.Samples || window.Step != gridWindow.Step) {
-		return false
-	}
-	return true
-}
-
 type latencyGridTarget struct {
-	ID   string
-	Name string
+	ID          string
+	Name        string
+	IntervalSec int
 }
 
 type latencyGridPointValue struct {
@@ -156,7 +115,8 @@ var latencyGridByNode = latencyGridDimension{
 	sourceFilter: " AND target_id IN (SELECT target_id FROM node_probe_targets WHERE node_id = ? AND enabled = 1)",
 	seriesQuery: `
 		SELECT pt.id AS series_id, pt.name AS series_name,
-		       ROW_NUMBER() OVER (ORDER BY pt.display_order ASC, pt.name ASC, pt.id ASC) AS series_order
+		       ROW_NUMBER() OVER (ORDER BY pt.display_order ASC, pt.name ASC, pt.id ASC) AS series_order,
+		       pt.interval_sec
 		FROM probe_targets pt
 		LEFT JOIN node_probe_targets npt ON npt.target_id = pt.id AND npt.node_id = ?
 		WHERE COALESCE(npt.enabled, 0) = 1
@@ -175,7 +135,8 @@ var latencyGridByTarget = latencyGridDimension{
 		  AND n.disabled = 0`,
 	seriesQuery: `
 		SELECT n.id AS series_id, n.display_name AS series_name,
-		       ROW_NUMBER() OVER (ORDER BY n.display_order ASC, n.display_name ASC, n.id ASC) AS series_order
+	       ROW_NUMBER() OVER (ORDER BY n.display_order ASC, n.display_name ASC, n.id ASC) AS series_order,
+	       (SELECT interval_sec FROM probe_targets WHERE id = npt.target_id) AS interval_sec
 		FROM nodes n
 		LEFT JOIN node_probe_targets npt ON npt.node_id = n.id AND npt.target_id = ?
 		WHERE n.disabled = 0 AND COALESCE(npt.enabled, 0) = 1
@@ -413,12 +374,267 @@ func (s *sqliteLatencyQueries) latencyGridSeries(ctx context.Context, query, id 
 	for rows.Next() {
 		var item latencyGridTarget
 		var order int
-		if err := rows.Scan(&item.ID, &item.Name, &order); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &order, &item.IntervalSec); err != nil {
 			return nil, err
 		}
 		series = append(series, item)
 	}
 	return series, rows.Err()
+}
+
+type latencyAdaptiveBucket struct {
+	timestampSum float64
+	roundCount   int64
+	medianSum    float64
+	medianCount  float64
+	avgSum       float64
+	avgCount     float64
+	lossSum      float64
+	lossCount    float64
+}
+
+func (bucket *latencyAdaptiveBucket) add(ts int64, medianSum, medianCount, avgSum, avgCount, lossSum, lossCount float64) {
+	weight := lossCount
+	if weight <= 0 {
+		weight = 1
+	}
+	bucket.timestampSum += float64(ts) * weight
+	bucket.roundCount += int64(weight)
+	bucket.medianSum += medianSum
+	bucket.medianCount += medianCount
+	bucket.avgSum += avgSum
+	bucket.avgCount += avgCount
+	bucket.lossSum += lossSum
+	bucket.lossCount += lossCount
+}
+
+func (bucket latencyAdaptiveBucket) point(series latencyGridTarget) latencyGridPointValue {
+	ts := int64(0)
+	if bucket.roundCount > 0 {
+		ts = int64(bucket.timestampSum / float64(bucket.roundCount))
+	}
+	median := nullableAverage(bucket.medianSum, bucket.medianCount)
+	avg := nullableAverage(bucket.avgSum, bucket.avgCount)
+	if avg == nil {
+		avg = median
+	}
+	loss := float64(0)
+	if bucket.lossCount > 0 {
+		loss = bucket.lossSum / bucket.lossCount
+	}
+	return latencyGridPointValue{
+		TS:          time.Unix(ts, 0).UTC().Format(time.RFC3339),
+		Series:      series,
+		MedianMS:    median,
+		AvgMS:       avg,
+		LossPercent: loss,
+	}
+}
+
+func nullableAverage(sum, count float64) *float64 {
+	if count <= 0 {
+		return nil
+	}
+	value := sum / count
+	return &value
+}
+
+func latencyRangeDuration(window latencyWindow) time.Duration {
+	switch window.Name {
+	case "1h":
+		return time.Hour
+	case "1d":
+		return 24 * time.Hour
+	case "7d":
+		return 7 * 24 * time.Hour
+	case "30d":
+		return 30 * 24 * time.Hour
+	default:
+		return time.Duration(window.Samples) * window.Step
+	}
+}
+
+func latencyAdaptiveMeasurementsQuery(dimension latencyGridDimension) string {
+	return `
+		WITH measurements AS (
+			SELECT ts, node_id, target_id,
+			       COALESCE(median_ms, 0) AS median_sum, CASE WHEN median_ms IS NULL THEN 0 ELSE 1 END AS median_count,
+			       COALESCE(avg_ms, 0) AS avg_sum, CASE WHEN avg_ms IS NULL THEN 0 ELSE 1 END AS avg_count,
+			       loss_percent AS loss_sum, 1 AS loss_count, 0 AS is_rollup
+			FROM probe_rounds WHERE ` + dimension.filterColumn + ` = ? AND ts >= ? AND ts < ?` + dimension.sourceFilter + `
+			UNION ALL
+			SELECT bucket_start AS ts, node_id, target_id,
+			       median_sum, median_count, avg_sum, avg_count, loss_sum, loss_count, 1 AS is_rollup
+			FROM latency_history_rollups WHERE ` + dimension.filterColumn + ` = ? AND bucket_start >= ? AND bucket_start < ? AND bucket_start < ?` + dimension.sourceFilter + `
+		)
+		SELECT measurements.ts, measurements.` + dimension.seriesColumn + `,
+		       median_sum, median_count, avg_sum, avg_count, loss_sum, loss_count, is_rollup
+		FROM measurements` + dimension.extraJoins + `
+		JOIN probe_targets pt ON pt.id = measurements.target_id
+		LEFT JOIN node_probe_targets npt ON npt.node_id = measurements.node_id AND npt.target_id = measurements.target_id
+		WHERE measurements.` + dimension.filterColumn + ` = ?` + dimension.extraFilter + `
+		  AND COALESCE(npt.enabled, 0) = 1
+		ORDER BY measurements.` + dimension.seriesColumn + ` ASC, measurements.ts ASC
+	`
+}
+
+func latencyAdaptivePointValuesFor(ctx context.Context, s *sqliteLatencyQueries, id string, window latencyWindow, dimension latencyGridDimension) ([]latencyGridPointValue, error) {
+	duration := latencyRangeDuration(window)
+	if duration <= 0 {
+		return []latencyGridPointValue{}, nil
+	}
+	series, err := s.latencyGridSeries(ctx, dimension.seriesQuery, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(series) == 0 {
+		return nil, nil
+	}
+	byID := make(map[string]*latencyAdaptiveSeries, len(series))
+	for _, item := range series {
+		interval := time.Duration(item.IntervalSec) * time.Second
+		if interval <= 0 {
+			interval = time.Minute
+		}
+		expected := int64((duration + interval - 1) / interval)
+		budget := expected
+		if budget > maxLatencyChartPoints {
+			budget = maxLatencyChartPoints
+		}
+		if budget < 1 {
+			budget = 1
+		}
+		factor := (expected + budget - 1) / budget
+		if factor < 1 {
+			factor = 1
+		}
+		byID[item.ID] = &latencyAdaptiveSeries{target: item, interval: interval, groupRounds: factor}
+	}
+
+	now := time.Now().UTC()
+	start := now.Add(-duration).Unix()
+	end := now.Unix()
+	queryArgs := []any{id, start, end + 1}
+	if dimension.sourceFilter != "" {
+		queryArgs = append(queryArgs, id)
+	}
+	queryArgs = append(queryArgs, id, start, end+1)
+	queryArgs = append(queryArgs, now.Add(-history.RawRetention).Unix())
+	if dimension.sourceFilter != "" {
+		queryArgs = append(queryArgs, id)
+	}
+	queryArgs = append(queryArgs, id)
+	rows, err := s.db.QueryContext(ctx, latencyAdaptiveMeasurementsQuery(dimension), queryArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var ts int64
+		var seriesID string
+		var medianSum, medianCount, avgSum, avgCount, lossSum, lossCount float64
+		var isRollup int
+		if err := rows.Scan(&ts, &seriesID, &medianSum, &medianCount, &avgSum, &avgCount, &lossSum, &lossCount, &isRollup); err != nil {
+			return nil, err
+		}
+		item := byID[seriesID]
+		if item == nil {
+			continue
+		}
+		resolution := item.interval
+		if isRollup != 0 && resolution < history.LatencyRollupStep {
+			resolution = history.LatencyRollupStep
+		}
+		gapLimit := int64(float64(resolution) * 1.75 / float64(time.Second))
+		if item.previousTS > 0 && ts-item.previousTS > gapLimit {
+			item.flush()
+		}
+		item.previousTS = ts
+		item.current.add(ts, medianSum, medianCount, avgSum, avgCount, lossSum, lossCount)
+		item.currentRounds += int64(lossCount)
+		if item.currentRounds >= item.groupRounds {
+			item.flush()
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, item := range series {
+		byID[item.ID].flush()
+		byID[item.ID].points = decimateLatencyPoints(byID[item.ID].points, int(maxLatencyChartPoints))
+	}
+
+	points := make([]latencyGridPointValue, 0, len(series)*int(maxLatencyChartPoints))
+	for _, item := range series {
+		points = append(points, byID[item.ID].points...)
+	}
+	return points, nil
+}
+
+// decimateLatencyPoints keeps local minima and maxima when a target produces
+// more rounds than its configured cadence predicts. It returns at most the
+// chart budget and keeps the selected extrema in timestamp order.
+func decimateLatencyPoints(points []latencyGridPointValue, limit int) []latencyGridPointValue {
+	if len(points) <= limit || limit < 2 {
+		return points
+	}
+	bucketCount := limit / 2
+	out := make([]latencyGridPointValue, 0, limit)
+	for bucket := 0; bucket < bucketCount; bucket++ {
+		start := bucket * len(points) / bucketCount
+		end := (bucket + 1) * len(points) / bucketCount
+		if end <= start {
+			continue
+		}
+		minIndex, maxIndex := start, start
+		for index := start + 1; index < end; index++ {
+			if adaptivePointDelay(points[index]) < adaptivePointDelay(points[minIndex]) {
+				minIndex = index
+			}
+			if adaptivePointDelay(points[index]) > adaptivePointDelay(points[maxIndex]) {
+				maxIndex = index
+			}
+		}
+		if minIndex > maxIndex {
+			minIndex, maxIndex = maxIndex, minIndex
+		}
+		out = append(out, points[minIndex])
+		if maxIndex != minIndex {
+			out = append(out, points[maxIndex])
+		}
+	}
+	return out
+}
+
+func adaptivePointDelay(point latencyGridPointValue) float64 {
+	if point.AvgMS != nil {
+		return *point.AvgMS
+	}
+	if point.MedianMS != nil {
+		return *point.MedianMS
+	}
+	return 0
+}
+
+const maxLatencyChartPoints int64 = 720
+
+type latencyAdaptiveSeries struct {
+	target        latencyGridTarget
+	interval      time.Duration
+	groupRounds   int64
+	currentRounds int64
+	previousTS    int64
+	current       latencyAdaptiveBucket
+	points        []latencyGridPointValue
+}
+
+func (series *latencyAdaptiveSeries) flush() {
+	if series.current.roundCount == 0 {
+		return
+	}
+	series.points = append(series.points, series.current.point(series.target))
+	series.current = latencyAdaptiveBucket{}
+	series.currentRounds = 0
 }
 
 func latencyGridBounds(window latencyWindow) (time.Time, time.Time, int64) {

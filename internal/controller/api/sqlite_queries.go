@@ -528,28 +528,13 @@ func (s *sqliteReadQueries) populateServiceTargetLatencySummary(ctx context.Cont
 }
 
 func (s *sqliteReadQueries) serviceLatencyPoints(ctx context.Context, targetID string, window latencyWindow) ([]ServiceLatencyPoint, error) {
-	if useLatencyGrid(window) {
-		return s.latency.serviceLatencyGridPoints(ctx, targetID, window)
-	}
-	since := time.Now().UTC().Add(-time.Duration(window.Samples) * window.Step).Unix()
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT pr.ts, pr.node_id, n.display_name, pr.median_ms, pr.avg_ms, pr.loss_percent
-		FROM probe_rounds pr
-		JOIN nodes n ON n.id = pr.node_id
-		JOIN probe_targets pt ON pt.id = pr.target_id
-		LEFT JOIN node_probe_targets npt ON npt.node_id = pr.node_id AND npt.target_id = pr.target_id
-		WHERE pr.target_id = ?
-		  AND pr.ts >= ?
-		  AND n.disabled = 0
-		  AND COALESCE(npt.enabled, 0) = 1
-		ORDER BY pr.ts ASC, n.display_order ASC, n.display_name ASC, pr.id ASC
-	`, targetID, since)
+	values, err := latencyAdaptivePointValuesFor(ctx, s.latency, targetID, window, latencyGridByTarget)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	return scanLatencyRows(rows, []ServiceLatencyPoint{}, func(ts, nodeID, nodeName string, median, avg *float64, loss float64) ServiceLatencyPoint {
-		return ServiceLatencyPoint{TS: ts, NodeID: nodeID, NodeName: nodeName, MedianMS: median, AvgMS: avg, LossPercent: loss}
-	})
+	points := make([]ServiceLatencyPoint, 0, len(values))
+	for _, value := range values {
+		points = append(points, serviceLatencyPointFromGridValue(value))
+	}
+	return points, nil
 }

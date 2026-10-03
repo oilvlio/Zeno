@@ -4,6 +4,7 @@ export interface KulinSeriesPoint {
   created_at: number
   avg_delay: number | null
   packet_loss: number | null
+  gap_before: boolean
 }
 
 export interface KulinTargetSeries {
@@ -14,7 +15,7 @@ export interface KulinTargetSeries {
 
 export interface KulinChartRow {
   created_at: number
-  [key: string]: number | null
+  [key: string]: number | null | boolean
 }
 
 export interface KulinChartView {
@@ -26,6 +27,10 @@ export interface KulinChartView {
 
 export function kulinPacketLossKey(targetId: string): string {
   return `${targetId}_packet_loss`
+}
+
+export function kulinGapBeforeKey(targetId: string): string {
+  return `${targetId}_gap_before`
 }
 
 export function calculateKulinPacketLoss(delays: Array<number | null | undefined>): number[] {
@@ -97,18 +102,26 @@ export function buildKulinTargetSeries(points: LatencyPoint[]): KulinTargetSerie
   return order.map((targetId) => {
     const targetPoints = orderedLatencyPoints(byTarget.get(targetId)!)
     const delays = targetPoints.map((point) => latencyDelay(point))
+    const nominalInterval = medianObservedInterval(targetPoints)
     const needsCalculatedPacketLoss = targetPoints.some((point) => !Number.isFinite(point.lossPercent))
     const calculatedPacketLoss = needsCalculatedPacketLoss ? calculateKulinPacketLoss(delays) : null
+    let pendingGap = false
 
     return {
       targetId,
       targetName: targetPoints[0]?.targetName ?? targetId,
       points: targetPoints.map((point, index) => {
         const delay = delays[index]
+        const createdAt = latencyPointTimestamp(point)
+        const previous = index > 0 ? targetPoints[index - 1] : null
+        const elapsed = previous ? createdAt - latencyPointTimestamp(previous) : 0
+        const gapBefore = pendingGap || (nominalInterval > 0 && elapsed > nominalInterval * 1.75)
+        pendingGap = delay === null
         const reportedLoss = Number.isFinite(point.lossPercent) ? point.lossPercent : calculatedPacketLoss?.[index] ?? 0
         return {
-          created_at: latencyPointTimestamp(point),
+          created_at: createdAt,
           avg_delay: delay,
+          gap_before: gapBefore,
           // A grid bucket with neither latency nor loss is missing data, not a
           // successful zero-loss probe. Keep both chart dimensions empty.
           packet_loss: delay === null && reportedLoss === 0 ? null : reportedLoss,
@@ -116,6 +129,16 @@ export function buildKulinTargetSeries(points: LatencyPoint[]): KulinTargetSerie
       }),
     }
   })
+}
+
+function medianObservedInterval(points: LatencyPoint[]): number {
+  const intervals = points.slice(1)
+    .map((point, index) => latencyPointTimestamp(point) - latencyPointTimestamp(points[index]))
+    .filter((interval) => Number.isFinite(interval) && interval > 0)
+    .sort((left, right) => left - right)
+  if (intervals.length === 0) return 0
+  const middle = Math.floor(intervals.length / 2)
+  return intervals.length % 2 === 1 ? intervals[middle] : (intervals[middle - 1] + intervals[middle]) / 2
 }
 
 function latencyPointTimestamp(point: LatencyPoint): number {
@@ -156,6 +179,7 @@ export function buildKulinChartRows(series: KulinTargetSeries[]): KulinChartRow[
         const point = pointsByTargetTime.get(target.targetId)?.get(createdAt)
         row[target.targetId] = point ? point.avg_delay : null
         row[kulinPacketLossKey(target.targetId)] = point ? point.packet_loss : null
+        row[kulinGapBeforeKey(target.targetId)] = point ? point.gap_before : null
       }
       return row
     })
@@ -173,6 +197,7 @@ export function selectKulinChartView(series: KulinTargetSeries[], rows: KulinCha
         created_at: point.created_at,
         [selected.targetId]: point.avg_delay,
         [packetLossKey]: point.packet_loss,
+        [kulinGapBeforeKey(selected.targetId)]: point.gap_before,
       })) : [],
       lineKeys: selected ? [selected.targetId] : [],
       showPacketLossArea: Boolean(selected),

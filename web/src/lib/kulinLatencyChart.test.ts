@@ -46,8 +46,8 @@ describe('buildKulinChartRows', () => {
     ])
 
     expect(buildKulinChartRows(series)).toEqual([
-      { created_at: Date.parse('2026-07-02T00:00:00Z'), alpha: 12, alpha_packet_loss: 0, beta: null, beta_packet_loss: null },
-      { created_at: Date.parse('2026-07-02T00:01:00Z'), alpha: null, alpha_packet_loss: null, beta: 20, beta_packet_loss: 5 },
+      { created_at: Date.parse('2026-07-02T00:00:00Z'), alpha: 12, alpha_packet_loss: 0, alpha_gap_before: false, beta: null, beta_packet_loss: null, beta_gap_before: null },
+      { created_at: Date.parse('2026-07-02T00:01:00Z'), alpha: null, alpha_packet_loss: null, alpha_gap_before: null, beta: 20, beta_packet_loss: 5, beta_gap_before: false },
     ])
   })
 
@@ -65,12 +65,16 @@ describe('buildKulinChartRows', () => {
       created_at: Date.parse(timestamp),
       'first-id': 11,
       'first-id_packet_loss': 1,
+      'first-id_gap_before': false,
       'second-id': 22,
       'second-id_packet_loss': 2,
+      'second-id_gap_before': false,
       'created-id': 33,
       'created-id_packet_loss': 3,
+      'created-id_gap_before': false,
       'loss-id': 44,
       'loss-id_packet_loss': 4,
+      'loss-id_gap_before': false,
     }])
   })
 })
@@ -100,6 +104,7 @@ describe('selectKulinChartView', () => {
       created_at: Date.parse('2026-07-02T00:00:00Z'),
       alpha: 12,
       alpha_packet_loss: 0,
+      alpha_gap_before: false,
     }])
   })
 })

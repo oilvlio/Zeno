@@ -713,14 +713,14 @@ func TestSQLiteBackedLatencyUsesKulinMinuteGridAndAverageDelay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("node latency: %v", err)
 	}
-	if got := len(uniquePointTimes(response.Points)); got != 1440 {
-		t.Fatalf("unique grid timestamps = %d, want 1440", got)
+	if got := len(uniquePointTimes(response.Points)); got != 1 {
+		t.Fatalf("unique adaptive timestamps = %d, want one grouped point", got)
 	}
-	if len(response.Points) != 1440 {
-		t.Fatalf("points len = %d, want 1440 for one target", len(response.Points))
+	if len(response.Points) != 1 {
+		t.Fatalf("points len = %d, want one grouped point", len(response.Points))
 	}
 	var bucketPoint *LatencyPoint
-	wantTS := now.Format(time.RFC3339)
+	wantTS := now.Add(25 * time.Second).Format(time.RFC3339)
 	for index := range response.Points {
 		if response.Points[index].TS == wantTS {
 			bucketPoint = &response.Points[index]
